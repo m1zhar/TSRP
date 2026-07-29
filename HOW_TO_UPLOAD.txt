@@ -1,0 +1,12 @@
+1. Open https://github.com/m1zhar/TSRP
+2. Click "Add file" -> "Upload files"
+3. Open this folder: Desktop / UPLOAD_TO_GITHUB
+4. Press Cmd+Shift+.  (shows hidden files like .gitignore and .streamlit)
+5. Drag into GitHub:
+   - app.py
+   - requirements.txt
+   - README.md
+   - .gitignore
+   - the .streamlit folder  (or create file named .streamlit/config.toml and paste from streamlit_config.toml)
+6. Click "Commit changes"
+7. Done. Share https://github.com/m1zhar/TSRP
