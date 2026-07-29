@@ -13,7 +13,7 @@ st.set_page_config(
     page_title="TSRP",
     page_icon="T",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 
@@ -1180,14 +1180,140 @@ st.markdown(
     }
 
     @media (max-width: 900px) {
+        .block-container {
+            padding-top: 0.75rem !important;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+            padding-bottom: 2rem !important;
+            max-width: 100% !important;
+        }
+
         .results-grid, .two-col, .learn-grid, .feature-grid { grid-template-columns: 1fr; }
-        .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
         .topbar, .terminal-header { flex-direction: column; align-items: flex-start; }
         .topbar-note { text-align: left; max-width: none; }
+        .header-actions { width: 100%; }
+
+        .hero-card, .panel, .score-panel, .empty-state { padding: 18px 16px; }
+        .score-panel { min-height: 220px; }
+        .hero-title { font-size: 1.55rem; }
+        .cmp-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+        [data-testid="stSidebar"] { min-width: 0 !important; }
+
+        .stTabs [data-baseweb="tab-list"] {
+            overflow-x: auto;
+            flex-wrap: nowrap !important;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+
+        .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar { display: none; }
+
+        .stTabs [data-baseweb="tab"] {
+            white-space: nowrap;
+            padding: 10px 12px;
+            font-size: .78rem;
+        }
     }
 
     @media (max-width: 560px) {
+        .block-container {
+            padding-left: 0.7rem !important;
+            padding-right: 0.7rem !important;
+        }
+
+        .metric-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+        .metric-card { padding: 12px 12px 10px; }
+        .metric-value { font-size: 1.05rem; margin-top: 6px; }
+        .metric-label { font-size: .62rem; }
+        .metric-meta { font-size: .65rem; line-height: 1.3; }
+
+        .terminal-header {
+            padding: 12px 14px;
+            border-radius: 14px;
+            margin-bottom: 12px;
+        }
+
+        .brand-mark { width: 36px; height: 36px; border-radius: 10px; font-size: .8rem; }
+        .brand-title { font-size: 1.05rem; }
+        .brand-sub { font-size: .72rem; }
+        .live-pill { font-size: .64rem; padding: 5px 9px; }
+
+        .hero-title { font-size: 1.35rem; letter-spacing: -0.02em; }
+        .hero-copy, .panel p, .learn-card p, .risk-item p { font-size: .88rem; }
+
+        .score-ring-wrap { width: 120px; height: 120px; }
+        .score-ring-inner .score-big { font-size: 2.1rem; }
+        .score-panel { min-height: 200px; padding: 16px; }
+        .score-caption { font-size: .8rem; }
+
+        .info-strip {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 6px;
+            font-size: .68rem;
+            padding: 10px 12px;
+        }
+
+        .flag-strip { gap: 6px; margin-bottom: 12px; }
+        .flag-chip, .conf-chip { font-size: .64rem; padding: 4px 8px; }
+
+        .row {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+            padding: 10px 0;
+            font-size: .84rem;
+        }
+
+        .row b { text-align: left; white-space: normal; font-size: .9rem; }
+
+        .panel h3, .learn-card h4 { font-size: .9rem; margin-bottom: 10px; padding-bottom: 8px; }
+
+        [data-testid="stForm"] {
+            padding: 12px 12px 4px;
+            border-radius: 14px;
+            margin-bottom: 12px;
+        }
+
+        .stTextInput input, .stSelectbox > div > div {
+            min-height: 42px !important;
+            font-size: .86rem !important;
+        }
+
+        .stButton button {
+            min-height: 42px !important;
+            border-radius: 10px !important;
+        }
+
+        .chart-wrap { padding: 8px 4px 2px; border-radius: 12px; }
+        .app-footer { font-size: .68rem; padding: 12px; line-height: 1.45; }
+
+        .gbar-head { font-size: .78rem; }
+        .whatif-note { font-size: .8rem; padding: 10px 12px; }
+
+        div[data-testid="stHorizontalBlock"] {
+            gap: 0.4rem !important;
+        }
+
+        /* Keep search usable: stack form fields more tightly */
+        [data-testid="stForm"] [data-testid="stHorizontalBlock"] {
+            flex-wrap: wrap !important;
+        }
+    }
+
+    @media (max-width: 400px) {
         .metric-grid { grid-template-columns: 1fr; }
+        .badge { font-size: .68rem; padding: 4px 8px; }
+        .hero-title { font-size: 1.22rem; }
+    }
+
+    /* Prefer phone portrait: touch-friendly tabs and no hover-dependent UI */
+    @media (hover: none) and (pointer: coarse) {
+        .metric-card:hover { transform: none; }
+        .stTabs [data-baseweb="tab"] { min-height: 40px; }
+        .stButton button { min-height: 44px !important; }
     }
     </style>
     """,
