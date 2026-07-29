@@ -1415,6 +1415,7 @@ st.markdown(
 
 SECTOR_MODELS = {
     "Technology": {
+        "discount_rate": 0.10,
         "business_weights": {"growth": 0.25, "gross": 0.20, "operating": 0.15, "fcf": 0.20, "roe": 0.10, "balance": 0.10},
         "business_benchmarks": {"gross": 0.70, "operating": 0.30, "fcf": 0.25, "roe": 0.25},
         "expectation_weights": {"required_growth": 0.50, "ev_sales": 0.25, "pe": 0.10, "ev_ebitda": 0.15},
@@ -1423,6 +1424,7 @@ SECTOR_MODELS = {
         "financial_benchmarks": {"operating": 0.28, "fcf": 0.22},
     },
     "Communication Services": {
+        "discount_rate": 0.10,
         "business_weights": {"growth": 0.20, "gross": 0.15, "operating": 0.20, "fcf": 0.20, "roe": 0.10, "balance": 0.15},
         "business_benchmarks": {"gross": 0.60, "operating": 0.25, "fcf": 0.20, "roe": 0.22},
         "expectation_weights": {"required_growth": 0.45, "ev_sales": 0.25, "pe": 0.15, "ev_ebitda": 0.15},
@@ -1431,6 +1433,7 @@ SECTOR_MODELS = {
         "financial_benchmarks": {"operating": 0.24, "fcf": 0.18},
     },
     "Consumer Cyclical": {
+        "discount_rate": 0.11,
         "business_weights": {"growth": 0.20, "gross": 0.10, "operating": 0.20, "fcf": 0.20, "roe": 0.15, "balance": 0.15},
         "business_benchmarks": {"gross": 0.45, "operating": 0.18, "fcf": 0.12, "roe": 0.22},
         "expectation_weights": {"required_growth": 0.40, "ev_sales": 0.20, "pe": 0.20, "ev_ebitda": 0.20},
@@ -1439,6 +1442,7 @@ SECTOR_MODELS = {
         "financial_benchmarks": {"operating": 0.16, "fcf": 0.10},
     },
     "Consumer Defensive": {
+        "discount_rate": 0.09,
         "business_weights": {"growth": 0.10, "gross": 0.10, "operating": 0.20, "fcf": 0.25, "roe": 0.15, "balance": 0.20},
         "business_benchmarks": {"gross": 0.40, "operating": 0.16, "fcf": 0.12, "roe": 0.22},
         "expectation_weights": {"required_growth": 0.30, "ev_sales": 0.20, "pe": 0.25, "ev_ebitda": 0.25},
@@ -1447,6 +1451,7 @@ SECTOR_MODELS = {
         "financial_benchmarks": {"operating": 0.15, "fcf": 0.11},
     },
     "Industrials": {
+        "discount_rate": 0.10,
         "business_weights": {"growth": 0.15, "gross": 0.10, "operating": 0.20, "fcf": 0.20, "roe": 0.15, "balance": 0.20},
         "business_benchmarks": {"gross": 0.40, "operating": 0.18, "fcf": 0.12, "roe": 0.20},
         "expectation_weights": {"required_growth": 0.35, "ev_sales": 0.15, "pe": 0.25, "ev_ebitda": 0.25},
@@ -1455,6 +1460,7 @@ SECTOR_MODELS = {
         "financial_benchmarks": {"operating": 0.16, "fcf": 0.10},
     },
     "Healthcare": {
+        "discount_rate": 0.10,
         "business_weights": {"growth": 0.20, "gross": 0.15, "operating": 0.15, "fcf": 0.15, "roe": 0.10, "balance": 0.25},
         "business_benchmarks": {"gross": 0.65, "operating": 0.22, "fcf": 0.16, "roe": 0.20},
         "expectation_weights": {"required_growth": 0.45, "ev_sales": 0.25, "pe": 0.15, "ev_ebitda": 0.15},
@@ -1463,6 +1469,7 @@ SECTOR_MODELS = {
         "financial_benchmarks": {"operating": 0.20, "fcf": 0.14},
     },
     "Energy": {
+        "discount_rate": 0.12,
         "business_weights": {"growth": 0.10, "gross": 0.05, "operating": 0.20, "fcf": 0.30, "roe": 0.10, "balance": 0.25},
         "business_benchmarks": {"gross": 0.35, "operating": 0.20, "fcf": 0.15, "roe": 0.18},
         "expectation_weights": {"required_growth": 0.25, "ev_sales": 0.15, "pe": 0.25, "ev_ebitda": 0.35},
@@ -1471,6 +1478,7 @@ SECTOR_MODELS = {
         "financial_benchmarks": {"operating": 0.18, "fcf": 0.13},
     },
     "Basic Materials": {
+        "discount_rate": 0.11,
         "business_weights": {"growth": 0.10, "gross": 0.10, "operating": 0.20, "fcf": 0.25, "roe": 0.10, "balance": 0.25},
         "business_benchmarks": {"gross": 0.35, "operating": 0.18, "fcf": 0.12, "roe": 0.18},
         "expectation_weights": {"required_growth": 0.25, "ev_sales": 0.15, "pe": 0.25, "ev_ebitda": 0.35},
@@ -1479,6 +1487,7 @@ SECTOR_MODELS = {
         "financial_benchmarks": {"operating": 0.16, "fcf": 0.10},
     },
     "Utilities": {
+        "discount_rate": 0.08,
         "business_weights": {"growth": 0.05, "gross": 0.05, "operating": 0.20, "fcf": 0.20, "roe": 0.15, "balance": 0.35},
         "business_benchmarks": {"gross": 0.35, "operating": 0.22, "fcf": 0.10, "roe": 0.14},
         "expectation_weights": {"required_growth": 0.20, "ev_sales": 0.15, "pe": 0.30, "ev_ebitda": 0.35},
@@ -1487,6 +1496,7 @@ SECTOR_MODELS = {
         "financial_benchmarks": {"operating": 0.20, "fcf": 0.09},
     },
     "Real Estate": {
+        "discount_rate": 0.09,
         "business_weights": {"growth": 0.10, "gross": 0.05, "operating": 0.15, "fcf": 0.25, "roe": 0.10, "balance": 0.35},
         "business_benchmarks": {"gross": 0.55, "operating": 0.35, "fcf": 0.18, "roe": 0.14},
         "expectation_weights": {"required_growth": 0.20, "ev_sales": 0.15, "pe": 0.25, "ev_ebitda": 0.40},
@@ -1497,6 +1507,7 @@ SECTOR_MODELS = {
 }
 
 DEFAULT_SECTOR_MODEL = {
+    "discount_rate": 0.10,
     "business_weights": {"growth": 0.20, "gross": 0.15, "operating": 0.20, "fcf": 0.20, "roe": 0.15, "balance": 0.10},
     "business_benchmarks": {"gross": 0.60, "operating": 0.30, "fcf": 0.20, "roe": 0.25},
     "expectation_weights": {"required_growth": 0.45, "ev_sales": 0.25, "pe": 0.15, "ev_ebitda": 0.15},
@@ -1506,16 +1517,24 @@ DEFAULT_SECTOR_MODEL = {
 }
 
 SEC_TAGS = {
-    "revenue": ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet"],
+    "revenue": ["RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet", "Revenues"],
     "net_income": ["NetIncomeLoss", "ProfitLoss"],
     "assets": ["Assets"],
     "equity": ["StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"],
     "cash": ["CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"],
     "debt": ["DebtCurrent", "LongTermDebtCurrent", "LongTermDebtNoncurrent", "LongTermDebtAndFinanceLeaseObligationsCurrent", "LongTermDebtAndFinanceLeaseObligationsNoncurrent"],
-    "operating_cash_flow": ["NetCashProvidedByUsedInOperatingActivities"],
-    "capex": ["PaymentsToAcquirePropertyPlantAndEquipment"],
+    "operating_cash_flow": [
+        "NetCashProvidedByUsedInOperatingActivities",
+        "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
+        "CashProvidedByUsedInOperatingActivities",
+    ],
+    "capex": [
+        "PaymentsToAcquirePropertyPlantAndEquipment",
+        "PaymentsToAcquireProductiveAssets",
+        "PaymentsForCapitalImprovements",
+        "PurchaseOfPropertyPlantAndEquipment",
+    ],
 }
-
 
 def get_sector_model(sector):
     return SECTOR_MODELS.get(sector, DEFAULT_SECTOR_MODEL)
@@ -1718,13 +1737,19 @@ def normalize_capex(capex):
 
 
 def compute_fcf(operating_cash_flow, capex, reported_fcf=None):
-    if reported_fcf is not None:
-        return safe_float(reported_fcf)
+    """Prefer OCF − Capex; fall back to reported FCF. Never invent a number."""
     ocf = safe_float(operating_cash_flow)
     cap = normalize_capex(capex)
-    if ocf is None or cap is None:
+    if ocf is not None and cap is not None:
+        return ocf + cap
+    return safe_float(reported_fcf)
+
+
+def ttm_sum(df, names, periods=4):
+    series = historical_series(df, names)
+    if len(series) < periods:
         return None
-    return ocf + cap
+    return float(series.iloc[:periods].sum())
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -1757,6 +1782,11 @@ def fetch_yahoo_data(ticker):
         cashflow = pd.DataFrame()
 
     try:
+        quarterly_cashflow = stock.quarterly_cashflow
+    except Exception:
+        quarterly_cashflow = pd.DataFrame()
+
+    try:
         history = stock.history(period="5y", auto_adjust=True)
     except Exception:
         history = pd.DataFrame()
@@ -1772,6 +1802,7 @@ def fetch_yahoo_data(ticker):
         "financials": financials,
         "balance": balance,
         "cashflow": cashflow,
+        "quarterly_cashflow": quarterly_cashflow,
         "history": history,
         "revenue_estimate": revenue_estimate,
     }
@@ -1987,40 +2018,114 @@ def sec_currency_candidates(reporting_currency, trading_currency):
 
 
 def sec_fact_values(companyfacts, tags, preferred_currencies):
+    """Pick the best annual series across tags + taxonomies (us-gaap, ifrs-full)."""
     if not companyfacts:
         return pd.Series(dtype=float), None
 
-    facts = companyfacts.get("facts", {}).get("us-gaap", {})
+    fact_roots = companyfacts.get("facts", {}) or {}
+    taxonomies = []
+    for key in ("us-gaap", "ifrs-full"):
+        if key in fact_roots:
+            taxonomies.append(fact_roots[key])
+    for key, block in fact_roots.items():
+        if key not in ("us-gaap", "ifrs-full") and isinstance(block, dict):
+            taxonomies.append(block)
 
-    for tag in tags:
-        item = facts.get(tag)
-        if not item:
-            continue
+    candidates = []
+    for facts in taxonomies:
+        for tag in tags:
+            item = facts.get(tag)
+            if not item:
+                continue
 
-        units = item.get("units", {})
-        currency_order = preferred_currencies + [c for c in units if c not in preferred_currencies]
+            units = item.get("units", {})
+            currency_order = preferred_currencies + [c for c in units if c not in preferred_currencies]
 
-        for currency in currency_order:
-            values = units.get(currency, [])
-            annual = [
-                x
-                for x in values
-                if x.get("form") in ["10-K", "20-F", "40-F"]
-                and x.get("val") is not None
-                and x.get("fy") is not None
-            ]
+            for currency in currency_order:
+                values = units.get(currency, [])
+                annual = [
+                    x
+                    for x in values
+                    if x.get("form") in ["10-K", "20-F", "40-F"]
+                    and x.get("val") is not None
+                    and x.get("fy") is not None
+                ]
+                if not annual:
+                    continue
 
-            if annual:
                 annual = sorted(annual, key=lambda x: (x.get("fy", 0), x.get("end", "")), reverse=True)
                 yearly = {}
+                latest_end = ""
                 for row in annual:
                     fy = row.get("fy")
                     if fy not in yearly:
                         yearly[fy] = safe_float(row.get("val"))
+                        latest_end = max(latest_end, row.get("end") or "")
                 ordered = pd.Series([yearly[fy] for fy in sorted(yearly.keys(), reverse=True)])
-                return ordered, currency
+                candidates.append((latest_end, len(ordered), ordered, currency))
+                break  # best currency for this tag in this taxonomy
 
-    return pd.Series(dtype=float), None
+    if not candidates:
+        return pd.Series(dtype=float), None
+
+    candidates.sort(key=lambda c: (c[0], c[1]), reverse=True)
+    _, _, ordered, currency = candidates[0]
+    return ordered, currency
+
+
+def pick_fcf_from_sources(sec_fcf, yahoo_annual_fcf, yahoo_ttm_fcf, yahoo_info_fcf, revenue_from_sec):
+    """
+    Prefer period-matched FCF: SEC with SEC revenue, Yahoo annual with Yahoo revenue,
+    then TTM / reported as last resorts. Never invent.
+    """
+    if revenue_from_sec:
+        order = [
+            (sec_fcf, "SEC EDGAR (OCF − Capex)"),
+            (yahoo_annual_fcf, "Yahoo Finance annual (OCF − Capex)"),
+            (yahoo_ttm_fcf, "Yahoo Finance TTM (OCF − Capex)"),
+            (yahoo_info_fcf, "Yahoo Finance reported FCF"),
+        ]
+    else:
+        order = [
+            (yahoo_annual_fcf, "Yahoo Finance annual (OCF − Capex)"),
+            (sec_fcf, "SEC EDGAR (OCF − Capex)"),
+            (yahoo_ttm_fcf, "Yahoo Finance TTM (OCF − Capex)"),
+            (yahoo_info_fcf, "Yahoo Finance reported FCF"),
+        ]
+    for value, source in order:
+        if value is not None:
+            return value, source
+    return None, None
+
+
+def choose_revenue_history(sec_history, yahoo_history):
+    """Prefer the series with usable multi-year coverage; break ties on length."""
+    sec_ok = sec_history is not None and len(sec_history) >= 2
+    yahoo_ok = yahoo_history is not None and len(yahoo_history) >= 2
+    if sec_ok and yahoo_ok:
+        return sec_history if len(sec_history) >= len(yahoo_history) else yahoo_history
+    if sec_ok:
+        return sec_history
+    if yahoo_ok:
+        return yahoo_history
+    if sec_history is not None and not sec_history.empty:
+        return sec_history
+    return yahoo_history if yahoo_history is not None else pd.Series(dtype=float)
+
+
+def data_coverage_confidence(fields, quality_flags):
+    """Confidence tracks field coverage, not how good the fundamentals look."""
+    present = sum(1 for v in fields.values() if v)
+    total = len(fields) or 1
+    ratio = present / total
+    bad_count = sum(1 for _, level in quality_flags if level == "bad")
+    missing_growth = not fields.get("historical_growth", False)
+
+    if bad_count or ratio < 0.5:
+        return "Low", ratio
+    if missing_growth or ratio < 0.85:
+        return "Medium", ratio
+    return "High", ratio
 
 
 def sec_latest(companyfacts, tags, preferred_currencies):
@@ -2062,6 +2167,7 @@ def pick_value(primary, fallback, primary_name, fallback_name, primary_currency=
 def dcf_enterprise_value(revenue, growth, fcf_margin, discount_rate=DISCOUNT_RATE, terminal_growth=TERMINAL_GROWTH, years=FORECAST_YEARS):
     revenue = safe_float(revenue)
     fcf_margin = safe_float(fcf_margin)
+    discount_rate = safe_float(discount_rate, DISCOUNT_RATE)
     if revenue is None or fcf_margin is None or revenue <= 0 or fcf_margin <= 0:
         return None
     if discount_rate <= terminal_growth:
@@ -2080,41 +2186,49 @@ def dcf_enterprise_value(revenue, growth, fcf_margin, discount_rate=DISCOUNT_RAT
     return present_value
 
 
-def solve_required_growth(enterprise_value, revenue, fcf_margin):
+def solve_required_growth(enterprise_value, revenue, fcf_margin, discount_rate=DISCOUNT_RATE):
+    """Returns (growth, hit_bound). hit_bound is True if result sits on the −20%/+80% clamp."""
     enterprise_value = safe_float(enterprise_value)
     revenue = safe_float(revenue)
     fcf_margin = safe_float(fcf_margin)
+    discount_rate = safe_float(discount_rate, DISCOUNT_RATE)
 
     if enterprise_value is None or revenue is None or fcf_margin is None:
-        return None
+        return None, False
     if enterprise_value <= 0 or revenue <= 0 or fcf_margin <= 0:
-        return None
-    if DISCOUNT_RATE <= TERMINAL_GROWTH:
-        return None
+        return None, False
+    if discount_rate <= TERMINAL_GROWTH:
+        return None, False
 
     low = -0.20
     high = 0.80
 
     for _ in range(80):
         mid = (low + high) / 2
-        if dcf_enterprise_value(revenue, mid, fcf_margin) < enterprise_value:
+        if dcf_enterprise_value(revenue, mid, fcf_margin, discount_rate=discount_rate) < enterprise_value:
             low = mid
         else:
             high = mid
 
-    return (low + high) / 2
+    result = (low + high) / 2
+    hit_bound = result <= -0.195 or result >= 0.795
+    return result, hit_bound
+
+
+# Missing evidence scores below — never silently optimistic.
+MISSING_EVIDENCE_SCORE = 40
 
 
 def business_quality_score(revenue_growth, gross_margin, operating_margin, fcf_margin, roe, debt_to_assets, sector_model):
     benchmarks = sector_model["business_benchmarks"]
     weights = sector_model["business_weights"]
 
-    growth_score = clamp(50 + (revenue_growth or 0) * 250)
-    gross_score = clamp(((gross_margin or 0) / benchmarks["gross"]) * 100)
-    operating_score = clamp(((operating_margin or 0) / benchmarks["operating"]) * 100)
-    fcf_score = clamp(((fcf_margin or 0) / benchmarks["fcf"]) * 100)
-    roe_score = clamp(((roe or 0) / benchmarks["roe"]) * 100)
-    balance_score = clamp(100 - ((debt_to_assets or 0.25) / 0.80 * 100))
+    growth_score = MISSING_EVIDENCE_SCORE if revenue_growth is None else clamp(50 + revenue_growth * 250)
+    gross_score = MISSING_EVIDENCE_SCORE if gross_margin is None else clamp((gross_margin / benchmarks["gross"]) * 100)
+    operating_score = MISSING_EVIDENCE_SCORE if operating_margin is None else clamp((operating_margin / benchmarks["operating"]) * 100)
+    fcf_score = MISSING_EVIDENCE_SCORE if fcf_margin is None else clamp((fcf_margin / benchmarks["fcf"]) * 100)
+    roe_score = MISSING_EVIDENCE_SCORE if roe is None else clamp((roe / benchmarks["roe"]) * 100)
+    balance_score = MISSING_EVIDENCE_SCORE if debt_to_assets is None else clamp(100 - (debt_to_assets / 0.80 * 100))
 
     return clamp(
         growth_score * weights["growth"]
@@ -2130,10 +2244,11 @@ def expectation_score(required_growth, ev_sales, pe, ev_ebitda, sector_model):
     benchmarks = sector_model["expectation_benchmarks"]
     weights = sector_model["expectation_weights"]
 
-    growth_pressure = clamp(50 + (required_growth or 0) * 180)
-    sales_pressure = clamp(((ev_sales or 3) / benchmarks["ev_sales"]) * 100) if ev_sales else 50
-    pe_pressure = clamp(((pe or 25) / benchmarks["pe"]) * 100) if pe and pe > 0 else 50
-    ebitda_pressure = clamp(((ev_ebitda or 14) / benchmarks["ev_ebitda"]) * 100) if ev_ebitda and ev_ebitda > 0 else 50
+    # Missing multiples → MISSING_EVIDENCE_SCORE (not a fake multiple that softens pressure)
+    growth_pressure = MISSING_EVIDENCE_SCORE if required_growth is None else clamp(50 + required_growth * 180)
+    sales_pressure = clamp((ev_sales / benchmarks["ev_sales"]) * 100) if ev_sales else MISSING_EVIDENCE_SCORE
+    pe_pressure = clamp((pe / benchmarks["pe"]) * 100) if pe and pe > 0 else MISSING_EVIDENCE_SCORE
+    ebitda_pressure = clamp((ev_ebitda / benchmarks["ev_ebitda"]) * 100) if ev_ebitda and ev_ebitda > 0 else MISSING_EVIDENCE_SCORE
 
     return clamp(
         growth_pressure * weights["required_growth"]
@@ -2150,11 +2265,11 @@ def financial_strength_score(cash, debt, operating_margin, fcf_margin, debt_to_a
     if cash is not None and debt is not None:
         cash_debt_score = 100 if debt <= 0 else clamp(50 + (cash / max(debt, 1)) * 35)
     else:
-        cash_debt_score = 60
+        cash_debt_score = MISSING_EVIDENCE_SCORE
 
-    operating_score = clamp(((operating_margin or 0) / benchmarks["operating"]) * 100)
-    fcf_score = clamp(((fcf_margin or 0) / benchmarks["fcf"]) * 100)
-    leverage_score = clamp(100 - ((debt_to_assets or 0.25) / 0.80 * 100))
+    operating_score = MISSING_EVIDENCE_SCORE if operating_margin is None else clamp((operating_margin / benchmarks["operating"]) * 100)
+    fcf_score = MISSING_EVIDENCE_SCORE if fcf_margin is None else clamp((fcf_margin / benchmarks["fcf"]) * 100)
+    leverage_score = MISSING_EVIDENCE_SCORE if debt_to_assets is None else clamp(100 - (debt_to_assets / 0.80 * 100))
 
     return clamp(
         cash_debt_score * weights["cash_debt"]
@@ -2166,9 +2281,10 @@ def financial_strength_score(cash, debt, operating_margin, fcf_margin, debt_to_a
 
 def growth_reality_score(historical_growth, required_growth):
     if required_growth is None:
-        return 50
+        return MISSING_EVIDENCE_SCORE
     if historical_growth is None:
-        historical_growth = 0.05
+        # Do not invent 5% growth — incomplete evidence cannot improve the score
+        return MISSING_EVIDENCE_SCORE
 
     growth_gap = required_growth - historical_growth
     return clamp(75 - growth_gap * 160)
@@ -2176,9 +2292,9 @@ def growth_reality_score(historical_growth, required_growth):
 
 def probability_score(required_growth, historical_growth, business_quality, market_expectations):
     if required_growth is None:
-        return 50
+        return MISSING_EVIDENCE_SCORE
     if historical_growth is None:
-        historical_growth = 0.05
+        return MISSING_EVIDENCE_SCORE
 
     growth_gap = required_growth - historical_growth
     quality_support = (business_quality - 50) * 0.35
@@ -2221,11 +2337,15 @@ def analyze_company(yahoo_data, sec_facts):
     financials = yahoo_data["financials"]
     balance = yahoo_data["balance"]
     cashflow = yahoo_data["cashflow"]
+    quarterly_cashflow = yahoo_data.get("quarterly_cashflow")
+    if quarterly_cashflow is None:
+        quarterly_cashflow = pd.DataFrame()
 
     reporting_currency, trading_currency = detect_currencies(info, fast_info)
     sec_currencies = sec_currency_candidates(reporting_currency, trading_currency)
     sector = info.get("sector") or "Unknown sector"
     sector_model = get_sector_model(sector)
+    discount_rate = safe_float(sector_model.get("discount_rate"), DISCOUNT_RATE)
 
     price = get_quote_price(info, fast_info)
     market_cap = get_market_cap(info, fast_info)
@@ -2238,10 +2358,13 @@ def analyze_company(yahoo_data, sec_facts):
 
     yahoo_operating_cash_flow = latest_value(cashflow, ["Operating Cash Flow", "Total Cash From Operating Activities"])
     yahoo_capex = latest_value(cashflow, ["Capital Expenditure", "Capital Expenditures"])
-    yahoo_free_cash_flow = compute_fcf(
-        yahoo_operating_cash_flow,
-        yahoo_capex,
-        latest_value(cashflow, ["Free Cash Flow"]),
+    yahoo_reported_fcf = latest_value(cashflow, ["Free Cash Flow"])
+    yahoo_annual_fcf = compute_fcf(yahoo_operating_cash_flow, yahoo_capex, yahoo_reported_fcf)
+    yahoo_info_fcf = safe_float(info.get("freeCashflow"))
+    yahoo_ttm_fcf = compute_fcf(
+        ttm_sum(quarterly_cashflow, ["Operating Cash Flow", "Total Cash From Operating Activities"]),
+        ttm_sum(quarterly_cashflow, ["Capital Expenditure", "Capital Expenditures"]),
+        ttm_sum(quarterly_cashflow, ["Free Cash Flow"]),
     )
 
     yahoo_cash = latest_value(balance, ["Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"])
@@ -2260,7 +2383,11 @@ def analyze_company(yahoo_data, sec_facts):
 
     sec_ocf = sec_latest(sec_facts, SEC_TAGS["operating_cash_flow"], sec_currencies)
     sec_capex_value = sec_latest(sec_facts, SEC_TAGS["capex"], sec_currencies)
-    sec_fcf = compute_fcf(sec_ocf, sec_capex_value)
+    sec_fcf_raw = compute_fcf(sec_ocf, sec_capex_value)
+    if sec_fcf_raw is not None and sec_revenue_currency and reporting_currency and sec_revenue_currency != reporting_currency:
+        sec_fcf = convert_amount(sec_fcf_raw, sec_revenue_currency, reporting_currency)
+    else:
+        sec_fcf = sec_fcf_raw
 
     revenue, revenue_source = pick_value(
         sec_revenue_latest,
@@ -2275,7 +2402,11 @@ def analyze_company(yahoo_data, sec_facts):
     equity, equity_source = pick_value(sec_equity, yahoo_equity, "SEC EDGAR", "Yahoo Finance", sec_revenue_currency, reporting_currency)
     cash, cash_source = pick_value(sec_cash, yahoo_cash, "SEC EDGAR", "Yahoo Finance", sec_revenue_currency, reporting_currency)
     debt, debt_source = pick_value(sec_debt_value, yahoo_debt, "SEC EDGAR", "Yahoo Finance", sec_revenue_currency, reporting_currency)
-    free_cash_flow, fcf_source = pick_value(sec_fcf, yahoo_free_cash_flow, "SEC EDGAR", "Yahoo Finance", sec_revenue_currency, reporting_currency)
+
+    revenue_from_sec = bool(revenue_source and str(revenue_source).startswith("SEC"))
+    free_cash_flow, fcf_source = pick_fcf_from_sources(
+        sec_fcf, yahoo_annual_fcf, yahoo_ttm_fcf, yahoo_info_fcf, revenue_from_sec
+    )
 
     market_cap_reporting = convert_amount(market_cap, trading_currency, reporting_currency)
     enterprise_value_trading = safe_float(info.get("enterpriseValue"))
@@ -2288,9 +2419,9 @@ def analyze_company(yahoo_data, sec_facts):
     if enterprise_value is None and market_cap_reporting is not None:
         enterprise_value = market_cap_reporting + (debt or 0) - (cash or 0)
 
-    revenue_history, _ = sec_fact_values(sec_facts, SEC_TAGS["revenue"], sec_currencies)
-    if revenue_history.empty:
-        revenue_history = historical_series(financials, ["Total Revenue", "Operating Revenue"])
+    revenue_history_sec, _ = sec_fact_values(sec_facts, SEC_TAGS["revenue"], sec_currencies)
+    revenue_history_yahoo = historical_series(financials, ["Total Revenue", "Operating Revenue"])
+    revenue_history = choose_revenue_history(revenue_history_sec, revenue_history_yahoo)
 
     historical_growth = None
     if len(revenue_history) >= 2:
@@ -2315,7 +2446,14 @@ def analyze_company(yahoo_data, sec_facts):
     if free_cash_flow is not None and revenue:
         fcf_margin = free_cash_flow / revenue
 
-    model_fcf_margin = fcf_margin if fcf_margin is not None and fcf_margin > 0 else DEFAULT_FCF_MARGIN
+    # Evidence score uses actual FCF. Reverse DCF may use a labeled sector mature margin.
+    sector_mature_fcf = safe_float(sector_model.get("financial_benchmarks", {}).get("fcf"), DEFAULT_FCF_MARGIN)
+    model_fcf_assumed = False
+    if fcf_margin is not None and fcf_margin > 0:
+        model_fcf_margin = fcf_margin
+    else:
+        model_fcf_margin = sector_mature_fcf
+        model_fcf_assumed = True
 
     roe = safe_float(info.get("returnOnEquity"))
     if roe is None and net_income is not None and equity:
@@ -2335,7 +2473,9 @@ def analyze_company(yahoo_data, sec_facts):
     if pe is not None and pe <= 0:
         pe = None
 
-    required_growth = solve_required_growth(enterprise_value, revenue, model_fcf_margin)
+    required_growth, growth_clamped = solve_required_growth(
+        enterprise_value, revenue, model_fcf_margin, discount_rate=discount_rate
+    )
 
     consensus_growth = None
     revenue_estimate = yahoo_data.get("revenue_estimate")
@@ -2355,13 +2495,26 @@ def analyze_company(yahoo_data, sec_facts):
     if required_growth is None:
         quality_flags.append(("Required growth not solvable", "bad"))
     if free_cash_flow is None:
-        quality_flags.append(("Free cash flow unavailable", "warn"))
-    if fcf_margin is None or fcf_margin <= 0:
-        quality_flags.append((f"FCF margin defaulted to {DEFAULT_FCF_MARGIN:.0%}", "warn"))
+        quality_flags.append(("Free cash flow unavailable (SEC + Yahoo exhausted)", "warn"))
+    elif fcf_margin is not None and fcf_margin <= 0:
+        quality_flags.append((f"Actual FCF margin {fcf_margin:.0%} — weak cash, scored as-is", "warn"))
+    if model_fcf_assumed:
+        actual_txt = percent(fcf_margin) if fcf_margin is not None else "missing"
+        quality_flags.append(
+            (
+                f"Reverse DCF uses labeled sector mature FCF {percent(model_fcf_margin)} "
+                f"(actual {actual_txt}) — not silent",
+                "warn",
+            )
+        )
     if historical_growth is None:
-        quality_flags.append(("No revenue growth history", "warn"))
+        quality_flags.append(("No revenue growth history — growth scored as incomplete (not assumed 5%)", "warn"))
     if cash is None or debt is None:
-        quality_flags.append(("Balance sheet incomplete", "warn"))
+        quality_flags.append(("Balance sheet incomplete — leverage scored as missing evidence", "warn"))
+    if growth_clamped:
+        quality_flags.append(("Required growth hit solver bound (−20% / +80%)", "warn"))
+    if sector == "Real Estate":
+        quality_flags.append(("REIT caveat: model uses FCF/P-E, not FFO/AFFO — scores are approximate", "warn"))
     if ev_ebitda is None or ev_ebitda <= 0:
         quality_flags.append(("EV/EBITDA unavailable", "info"))
     if pe is None:
@@ -2370,15 +2523,25 @@ def analyze_company(yahoo_data, sec_facts):
         quality_flags.append(("No analyst estimates", "info"))
     if sec_facts is None:
         quality_flags.append(("Yahoo data only, no SEC facts", "info"))
+    quality_flags.append((f"Sector discount rate {discount_rate:.0%}", "info"))
 
-    bad_count = sum(1 for _, level in quality_flags if level == "bad")
-    warn_count = sum(1 for _, level in quality_flags if level == "warn")
-    if bad_count:
-        confidence = "Low"
-    elif warn_count >= 2:
+    coverage_fields = {
+        "revenue": revenue is not None,
+        "free_cash_flow": free_cash_flow is not None,
+        "historical_growth": historical_growth is not None,
+        "cash": cash is not None,
+        "debt": debt is not None,
+        "enterprise_value": enterprise_value is not None,
+    }
+    confidence, coverage_ratio = data_coverage_confidence(coverage_fields, quality_flags)
+    # Assumed DCF margin or missing growth can never claim High confidence
+    if confidence == "High" and (model_fcf_assumed or historical_growth is None):
         confidence = "Medium"
-    else:
-        confidence = "High"
+    filled = sum(1 for v in coverage_fields.values() if v)
+    quality_flags.insert(
+        0,
+        (f"Data coverage {filled}/{len(coverage_fields)} fields ({coverage_ratio:.0%})", "info"),
+    )
 
     business_quality = business_quality_score(
         historical_growth,
@@ -2425,7 +2588,7 @@ def analyze_company(yahoo_data, sec_facts):
         "Equity": equity_source,
         "Cash": cash_source,
         "Debt": debt_source,
-        "Free Cash Flow": fcf_source,
+        "Free Cash Flow": fcf_source or "Unavailable",
         "Price / Market Data": "Yahoo Finance",
         "Reporting Currency": f"Yahoo Finance ({reporting_currency})",
         "Trading Currency": f"Yahoo Finance ({trading_currency})",
@@ -2450,6 +2613,8 @@ def analyze_company(yahoo_data, sec_facts):
         "profit_margin": profit_margin,
         "fcf_margin": fcf_margin,
         "model_fcf_margin": model_fcf_margin,
+        "model_fcf_assumed": model_fcf_assumed,
+        "discount_rate": discount_rate,
         "historical_growth": historical_growth,
         "required_growth": required_growth,
         "business_quality": business_quality,
@@ -3137,12 +3302,21 @@ with tab_whatif:
         if base_growth is None:
             base_growth = analysis["historical_growth"] if analysis["historical_growth"] is not None else 0.08
         base_growth_pct = float(min(max(base_growth * 100, -10.0), 40.0))
-        base_margin_pct = float(min(max(analysis["model_fcf_margin"] * 100, 1.0), 50.0))
+        # What-If may start from DEFAULT only as an explicit slider seed — never used in the scored model
+        seed_margin = analysis["model_fcf_margin"] if analysis["model_fcf_margin"] is not None else DEFAULT_FCF_MARGIN
+        base_margin_pct = float(min(max(seed_margin * 100, 1.0), 50.0))
+        margin_note = (
+            f" Reverse DCF seed uses labeled sector mature FCF {percent(analysis['model_fcf_margin'])}."
+            if analysis.get("model_fcf_assumed")
+            else ""
+        )
+        base_discount = safe_float(analysis.get("discount_rate"), DISCOUNT_RATE)
 
         render_html(
             '<div class="whatif-note">Set your own assumptions and see the price they justify. '
             "The sliders start at the assumptions currently baked into the market price, so the initial "
-            "result is roughly the price today. Push growth or margin to what <b>you</b> believe and see the gap.</div>"
+            f"result is roughly the price today. Push growth or margin to what <b>you</b> believe and see the gap."
+            f"{margin_note}</div>"
         )
 
         sl_left, sl_right = st.columns(2)
@@ -3150,7 +3324,7 @@ with tab_whatif:
             wi_growth = st.slider("Revenue growth per year (10 yrs)", -10.0, 40.0, round(base_growth_pct, 1), 0.5, format="%.1f%%") / 100
             wi_margin = st.slider("FCF margin at maturity", 1.0, 50.0, round(base_margin_pct, 1), 0.5, format="%.1f%%") / 100
         with sl_right:
-            wi_discount = st.slider("Discount rate", 6.0, 15.0, DISCOUNT_RATE * 100, 0.25, format="%.2f%%") / 100
+            wi_discount = st.slider("Discount rate", 6.0, 15.0, round(base_discount * 100, 2), 0.25, format="%.2f%%") / 100
             wi_terminal = st.slider("Terminal growth", 0.0, 4.0, TERMINAL_GROWTH * 100, 0.25, format="%.2f%%") / 100
 
         if wi_discount <= wi_terminal:
@@ -3186,7 +3360,7 @@ with tab_whatif:
                     render_html(
                         f'<div class="whatif-note">For reference, the current price implies about '
                         f"<b>{percent(req)}</b> annual revenue growth at a {percent(analysis['model_fcf_margin'])} FCF margin, "
-                        f"{DISCOUNT_RATE:.0%} discount rate, and {TERMINAL_GROWTH:.0%} terminal growth.</div>"
+                        f"{percent(analysis.get('discount_rate'))} discount rate, and {TERMINAL_GROWTH:.0%} terminal growth.</div>"
                     )
 
 with tab_compare:
