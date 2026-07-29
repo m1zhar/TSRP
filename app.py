@@ -207,6 +207,29 @@ def esc(value):
     return html.escape("" if value is None else str(value))
 
 
+def brand_logo_svg(size="sm"):
+    # Abstract mark: rising bars + pulse node (Apple-clean + TradingView terminal vibe)
+    return (
+        f'<div class="logo-mark{" logo-lg" if size == "lg" else ""}" aria-hidden="true">'
+        '<svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        '<rect x="4" y="18" width="4" height="8" rx="1.2" fill="white" opacity="0.55"/>'
+        '<rect x="11" y="12" width="4" height="14" rx="1.2" fill="white" opacity="0.75"/>'
+        '<rect x="18" y="7" width="4" height="19" rx="1.2" fill="white"/>'
+        '<path d="M5 15.5 L12 11 L19 13.5 L27 6" stroke="#7CFFB2" stroke-width="2.2" '
+        'stroke-linecap="round" stroke-linejoin="round"/>'
+        '<circle cx="27" cy="6" r="2.2" fill="#7CFFB2"/>'
+        "</svg></div>"
+    )
+
+
+def brand_lockup_html(subtitle="Expectation Reality Check"):
+    return (
+        f'<div class="brand-lockup">{brand_logo_svg("sm")}'
+        f"<div><div class='brand-title'>TSRP</div>"
+        f"<div class='brand-sub'>{esc(subtitle)}</div></div></div>"
+    )
+
+
 st.markdown(
     """
     <style>
@@ -300,7 +323,7 @@ st.markdown(
 
     .brand-lockup { display: flex; align-items: center; gap: 14px; }
 
-    .brand-mark {
+    .brand-mark, .logo-mark {
         width: 44px;
         height: 44px;
         border-radius: 12px;
@@ -311,7 +334,21 @@ st.markdown(
         font-size: .92rem;
         font-weight: 800;
         box-shadow: 0 6px 24px rgba(41, 98, 255, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        flex-shrink: 0;
+        overflow: hidden;
     }
+
+    .brand-mark svg, .logo-mark svg { width: 26px; height: 26px; display: block; }
+
+    .logo-mark.logo-lg {
+        width: 64px;
+        height: 64px;
+        border-radius: 18px;
+        margin-bottom: 18px;
+        box-shadow: 0 10px 36px rgba(41, 98, 255, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    }
+
+    .logo-mark.logo-lg svg { width: 36px; height: 36px; }
 
     .brand-title {
         font-size: 1.22rem;
@@ -325,6 +362,49 @@ st.markdown(
         font-size: .8rem;
         margin-top: 2px;
         letter-spacing: 0.02em;
+    }
+
+    .try-section {
+        margin: 14px 0 6px;
+        padding: 16px 16px 12px;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-lg);
+        background: linear-gradient(180deg, rgba(16, 20, 27, 0.95), rgba(8, 10, 14, 0.95));
+        box-shadow: var(--shadow-soft);
+    }
+
+    .try-label {
+        font-size: .7rem;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--text-tertiary);
+        margin-bottom: 4px;
+    }
+
+    .try-hint {
+        color: var(--text-secondary);
+        font-size: .86rem;
+        margin-bottom: 0;
+    }
+
+    /* Quick-start / try-instead ticker pills in the main pane */
+    [data-testid="stMain"] [data-testid="stHorizontalBlock"] .stButton button[kind="secondary"] {
+        background: rgba(41, 98, 255, 0.08) !important;
+        border: 1px solid rgba(41, 98, 255, 0.28) !important;
+        color: #c9d8ff !important;
+        border-radius: 12px !important;
+        font-family: var(--mono) !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.03em !important;
+        box-shadow: none !important;
+        min-height: 48px !important;
+    }
+
+    [data-testid="stMain"] [data-testid="stHorizontalBlock"] .stButton button[kind="secondary"]:hover {
+        background: rgba(41, 98, 255, 0.18) !important;
+        border-color: rgba(41, 98, 255, 0.5) !important;
+        color: #fff !important;
     }
 
     .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -378,6 +458,15 @@ st.markdown(
         border-color: var(--border-strong);
         position: relative;
         overflow: hidden;
+        text-align: left;
+    }
+
+    .empty-state .hero-title {
+        max-width: 18ch;
+    }
+
+    .empty-state .hero-copy {
+        max-width: 42rem;
     }
 
     .empty-state.error-state {
@@ -1235,7 +1324,10 @@ st.markdown(
             margin-bottom: 12px;
         }
 
-        .brand-mark { width: 36px; height: 36px; border-radius: 10px; font-size: .8rem; }
+        .brand-mark, .logo-mark { width: 36px; height: 36px; border-radius: 10px; font-size: .8rem; }
+        .brand-mark svg, .logo-mark svg { width: 20px; height: 20px; }
+        .logo-mark.logo-lg { width: 52px; height: 52px; border-radius: 14px; margin-bottom: 14px; }
+        .logo-mark.logo-lg svg { width: 28px; height: 28px; }
         .brand-title { font-size: 1.05rem; }
         .brand-sub { font-size: .72rem; }
         .live-pill { font-size: .64rem; padding: 5px 9px; }
@@ -1734,16 +1826,25 @@ def render_ticker_error(symbol, reason=None):
     render_html(
         f"""
 <div class="empty-state error-state">
+  {brand_logo_svg("lg")}
   <div class="eyebrow">Error</div>
   <div class="hero-title">Invalid ticker · {esc(symbol)}</div>
   <div class="hero-copy">{esc(detail)} Try a valid symbol like AAPL, SAP.DE, or 7203.T.</div>
 </div>
 """
     )
+    render_html(
+        """
+<div class="try-section">
+  <div class="try-label">Try instead</div>
+  <div class="try-hint">Pick a known symbol to jump back in.</div>
+</div>
+"""
+    )
     tips = st.columns(4)
     for col, tip in zip(tips, ["AAPL", "MSFT", "NVDA", "SAP.DE"]):
         with col:
-            if st.button(tip, key=f"err_tip_{tip}", use_container_width=True):
+            if st.button(tip, key=f"err_tip_{tip}", use_container_width=True, type="secondary"):
                 st.session_state.ticker = tip
                 st.session_state.ticker_error = None
                 st.session_state.invalid_ticker = ""
@@ -2747,15 +2848,9 @@ with st.sidebar:
 st.markdown('<div class="app-wrap">', unsafe_allow_html=True)
 
 render_html(
-    """
+    f"""
 <div class="terminal-header">
-  <div class="brand-lockup">
-    <div class="brand-mark">T</div>
-    <div>
-      <div class="brand-title">TSRP</div>
-      <div class="brand-sub">Expectation Reality Check</div>
-    </div>
-  </div>
+  {brand_lockup_html()}
   <div class="header-actions">
     <div class="live-pill"><span class="live-dot"></span>Live market data</div>
     <div class="live-pill badge-muted">Not investment advice</div>
@@ -2804,18 +2899,27 @@ if st.session_state.ticker_error:
 
 if not st.session_state.ticker:
     render_html(
-        """
+        f"""
 <div class="empty-state">
-  <div class="eyebrow">Get started</div>
-  <div class="hero-title">Analyze any public company</div>
-  <div class="hero-copy">Enter a ticker to translate market price into implied expectations, then compare those expectations against revenue growth, margins, cash flow, and balance sheet evidence.</div>
+  {brand_logo_svg("lg")}
+  <div class="eyebrow">Expectation Reality Check</div>
+  <div class="hero-title">See what the price is asking for</div>
+  <div class="hero-copy">Enter a ticker to translate market price into implied expectations, then compare those against revenue growth, margins, cash flow, and balance sheet evidence.</div>
+</div>
+"""
+    )
+    render_html(
+        """
+<div class="try-section">
+  <div class="try-label">Quick start</div>
+  <div class="try-hint">No ticker yet? Try one of these.</div>
 </div>
 """
     )
     tip_cols = st.columns(4)
     for col, tip in zip(tip_cols, ["AAPL", "MSFT", "NVDA", "BABA"]):
         with col:
-            if st.button(f"Try {tip}", key=f"empty_tip_{tip}", use_container_width=True):
+            if st.button(tip, key=f"empty_tip_{tip}", use_container_width=True, type="secondary"):
                 st.session_state.ticker = tip
                 st.session_state.ticker_error = None
                 st.session_state.invalid_ticker = ""
