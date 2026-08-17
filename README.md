@@ -1,6 +1,8 @@
-# TSRP
+# The Saleh Research Project (TSRP)
 
-Expectation Reality Check — Streamlit app.
+Expectation Reality Check — reverse-DCF Streamlit app.
+
+**For educational purposes only. Not investment advice.**
 
 ## Run
 
@@ -11,4 +13,8 @@ python3 -m streamlit run app.py
 
 Open the local URL Streamlit prints (usually http://localhost:8501).
 
-Not investment advice.
+## Tests
+
+```bash
+python3 -m unittest test_engine.py -v
+```
