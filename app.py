@@ -1,4 +1,6 @@
 from datetime import datetime
+from pathlib import Path
+import base64
 import html
 import math
 import re
@@ -8,10 +10,31 @@ import requests
 import streamlit as st
 import yfinance as yf
 
+from engine import (
+    FORECAST_YEARS,
+    business_quality_score,
+    choose_model_fcf_margin,
+    dcf_enterprise_value,
+    expectation_score,
+    financial_strength_score,
+    history_cagr,
+    model_rates,
+    probability_score,
+    reality_score,
+    score_label,
+    solve_required_growth,
+)
+
+
+ROOT = Path(__file__).resolve().parent
+LOGO_PATH = ROOT / "assets" / "tsrp-logo.png"
+APP_NAME = "The Saleh Research Project"
+APP_SHORT = "TSRP"
+EDUCATIONAL_DISCLAIMER = "For educational purposes only. Not investment advice."
 
 st.set_page_config(
-    page_title="TSRP",
-    page_icon="T",
+    page_title=f"{APP_SHORT} · {APP_NAME}",
+    page_icon=str(LOGO_PATH) if LOGO_PATH.exists() else "T",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -208,9 +231,16 @@ def esc(value):
 
 
 def brand_logo_svg(size="sm"):
-    # Abstract mark: rising bars + pulse node (Apple-clean + TradingView terminal vibe)
+    cls = "logo-mark logo-lg" if size == "lg" else "logo-mark"
+    if LOGO_PATH.exists():
+        payload = base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
+        return (
+            f'<div class="{cls}" aria-hidden="true">'
+            f'<img src="data:image/png;base64,{payload}" alt="TSRP logo" />'
+            f"</div>"
+        )
     return (
-        f'<div class="logo-mark{" logo-lg" if size == "lg" else ""}" aria-hidden="true">'
+        f'<div class="{cls}" aria-hidden="true">'
         '<svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">'
         '<rect x="4" y="18" width="4" height="8" rx="1.2" fill="white" opacity="0.55"/>'
         '<rect x="11" y="12" width="4" height="14" rx="1.2" fill="white" opacity="0.75"/>'
@@ -222,11 +252,14 @@ def brand_logo_svg(size="sm"):
     )
 
 
-def brand_lockup_html(subtitle="Expectation Reality Check"):
+def brand_lockup_html():
     return (
         f'<div class="brand-lockup">{brand_logo_svg("sm")}'
-        f"<div><div class='brand-title'>TSRP</div>"
-        f"<div class='brand-sub'>{esc(subtitle)}</div></div></div>"
+        f"<div class='brand-text'>"
+        f"<div class='brand-title'>{esc(APP_SHORT)}</div>"
+        f"<div class='brand-name'>{esc(APP_NAME)}</div>"
+        f"<div class='brand-sub'>Expectation Reality Check</div>"
+        f"</div></div>"
     )
 
 
@@ -234,39 +267,47 @@ st.markdown(
     """
     <style>
     :root {
-        --bg: #030405;
-        --bg-elevated: #080a0f;
-        --card: #0c0f14;
-        --card-hover: #11151c;
-        --surface: #10141b;
+        --bg: #040506;
+        --bg-elevated: #0a0c10;
+        --card: rgba(14, 17, 23, 0.92);
+        --card-hover: rgba(20, 24, 32, 0.96);
+        --surface: rgba(16, 20, 28, 0.88);
         --surface-2: #161b24;
-        --text: #f2f4f8;
-        --text-secondary: #9aa0ab;
-        --text-tertiary: #5c6370;
-        --blue: #2962ff;
-        --blue-bright: #5b8cff;
-        --blue-soft: rgba(41, 98, 255, 0.16);
-        --purple: #7c5cff;
-        --green: #089981;
-        --green-soft: rgba(8, 153, 129, 0.18);
-        --orange: #f7931a;
-        --orange-soft: rgba(247, 147, 26, 0.16);
-        --red: #f23645;
-        --red-soft: rgba(242, 54, 69, 0.16);
-        --border: rgba(255, 255, 255, 0.06);
-        --border-strong: rgba(255, 255, 255, 0.11);
-        --fill: rgba(255, 255, 255, 0.04);
-        --grid: rgba(255, 255, 255, 0.025);
-        --shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
-        --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.35);
-        --radius-xl: 20px;
-        --radius-lg: 14px;
-        --radius-md: 10px;
-        --radius-sm: 7px;
+        --text: #f6f7fb;
+        --text-secondary: #a3aab6;
+        --text-tertiary: #6b7280;
+        --blue: #4f7cff;
+        --blue-bright: #7aa2ff;
+        --blue-soft: rgba(79, 124, 255, 0.14);
+        --cyan: #2dd4bf;
+        --cyan-soft: rgba(45, 212, 191, 0.12);
+        --purple: #8b7cff;
+        --green: #10b981;
+        --green-soft: rgba(16, 185, 129, 0.16);
+        --orange: #f59e0b;
+        --orange-soft: rgba(245, 158, 11, 0.14);
+        --red: #ef4444;
+        --red-soft: rgba(239, 68, 68, 0.14);
+        --border: rgba(255, 255, 255, 0.07);
+        --border-strong: rgba(255, 255, 255, 0.12);
+        --fill: rgba(255, 255, 255, 0.035);
+        --grid: rgba(255, 255, 255, 0.022);
+        --shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+        --shadow-soft: 0 8px 30px rgba(0, 0, 0, 0.28);
+        --glow-blue: 0 0 40px rgba(79, 124, 255, 0.12);
+        --radius-xl: 22px;
+        --radius-lg: 16px;
+        --radius-md: 12px;
+        --radius-sm: 8px;
         --mono: "SF Mono", "JetBrains Mono", "Menlo", "Consolas", monospace;
+        --display: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
-    header[data-testid="stHeader"],
+    header[data-testid="stHeader"] {
+        background: rgba(4, 5, 6, 0.75) !important;
+        backdrop-filter: blur(12px);
+    }
+
     [data-testid="stToolbar"],
     [data-testid="stDecoration"],
     [data-testid="stStatusWidget"],
@@ -274,44 +315,57 @@ st.markdown(
     footer { display: none !important; }
 
     html, body, [class*="css"] {
-        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif !important;
+        font-family: var(--display) !important;
         -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
     }
 
     .stApp {
         background-color: var(--bg);
         background-image:
+            radial-gradient(ellipse 80% 50% at 50% -20%, rgba(79, 124, 255, 0.18), transparent 55%),
+            radial-gradient(ellipse 50% 40% at 100% 0%, rgba(45, 212, 191, 0.08), transparent 50%),
+            radial-gradient(ellipse 60% 40% at 0% 100%, rgba(79, 124, 255, 0.06), transparent 55%),
             linear-gradient(var(--grid) 1px, transparent 1px),
-            linear-gradient(90deg, var(--grid) 1px, transparent 1px),
-            radial-gradient(ellipse 55% 45% at 0% -5%, rgba(41, 98, 255, 0.14), transparent 55%),
-            radial-gradient(ellipse 45% 35% at 100% 0%, rgba(8, 153, 129, 0.1), transparent 50%),
-            radial-gradient(ellipse 70% 45% at 50% 110%, rgba(41, 98, 255, 0.06), transparent 60%);
-        background-size: 56px 56px, 56px 56px, auto, auto, auto;
+            linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+        background-size: auto, auto, auto, 48px 48px, 48px 48px;
         color: var(--text);
     }
 
     .block-container {
-        max-width: 1240px;
-        padding-top: 1.25rem;
-        padding-bottom: 2.5rem;
+        max-width: 1180px;
+        padding-top: 1.5rem;
+        padding-bottom: 3rem;
     }
 
-    .app-wrap { animation: fadeIn .5s ease both; }
+    .app-wrap { animation: fadeIn .45s ease both; }
 
     .terminal-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 16px;
-        padding: 16px 20px;
-        margin-bottom: 16px;
-        background: rgba(12, 15, 20, 0.82);
+        gap: 20px;
+        padding: 18px 22px;
+        margin-bottom: 20px;
+        background: linear-gradient(135deg, rgba(16, 20, 28, 0.95) 0%, rgba(10, 12, 18, 0.92) 100%);
         border: 1px solid var(--border-strong);
         border-radius: var(--radius-xl);
-        backdrop-filter: blur(24px) saturate(180%);
-        -webkit-backdrop-filter: blur(24px) saturate(180%);
-        box-shadow: var(--shadow-soft), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        backdrop-filter: blur(20px) saturate(160%);
+        -webkit-backdrop-filter: blur(20px) saturate(160%);
+        box-shadow: var(--shadow-soft), var(--glow-blue), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        position: relative;
+        overflow: hidden;
     }
+
+    .terminal-header::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, rgba(79, 124, 255, 0.06), transparent 40%, rgba(45, 212, 191, 0.05));
+        pointer-events: none;
+    }
+
+    .terminal-header > * { position: relative; z-index: 1; }
 
     .topbar {
         display: flex;
@@ -321,48 +375,82 @@ st.markdown(
         margin-bottom: 18px;
     }
 
-    .brand-lockup { display: flex; align-items: center; gap: 14px; }
+    .brand-lockup { display: flex; align-items: center; gap: 16px; }
+
+    .brand-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 
     .brand-mark, .logo-mark {
-        width: 44px;
-        height: 44px;
-        border-radius: 12px;
+        width: 52px;
+        height: 52px;
+        border-radius: 15px;
         display: grid;
         place-items: center;
-        background: linear-gradient(145deg, #3d7bff 0%, #1a4fd6 55%, #0f2d8a 100%);
+        background: linear-gradient(145deg, #121722, #07090f);
         color: #fff;
-        font-size: .92rem;
-        font-weight: 800;
-        box-shadow: 0 6px 24px rgba(41, 98, 255, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
         flex-shrink: 0;
         overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 10px 32px rgba(79, 124, 255, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08);
     }
 
-    .brand-mark svg, .logo-mark svg { width: 26px; height: 26px; display: block; }
+    .brand-mark svg, .logo-mark svg,
+    .brand-mark img, .logo-mark img { width: 100%; height: 100%; display: block; object-fit: cover; }
 
     .logo-mark.logo-lg {
-        width: 64px;
-        height: 64px;
-        border-radius: 18px;
-        margin-bottom: 18px;
-        box-shadow: 0 10px 36px rgba(41, 98, 255, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+        width: 80px;
+        height: 80px;
+        border-radius: 22px;
+        margin-bottom: 20px;
+        box-shadow: 0 16px 48px rgba(79, 124, 255, 0.32);
     }
 
     .logo-mark.logo-lg svg { width: 36px; height: 36px; }
 
     .brand-title {
-        font-size: 1.22rem;
-        font-weight: 700;
+        font-size: 1.35rem;
+        font-weight: 800;
         color: var(--text);
-        letter-spacing: -0.035em;
+        letter-spacing: -0.04em;
+        line-height: 1.1;
+    }
+
+    .brand-name {
+        color: var(--cyan);
+        font-size: .82rem;
+        font-weight: 650;
+        letter-spacing: 0.01em;
+        margin-top: 2px;
     }
 
     .brand-sub {
         color: var(--text-tertiary);
-        font-size: .8rem;
-        margin-top: 2px;
-        letter-spacing: 0.02em;
+        font-size: .74rem;
+        margin-top: 3px;
+        letter-spacing: 0.03em;
     }
+
+    .section-kicker {
+        font-size: .68rem;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--text-tertiary);
+        margin: 0 0 8px 2px;
+    }
+
+    .edu-banner {
+        margin: -8px 0 18px;
+        padding: 10px 14px;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(245, 158, 11, 0.22);
+        background: linear-gradient(90deg, rgba(245, 158, 11, 0.08), rgba(245, 158, 11, 0.03));
+        color: var(--text-secondary);
+        font-size: .78rem;
+        line-height: 1.45;
+        text-align: center;
+    }
+
+    .edu-banner b { color: var(--orange); font-weight: 650; }
 
     .try-section {
         margin: 14px 0 6px;
@@ -421,15 +509,25 @@ st.markdown(
         display: inline-flex;
         align-items: center;
         gap: 7px;
-        padding: 6px 12px;
+        padding: 7px 13px;
         border-radius: 999px;
-        background: var(--fill);
+        background: rgba(255, 255, 255, 0.03);
         border: 1px solid var(--border);
         color: var(--text-secondary);
-        font-size: .72rem;
+        font-size: .68rem;
         font-weight: 600;
-        letter-spacing: .04em;
-        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+
+    .live-pill.badge-muted {
+        background: rgba(245, 158, 11, 0.08);
+        border-color: rgba(245, 158, 11, 0.22);
+        color: #fcd89a;
+        text-transform: none;
+        letter-spacing: 0;
+        max-width: 280px;
+        line-height: 1.35;
+        text-align: left;
     }
 
     .live-dot {
@@ -449,20 +547,23 @@ st.markdown(
     }
 
     .hero-card, .panel, .score-panel, .empty-state, .learn-card {
-        background: linear-gradient(165deg, rgba(16, 20, 27, 0.98) 0%, rgba(10, 12, 16, 0.98) 100%);
-        box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        background: linear-gradient(160deg, rgba(18, 22, 30, 0.98) 0%, rgba(11, 13, 18, 0.96) 100%);
+        box-shadow: var(--shadow-soft), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        backdrop-filter: blur(12px);
     }
 
     .empty-state {
-        padding: 36px 32px;
+        padding: 44px 36px;
         border-color: var(--border-strong);
         position: relative;
         overflow: hidden;
         text-align: left;
+        border-radius: var(--radius-xl);
     }
 
     .empty-state .hero-title {
-        max-width: 18ch;
+        max-width: 16ch;
+        font-size: clamp(1.85rem, 4vw, 2.6rem);
     }
 
     .empty-state .hero-copy {
@@ -492,40 +593,51 @@ st.markdown(
         pointer-events: none;
     }
 
-    .hero-card, .panel, .score-panel { padding: 24px 26px; }
+    .hero-card, .panel, .score-panel { padding: 26px 28px; }
 
     .info-strip {
-        padding: 11px 16px;
-        margin-bottom: 14px;
+        padding: 12px 18px;
+        margin-bottom: 16px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        gap: 12px;
+        gap: 14px;
         flex-wrap: wrap;
         box-shadow: none;
-        background: var(--surface);
-        border-color: var(--border-strong);
+        background: linear-gradient(90deg, rgba(79, 124, 255, 0.06), rgba(45, 212, 191, 0.04));
+        border-color: rgba(79, 124, 255, 0.18);
+        border-radius: var(--radius-lg);
         font-family: var(--mono);
-        font-size: .76rem;
+        font-size: .74rem;
     }
 
-    .info-strip span { color: var(--text-secondary); }
-    .info-strip b { color: var(--text); font-weight: 600; }
+    .rate-chip {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(79, 124, 255, 0.1);
+        border: 1px solid rgba(79, 124, 255, 0.2);
+        color: #b8ccff;
+        font-family: var(--mono);
+        font-size: .68rem;
+    }
 
     .eyebrow {
-        color: var(--blue);
-        font-size: .7rem;
+        color: var(--cyan);
+        font-size: .68rem;
         font-weight: 700;
-        letter-spacing: .08em;
+        letter-spacing: .1em;
         text-transform: uppercase;
     }
 
     .hero-title {
-        font-size: clamp(1.65rem, 3vw, 2.35rem);
-        line-height: 1.1;
-        font-weight: 650;
-        letter-spacing: -0.03em;
-        margin: 8px 0 10px;
+        font-size: clamp(1.75rem, 3.2vw, 2.5rem);
+        line-height: 1.08;
+        font-weight: 700;
+        letter-spacing: -0.035em;
+        margin: 10px 0 12px;
         color: var(--text);
     }
 
@@ -541,10 +653,14 @@ st.markdown(
         gap: 14px;
     }
 
-    .results-grid { grid-template-columns: 1.25fr .75fr; margin-bottom: 14px; }
-    .two-col { grid-template-columns: 1fr 1fr; margin-bottom: 14px; }
-    .learn-grid, .feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .metric-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 14px; }
+    .results-grid { grid-template-columns: 1.2fr .8fr; margin-bottom: 18px; gap: 16px; }
+    .two-col { grid-template-columns: 1fr 1fr; margin-bottom: 18px; gap: 16px; }
+    .learn-grid, .feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .metric-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 18px; gap: 14px; }
+
+    .hero-card {
+        border-left: 3px solid var(--cyan);
+    }
 
     .score-panel {
         display: flex;
@@ -552,10 +668,11 @@ st.markdown(
         justify-content: center;
         align-items: center;
         text-align: center;
-        min-height: 280px;
+        min-height: 300px;
         border: 1px solid var(--border-strong);
         position: relative;
         overflow: hidden;
+        border-radius: var(--radius-xl);
     }
 
     .score-panel::before {
@@ -654,11 +771,13 @@ st.markdown(
     .badge-muted { color: var(--text-tertiary); }
 
     .metric-card {
-        padding: 18px 20px 16px;
+        padding: 20px 22px 18px;
         position: relative;
         overflow: hidden;
-        transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
-        animation: fadeUp .55s ease both;
+        transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease;
+        animation: fadeUp .5s ease both;
+        border-radius: var(--radius-lg);
+        background: linear-gradient(180deg, rgba(16, 20, 28, 0.95), rgba(12, 15, 20, 0.92));
     }
 
     .metric-card::before {
@@ -667,47 +786,48 @@ st.markdown(
         top: 0;
         left: 0;
         right: 0;
-        height: 2px;
-        background: var(--blue);
-        opacity: 0.85;
+        height: 3px;
+        background: linear-gradient(90deg, var(--blue), var(--blue-bright));
+        opacity: 0.9;
     }
 
-    .metric-card.accent-purple::before { background: var(--purple); }
-    .metric-card.accent-green::before { background: var(--green); }
-    .metric-card.accent-cyan::before { background: #00bcd4; }
+    .metric-card:hover {
+        transform: translateY(-3px);
+        border-color: rgba(79, 124, 255, 0.25);
+        box-shadow: var(--shadow-soft), 0 0 32px rgba(79, 124, 255, 0.08);
+    }
+
+    .metric-value {
+        font-family: var(--mono);
+        color: var(--text);
+        font-size: 1.42rem;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        margin-top: 12px;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .metric-card.accent-purple::before { background: linear-gradient(90deg, var(--purple), #a89bff); }
+    .metric-card.accent-green::before { background: linear-gradient(90deg, var(--green), #34d399); }
+    .metric-card.accent-cyan::before { background: linear-gradient(90deg, var(--cyan), #5eead4); }
 
     .metric-card:nth-child(1) { animation-delay: .04s; }
     .metric-card:nth-child(2) { animation-delay: .08s; }
     .metric-card:nth-child(3) { animation-delay: .12s; }
     .metric-card:nth-child(4) { animation-delay: .16s; }
 
-    .metric-card:hover {
-        transform: translateY(-2px);
-        background: var(--card-hover);
-        border-color: var(--border-strong);
-        box-shadow: var(--shadow-soft), 0 0 24px rgba(41, 98, 255, 0.06);
-    }
-
     .metric-label {
         color: var(--text-tertiary);
-        font-size: .68rem;
+        font-size: .66rem;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: .06em;
+        letter-spacing: .07em;
     }
 
-    .metric-value {
-        font-family: var(--mono);
-        color: var(--text);
-        font-size: 1.32rem;
-        font-weight: 700;
-        letter-spacing: -0.03em;
-        margin-top: 10px;
-        font-variant-numeric: tabular-nums;
-    }
-
-    .panel-pricing { border-top: 2px solid rgba(41, 98, 255, 0.5); }
-    .panel-reality { border-top: 2px solid rgba(8, 153, 129, 0.5); }
+    .info-strip span { color: var(--text-secondary); }
+    .info-strip b { color: var(--text); font-weight: 600; }
+    .panel-pricing { border-top: 3px solid rgba(79, 124, 255, 0.45); }
+    .panel-reality { border-top: 3px solid rgba(45, 212, 191, 0.45); }
 
     .panel h3::before, .learn-card h4::before {
         content: "";
@@ -811,22 +931,23 @@ st.markdown(
     }
 
     [data-testid="stForm"] {
-        background: linear-gradient(180deg, var(--surface) 0%, rgba(12, 15, 20, 0.95) 100%);
-        border: 1px solid var(--border-strong);
+        background: linear-gradient(180deg, rgba(16, 20, 28, 0.98) 0%, rgba(10, 12, 18, 0.95) 100%);
+        border: 1px solid rgba(79, 124, 255, 0.16);
         border-radius: var(--radius-xl);
-        padding: 18px 20px 8px;
-        margin-bottom: 16px;
-        box-shadow: var(--shadow-soft), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        padding: 20px 22px 10px;
+        margin-bottom: 20px;
+        box-shadow: var(--shadow-soft), inset 0 1px 0 rgba(255, 255, 255, 0.04);
     }
 
     .stTextInput input, .stSelectbox > div > div {
-        background: var(--bg-elevated) !important;
+        background: rgba(4, 5, 8, 0.85) !important;
         border: 1px solid var(--border-strong) !important;
         border-radius: var(--radius-md) !important;
         color: var(--text) !important;
-        min-height: 44px !important;
+        min-height: 48px !important;
         font-family: var(--mono) !important;
-        font-size: .9rem !important;
+        font-size: .92rem !important;
+        transition: border-color .15s ease, box-shadow .15s ease !important;
     }
 
     .stTextInput input::placeholder { color: var(--text-tertiary) !important; }
@@ -847,45 +968,56 @@ st.markdown(
     .stSelectbox svg { fill: var(--text-secondary) !important; }
 
     .stButton button {
-        background: linear-gradient(180deg, #3d7bff 0%, var(--blue) 100%) !important;
+        background: linear-gradient(180deg, #5b8cff 0%, var(--blue) 55%, #3d66e8 100%) !important;
         color: #fff !important;
-        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        border: 1px solid rgba(255, 255, 255, 0.14) !important;
         border-radius: var(--radius-md) !important;
-        min-height: 44px !important;
-        font-weight: 650 !important;
+        min-height: 48px !important;
+        font-weight: 700 !important;
         letter-spacing: -0.01em !important;
-        box-shadow: 0 4px 14px rgba(41, 98, 255, 0.35) !important;
+        box-shadow: 0 6px 20px rgba(79, 124, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+        transition: transform .15s ease, box-shadow .15s ease !important;
     }
 
     .stButton button:hover {
-        background: linear-gradient(180deg, #5088ff 0%, #3470ff 100%) !important;
-        box-shadow: 0 6px 20px rgba(41, 98, 255, 0.45) !important;
+        background: linear-gradient(180deg, #6b97ff 0%, #5080ff 55%, #4a72ef 100%) !important;
+        box-shadow: 0 8px 28px rgba(79, 124, 255, 0.45) !important;
+        transform: translateY(-1px);
     }
 
     .stTabs [data-baseweb="tab-list"] {
-        gap: 4px;
-        border-bottom: 1px solid var(--border);
-        background: transparent;
-        padding: 0 2px;
+        gap: 6px;
+        border-bottom: none;
+        background: rgba(255, 255, 255, 0.02);
+        padding: 6px;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border);
+        margin-bottom: 16px;
+        flex-wrap: wrap;
     }
 
     .stTabs [data-baseweb="tab"] {
         background: transparent;
         border: none;
-        border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+        border-radius: var(--radius-sm) !important;
         color: var(--text-tertiary);
-        padding: 10px 14px;
+        padding: 9px 16px;
         font-weight: 600;
-        font-size: .84rem;
-        border-bottom: 2px solid transparent;
+        font-size: .82rem;
+        border-bottom: none !important;
+        margin: 0;
     }
 
-    .stTabs [data-baseweb="tab"]:hover { color: var(--text-secondary); background: var(--fill); }
+    .stTabs [data-baseweb="tab"]:hover {
+        color: var(--text-secondary);
+        background: rgba(255, 255, 255, 0.04);
+    }
 
     .stTabs [aria-selected="true"] {
         color: var(--text) !important;
-        border-bottom: 2px solid var(--blue) !important;
-        background: rgba(41, 98, 255, 0.08) !important;
+        background: linear-gradient(180deg, rgba(79, 124, 255, 0.22), rgba(79, 124, 255, 0.1)) !important;
+        border: 1px solid rgba(79, 124, 255, 0.35) !important;
+        box-shadow: 0 2px 12px rgba(79, 124, 255, 0.15);
     }
 
     div[data-testid="stDataFrame"] {
@@ -933,16 +1065,19 @@ st.markdown(
     }
 
     .app-footer {
-        margin-top: 28px;
-        padding: 14px 18px;
+        margin-top: 32px;
+        padding: 16px 20px;
         border-radius: var(--radius-lg);
         border: 1px solid var(--border);
-        background: rgba(8, 10, 14, 0.75);
+        background: linear-gradient(180deg, rgba(10, 12, 18, 0.9), rgba(6, 7, 10, 0.95));
         color: var(--text-tertiary);
-        font-size: .74rem;
+        font-size: .72rem;
         text-align: center;
         letter-spacing: 0.02em;
+        line-height: 1.55;
     }
+
+    .app-footer strong { color: var(--cyan); font-weight: 650; }
 
     div[data-baseweb="popover"], div[data-baseweb="menu"] {
         background: var(--surface-2) !important;
@@ -1084,8 +1219,34 @@ st.markdown(
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: 7px;
-        margin: -6px 0 14px;
+        gap: 8px;
+        margin: 0 0 18px;
+        padding: 12px 14px;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.02);
+    }
+
+    .gbar-verdict {
+        margin-top: 18px;
+        padding: 14px 16px;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(79, 124, 255, 0.15);
+        background: linear-gradient(90deg, rgba(79, 124, 255, 0.08), rgba(45, 212, 191, 0.05));
+        color: var(--text-secondary);
+        font-size: .86rem;
+        line-height: 1.55;
+    }
+
+    .gbar-verdict b { color: var(--text); }
+
+    .learn-card {
+        transition: border-color .2s ease, transform .2s ease;
+    }
+
+    .learn-card:hover {
+        border-color: rgba(79, 124, 255, 0.25);
+        transform: translateY(-2px);
     }
 
     .flag-chip {
@@ -1154,19 +1315,6 @@ st.markdown(
     .gbar-fill.con { background: var(--purple); box-shadow: 0 0 12px rgba(124, 92, 255, 0.4); }
     .gbar-fill.his { background: var(--green); box-shadow: 0 0 12px rgba(8, 153, 129, 0.4); }
     .gbar-fill.neg { background: var(--red); box-shadow: 0 0 12px rgba(242, 54, 69, 0.4); }
-
-    .gbar-verdict {
-        margin-top: 16px;
-        padding: 12px 14px;
-        border-radius: var(--radius-md);
-        border: 1px solid var(--border);
-        background: var(--fill);
-        color: var(--text-secondary);
-        font-size: .86rem;
-        line-height: 1.5;
-    }
-
-    .gbar-verdict b { color: var(--text); }
 
     .cmp-table { width: 100%; border-collapse: collapse; }
 
@@ -1415,6 +1563,7 @@ st.markdown(
 
 SECTOR_MODELS = {
     "Technology": {
+        "discount_rate": 0.10,
         "business_weights": {"growth": 0.25, "gross": 0.20, "operating": 0.15, "fcf": 0.20, "roe": 0.10, "balance": 0.10},
         "business_benchmarks": {"gross": 0.70, "operating": 0.30, "fcf": 0.25, "roe": 0.25},
         "expectation_weights": {"required_growth": 0.50, "ev_sales": 0.25, "pe": 0.10, "ev_ebitda": 0.15},
@@ -1423,6 +1572,7 @@ SECTOR_MODELS = {
         "financial_benchmarks": {"operating": 0.28, "fcf": 0.22},
     },
     "Communication Services": {
+        "discount_rate": 0.10,
         "business_weights": {"growth": 0.20, "gross": 0.15, "operating": 0.20, "fcf": 0.20, "roe": 0.10, "balance": 0.15},
         "business_benchmarks": {"gross": 0.60, "operating": 0.25, "fcf": 0.20, "roe": 0.22},
         "expectation_weights": {"required_growth": 0.45, "ev_sales": 0.25, "pe": 0.15, "ev_ebitda": 0.15},
@@ -1431,6 +1581,7 @@ SECTOR_MODELS = {
         "financial_benchmarks": {"operating": 0.24, "fcf": 0.18},
     },
     "Consumer Cyclical": {
+        "discount_rate": 0.11,
         "business_weights": {"growth": 0.20, "gross": 0.10, "operating": 0.20, "fcf": 0.20, "roe": 0.15, "balance": 0.15},
         "business_benchmarks": {"gross": 0.45, "operating": 0.18, "fcf": 0.12, "roe": 0.22},
         "expectation_weights": {"required_growth": 0.40, "ev_sales": 0.20, "pe": 0.20, "ev_ebitda": 0.20},
@@ -1439,6 +1590,7 @@ SECTOR_MODELS = {
         "financial_benchmarks": {"operating": 0.16, "fcf": 0.10},
     },
     "Consumer Defensive": {
+        "discount_rate": 0.09,
         "business_weights": {"growth": 0.10, "gross": 0.10, "operating": 0.20, "fcf": 0.25, "roe": 0.15, "balance": 0.20},
         "business_benchmarks": {"gross": 0.40, "operating": 0.16, "fcf": 0.12, "roe": 0.22},
         "expectation_weights": {"required_growth": 0.30, "ev_sales": 0.20, "pe": 0.25, "ev_ebitda": 0.25},
@@ -1447,6 +1599,7 @@ SECTOR_MODELS = {
         "financial_benchmarks": {"operating": 0.15, "fcf": 0.11},
     },
     "Industrials": {
+        "discount_rate": 0.10,
         "business_weights": {"growth": 0.15, "gross": 0.10, "operating": 0.20, "fcf": 0.20, "roe": 0.15, "balance": 0.20},
         "business_benchmarks": {"gross": 0.40, "operating": 0.18, "fcf": 0.12, "roe": 0.20},
         "expectation_weights": {"required_growth": 0.35, "ev_sales": 0.15, "pe": 0.25, "ev_ebitda": 0.25},
@@ -1455,6 +1608,7 @@ SECTOR_MODELS = {
         "financial_benchmarks": {"operating": 0.16, "fcf": 0.10},
     },
     "Healthcare": {
+        "discount_rate": 0.10,
         "business_weights": {"growth": 0.20, "gross": 0.15, "operating": 0.15, "fcf": 0.15, "roe": 0.10, "balance": 0.25},
         "business_benchmarks": {"gross": 0.65, "operating": 0.22, "fcf": 0.16, "roe": 0.20},
         "expectation_weights": {"required_growth": 0.45, "ev_sales": 0.25, "pe": 0.15, "ev_ebitda": 0.15},
@@ -1463,6 +1617,7 @@ SECTOR_MODELS = {
         "financial_benchmarks": {"operating": 0.20, "fcf": 0.14},
     },
     "Energy": {
+        "discount_rate": 0.12,
         "business_weights": {"growth": 0.10, "gross": 0.05, "operating": 0.20, "fcf": 0.30, "roe": 0.10, "balance": 0.25},
         "business_benchmarks": {"gross": 0.35, "operating": 0.20, "fcf": 0.15, "roe": 0.18},
         "expectation_weights": {"required_growth": 0.25, "ev_sales": 0.15, "pe": 0.25, "ev_ebitda": 0.35},
@@ -1471,6 +1626,7 @@ SECTOR_MODELS = {
         "financial_benchmarks": {"operating": 0.18, "fcf": 0.13},
     },
     "Basic Materials": {
+        "discount_rate": 0.11,
         "business_weights": {"growth": 0.10, "gross": 0.10, "operating": 0.20, "fcf": 0.25, "roe": 0.10, "balance": 0.25},
         "business_benchmarks": {"gross": 0.35, "operating": 0.18, "fcf": 0.12, "roe": 0.18},
         "expectation_weights": {"required_growth": 0.25, "ev_sales": 0.15, "pe": 0.25, "ev_ebitda": 0.35},
@@ -1479,6 +1635,7 @@ SECTOR_MODELS = {
         "financial_benchmarks": {"operating": 0.16, "fcf": 0.10},
     },
     "Utilities": {
+        "discount_rate": 0.08,
         "business_weights": {"growth": 0.05, "gross": 0.05, "operating": 0.20, "fcf": 0.20, "roe": 0.15, "balance": 0.35},
         "business_benchmarks": {"gross": 0.35, "operating": 0.22, "fcf": 0.10, "roe": 0.14},
         "expectation_weights": {"required_growth": 0.20, "ev_sales": 0.15, "pe": 0.30, "ev_ebitda": 0.35},
@@ -1487,6 +1644,7 @@ SECTOR_MODELS = {
         "financial_benchmarks": {"operating": 0.20, "fcf": 0.09},
     },
     "Real Estate": {
+        "discount_rate": 0.09,
         "business_weights": {"growth": 0.10, "gross": 0.05, "operating": 0.15, "fcf": 0.25, "roe": 0.10, "balance": 0.35},
         "business_benchmarks": {"gross": 0.55, "operating": 0.35, "fcf": 0.18, "roe": 0.14},
         "expectation_weights": {"required_growth": 0.20, "ev_sales": 0.15, "pe": 0.25, "ev_ebitda": 0.40},
@@ -1497,6 +1655,7 @@ SECTOR_MODELS = {
 }
 
 DEFAULT_SECTOR_MODEL = {
+    "discount_rate": 0.10,
     "business_weights": {"growth": 0.20, "gross": 0.15, "operating": 0.20, "fcf": 0.20, "roe": 0.15, "balance": 0.10},
     "business_benchmarks": {"gross": 0.60, "operating": 0.30, "fcf": 0.20, "roe": 0.25},
     "expectation_weights": {"required_growth": 0.45, "ev_sales": 0.25, "pe": 0.15, "ev_ebitda": 0.15},
@@ -1506,16 +1665,24 @@ DEFAULT_SECTOR_MODEL = {
 }
 
 SEC_TAGS = {
-    "revenue": ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet"],
+    "revenue": ["RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet", "Revenues"],
     "net_income": ["NetIncomeLoss", "ProfitLoss"],
     "assets": ["Assets"],
     "equity": ["StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"],
     "cash": ["CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"],
     "debt": ["DebtCurrent", "LongTermDebtCurrent", "LongTermDebtNoncurrent", "LongTermDebtAndFinanceLeaseObligationsCurrent", "LongTermDebtAndFinanceLeaseObligationsNoncurrent"],
-    "operating_cash_flow": ["NetCashProvidedByUsedInOperatingActivities"],
-    "capex": ["PaymentsToAcquirePropertyPlantAndEquipment"],
+    "operating_cash_flow": [
+        "NetCashProvidedByUsedInOperatingActivities",
+        "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
+        "CashProvidedByUsedInOperatingActivities",
+    ],
+    "capex": [
+        "PaymentsToAcquirePropertyPlantAndEquipment",
+        "PaymentsToAcquireProductiveAssets",
+        "PaymentsForCapitalImprovements",
+        "PurchaseOfPropertyPlantAndEquipment",
+    ],
 }
-
 
 def get_sector_model(sector):
     return SECTOR_MODELS.get(sector, DEFAULT_SECTOR_MODEL)
@@ -1567,6 +1734,17 @@ def percent(value):
     if value is None:
         return "N/A"
     return f"{value * 100:.1f}%"
+
+
+def required_growth_label(analysis):
+    if analysis.get("model_fcf_refused") or analysis.get("required_growth") is None:
+        return "N/A"
+    if analysis.get("growth_clamped"):
+        growth = analysis["required_growth"]
+        if growth is not None and growth >= 1.0:
+            return ">120%/yr"
+        return "<-40%/yr"
+    return f"{percent(analysis['required_growth'])} /yr"
 
 
 def multiple(value):
@@ -1718,13 +1896,19 @@ def normalize_capex(capex):
 
 
 def compute_fcf(operating_cash_flow, capex, reported_fcf=None):
-    if reported_fcf is not None:
-        return safe_float(reported_fcf)
+    """Prefer OCF − Capex; fall back to reported FCF. Never invent a number."""
     ocf = safe_float(operating_cash_flow)
     cap = normalize_capex(capex)
-    if ocf is None or cap is None:
+    if ocf is not None and cap is not None:
+        return ocf + cap
+    return safe_float(reported_fcf)
+
+
+def ttm_sum(df, names, periods=4):
+    series = historical_series(df, names)
+    if len(series) < periods:
         return None
-    return ocf + cap
+    return float(series.iloc[:periods].sum())
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -1757,6 +1941,11 @@ def fetch_yahoo_data(ticker):
         cashflow = pd.DataFrame()
 
     try:
+        quarterly_cashflow = stock.quarterly_cashflow
+    except Exception:
+        quarterly_cashflow = pd.DataFrame()
+
+    try:
         history = stock.history(period="5y", auto_adjust=True)
     except Exception:
         history = pd.DataFrame()
@@ -1772,6 +1961,7 @@ def fetch_yahoo_data(ticker):
         "financials": financials,
         "balance": balance,
         "cashflow": cashflow,
+        "quarterly_cashflow": quarterly_cashflow,
         "history": history,
         "revenue_estimate": revenue_estimate,
     }
@@ -1886,8 +2076,12 @@ def evidence_dataframe(analysis, company_name, ticker, sector, industry, reporti
             ["Operating Margin", percent(analysis["operating_margin"])],
             ["Profit Margin", percent(analysis["profit_margin"])],
             ["FCF Margin", percent(analysis["fcf_margin"])],
+            ["FCF margin used in reverse DCF", percent(analysis.get("model_fcf_margin"))],
+            ["Discount rate", percent(analysis.get("discount_rate"))],
+            ["Terminal growth", percent(analysis.get("terminal_growth"))],
             ["Historical Revenue Growth", percent(analysis["historical_growth"])],
-            ["Required Revenue Growth", percent(analysis["required_growth"])],
+            ["Historical window (years)", str(analysis.get("historical_growth_years") or "—")],
+            ["Required Revenue Growth", required_growth_label(analysis)],
             ["Analyst Consensus Growth", percent(analysis.get("consensus_growth"))],
             ["Analyst Target Price", money(analysis.get("target_mean_price"), trading_currency, display_currency, display_fx_trading)],
             ["EV/Sales", multiple(analysis["ev_sales"])],
@@ -1987,40 +2181,114 @@ def sec_currency_candidates(reporting_currency, trading_currency):
 
 
 def sec_fact_values(companyfacts, tags, preferred_currencies):
+    """Pick the best annual series across tags + taxonomies (us-gaap, ifrs-full)."""
     if not companyfacts:
         return pd.Series(dtype=float), None
 
-    facts = companyfacts.get("facts", {}).get("us-gaap", {})
+    fact_roots = companyfacts.get("facts", {}) or {}
+    taxonomies = []
+    for key in ("us-gaap", "ifrs-full"):
+        if key in fact_roots:
+            taxonomies.append(fact_roots[key])
+    for key, block in fact_roots.items():
+        if key not in ("us-gaap", "ifrs-full") and isinstance(block, dict):
+            taxonomies.append(block)
 
-    for tag in tags:
-        item = facts.get(tag)
-        if not item:
-            continue
+    candidates = []
+    for facts in taxonomies:
+        for tag in tags:
+            item = facts.get(tag)
+            if not item:
+                continue
 
-        units = item.get("units", {})
-        currency_order = preferred_currencies + [c for c in units if c not in preferred_currencies]
+            units = item.get("units", {})
+            currency_order = preferred_currencies + [c for c in units if c not in preferred_currencies]
 
-        for currency in currency_order:
-            values = units.get(currency, [])
-            annual = [
-                x
-                for x in values
-                if x.get("form") in ["10-K", "20-F", "40-F"]
-                and x.get("val") is not None
-                and x.get("fy") is not None
-            ]
+            for currency in currency_order:
+                values = units.get(currency, [])
+                annual = [
+                    x
+                    for x in values
+                    if x.get("form") in ["10-K", "20-F", "40-F"]
+                    and x.get("val") is not None
+                    and x.get("fy") is not None
+                ]
+                if not annual:
+                    continue
 
-            if annual:
                 annual = sorted(annual, key=lambda x: (x.get("fy", 0), x.get("end", "")), reverse=True)
                 yearly = {}
+                latest_end = ""
                 for row in annual:
                     fy = row.get("fy")
                     if fy not in yearly:
                         yearly[fy] = safe_float(row.get("val"))
+                        latest_end = max(latest_end, row.get("end") or "")
                 ordered = pd.Series([yearly[fy] for fy in sorted(yearly.keys(), reverse=True)])
-                return ordered, currency
+                candidates.append((latest_end, len(ordered), ordered, currency))
+                break  # best currency for this tag in this taxonomy
 
-    return pd.Series(dtype=float), None
+    if not candidates:
+        return pd.Series(dtype=float), None
+
+    candidates.sort(key=lambda c: (c[0], c[1]), reverse=True)
+    _, _, ordered, currency = candidates[0]
+    return ordered, currency
+
+
+def pick_fcf_from_sources(sec_fcf, yahoo_annual_fcf, yahoo_ttm_fcf, yahoo_info_fcf, revenue_from_sec):
+    """
+    Prefer period-matched FCF: SEC with SEC revenue, Yahoo annual with Yahoo revenue,
+    then TTM / reported as last resorts. Never invent.
+    """
+    if revenue_from_sec:
+        order = [
+            (sec_fcf, "SEC EDGAR (OCF − Capex)"),
+            (yahoo_annual_fcf, "Yahoo Finance annual (OCF − Capex)"),
+            (yahoo_ttm_fcf, "Yahoo Finance TTM (OCF − Capex)"),
+            (yahoo_info_fcf, "Yahoo Finance reported FCF"),
+        ]
+    else:
+        order = [
+            (yahoo_annual_fcf, "Yahoo Finance annual (OCF − Capex)"),
+            (sec_fcf, "SEC EDGAR (OCF − Capex)"),
+            (yahoo_ttm_fcf, "Yahoo Finance TTM (OCF − Capex)"),
+            (yahoo_info_fcf, "Yahoo Finance reported FCF"),
+        ]
+    for value, source in order:
+        if value is not None:
+            return value, source
+    return None, None
+
+
+def choose_revenue_history(sec_history, yahoo_history):
+    """Prefer the series with usable multi-year coverage; break ties on length."""
+    sec_ok = sec_history is not None and len(sec_history) >= 2
+    yahoo_ok = yahoo_history is not None and len(yahoo_history) >= 2
+    if sec_ok and yahoo_ok:
+        return sec_history if len(sec_history) >= len(yahoo_history) else yahoo_history
+    if sec_ok:
+        return sec_history
+    if yahoo_ok:
+        return yahoo_history
+    if sec_history is not None and not sec_history.empty:
+        return sec_history
+    return yahoo_history if yahoo_history is not None else pd.Series(dtype=float)
+
+
+def data_coverage_confidence(fields, quality_flags):
+    """Confidence tracks field coverage, not how good the fundamentals look."""
+    present = sum(1 for v in fields.values() if v)
+    total = len(fields) or 1
+    ratio = present / total
+    bad_count = sum(1 for _, level in quality_flags if level == "bad")
+    missing_growth = not fields.get("historical_growth", False)
+
+    if bad_count or ratio < 0.5:
+        return "Low", ratio
+    if missing_growth or ratio < 0.85:
+        return "Medium", ratio
+    return "High", ratio
 
 
 def sec_latest(companyfacts, tags, preferred_currencies):
@@ -2059,160 +2327,23 @@ def pick_value(primary, fallback, primary_name, fallback_name, primary_currency=
     return fallback, fallback_name
 
 
-def dcf_enterprise_value(revenue, growth, fcf_margin, discount_rate=DISCOUNT_RATE, terminal_growth=TERMINAL_GROWTH, years=FORECAST_YEARS):
-    revenue = safe_float(revenue)
-    fcf_margin = safe_float(fcf_margin)
-    if revenue is None or fcf_margin is None or revenue <= 0 or fcf_margin <= 0:
-        return None
-    if discount_rate <= terminal_growth:
-        return None
-
-    present_value = 0
-    projected_revenue = revenue
-    final_fcf = 0
-    for year in range(1, years + 1):
-        projected_revenue *= 1 + growth
-        final_fcf = projected_revenue * fcf_margin
-        present_value += final_fcf / ((1 + discount_rate) ** year)
-
-    terminal_value = final_fcf * (1 + terminal_growth) / (discount_rate - terminal_growth)
-    present_value += terminal_value / ((1 + discount_rate) ** years)
-    return present_value
-
-
-def solve_required_growth(enterprise_value, revenue, fcf_margin):
-    enterprise_value = safe_float(enterprise_value)
-    revenue = safe_float(revenue)
-    fcf_margin = safe_float(fcf_margin)
-
-    if enterprise_value is None or revenue is None or fcf_margin is None:
-        return None
-    if enterprise_value <= 0 or revenue <= 0 or fcf_margin <= 0:
-        return None
-    if DISCOUNT_RATE <= TERMINAL_GROWTH:
-        return None
-
-    low = -0.20
-    high = 0.80
-
-    for _ in range(80):
-        mid = (low + high) / 2
-        if dcf_enterprise_value(revenue, mid, fcf_margin) < enterprise_value:
-            low = mid
-        else:
-            high = mid
-
-    return (low + high) / 2
-
-
-def business_quality_score(revenue_growth, gross_margin, operating_margin, fcf_margin, roe, debt_to_assets, sector_model):
-    benchmarks = sector_model["business_benchmarks"]
-    weights = sector_model["business_weights"]
-
-    growth_score = clamp(50 + (revenue_growth or 0) * 250)
-    gross_score = clamp(((gross_margin or 0) / benchmarks["gross"]) * 100)
-    operating_score = clamp(((operating_margin or 0) / benchmarks["operating"]) * 100)
-    fcf_score = clamp(((fcf_margin or 0) / benchmarks["fcf"]) * 100)
-    roe_score = clamp(((roe or 0) / benchmarks["roe"]) * 100)
-    balance_score = clamp(100 - ((debt_to_assets or 0.25) / 0.80 * 100))
-
-    return clamp(
-        growth_score * weights["growth"]
-        + gross_score * weights["gross"]
-        + operating_score * weights["operating"]
-        + fcf_score * weights["fcf"]
-        + roe_score * weights["roe"]
-        + balance_score * weights["balance"]
-    )
-
-
-def expectation_score(required_growth, ev_sales, pe, ev_ebitda, sector_model):
-    benchmarks = sector_model["expectation_benchmarks"]
-    weights = sector_model["expectation_weights"]
-
-    growth_pressure = clamp(50 + (required_growth or 0) * 180)
-    sales_pressure = clamp(((ev_sales or 3) / benchmarks["ev_sales"]) * 100) if ev_sales else 50
-    pe_pressure = clamp(((pe or 25) / benchmarks["pe"]) * 100) if pe and pe > 0 else 50
-    ebitda_pressure = clamp(((ev_ebitda or 14) / benchmarks["ev_ebitda"]) * 100) if ev_ebitda and ev_ebitda > 0 else 50
-
-    return clamp(
-        growth_pressure * weights["required_growth"]
-        + sales_pressure * weights["ev_sales"]
-        + pe_pressure * weights["pe"]
-        + ebitda_pressure * weights["ev_ebitda"]
-    )
-
-
-def financial_strength_score(cash, debt, operating_margin, fcf_margin, debt_to_assets, sector_model):
-    benchmarks = sector_model["financial_benchmarks"]
-    weights = sector_model["financial_weights"]
-
-    if cash is not None and debt is not None:
-        cash_debt_score = 100 if debt <= 0 else clamp(50 + (cash / max(debt, 1)) * 35)
-    else:
-        cash_debt_score = 60
-
-    operating_score = clamp(((operating_margin or 0) / benchmarks["operating"]) * 100)
-    fcf_score = clamp(((fcf_margin or 0) / benchmarks["fcf"]) * 100)
-    leverage_score = clamp(100 - ((debt_to_assets or 0.25) / 0.80 * 100))
-
-    return clamp(
-        cash_debt_score * weights["cash_debt"]
-        + operating_score * weights["operating"]
-        + fcf_score * weights["fcf"]
-        + leverage_score * weights["leverage"]
-    )
-
-
-def growth_reality_score(historical_growth, required_growth):
-    if required_growth is None:
-        return 50
-    if historical_growth is None:
-        historical_growth = 0.05
-
-    growth_gap = required_growth - historical_growth
-    return clamp(75 - growth_gap * 160)
-
-
-def probability_score(required_growth, historical_growth, business_quality, market_expectations):
-    if required_growth is None:
-        return 50
-    if historical_growth is None:
-        historical_growth = 0.05
-
-    growth_gap = required_growth - historical_growth
-    quality_support = (business_quality - 50) * 0.35
-    expectation_penalty = max(0, market_expectations - business_quality) * 0.35
-    growth_penalty = max(0, growth_gap) * 120
-
-    return clamp(55 + quality_support - expectation_penalty - growth_penalty)
-
-
-def reality_score(business_quality, financial_strength, market_expectations, historical_growth, required_growth):
-    growth_reality = growth_reality_score(historical_growth, required_growth)
-    expectation_reasonableness = clamp(100 - market_expectations * 0.55)
-    reality_gap_score = clamp(50 + (business_quality - market_expectations) * 0.45)
-
-    return clamp(
-        business_quality * 0.30
-        + financial_strength * 0.25
-        + growth_reality * 0.20
-        + expectation_reasonableness * 0.15
-        + reality_gap_score * 0.10
-    )
-
-
-def score_label(value):
-    value = safe_float(value, 0)
-    if value >= 85:
-        return "Strong support"
-    if value >= 70:
-        return "Reasonable support"
-    if value >= 55:
-        return "Mixed but explainable"
-    if value >= 40:
-        return "Demanding expectations"
-    return "Very demanding expectations"
+def trailing_fcf_margins(cashflow, financials, years=4):
+    """Newest-first FCF / revenue for up to `years` annual periods."""
+    ocf = historical_series(cashflow, ["Operating Cash Flow", "Total Cash From Operating Activities"])
+    capex = historical_series(cashflow, ["Capital Expenditure", "Capital Expenditures"])
+    reported = historical_series(cashflow, ["Free Cash Flow"])
+    rev = historical_series(financials, ["Total Revenue", "Operating Revenue"])
+    length = min(len(rev), years)
+    margins = []
+    for i in range(length):
+        cap = capex.iloc[i] if i < len(capex) else None
+        ocf_i = ocf.iloc[i] if i < len(ocf) else None
+        reported_i = reported.iloc[i] if i < len(reported) else None
+        fcf = compute_fcf(ocf_i, cap, reported_i)
+        revenue_i = safe_float(rev.iloc[i])
+        if fcf is not None and revenue_i and revenue_i > 0:
+            margins.append(fcf / revenue_i)
+    return margins
 
 
 def analyze_company(yahoo_data, sec_facts):
@@ -2221,11 +2352,17 @@ def analyze_company(yahoo_data, sec_facts):
     financials = yahoo_data["financials"]
     balance = yahoo_data["balance"]
     cashflow = yahoo_data["cashflow"]
+    quarterly_cashflow = yahoo_data.get("quarterly_cashflow")
+    if quarterly_cashflow is None:
+        quarterly_cashflow = pd.DataFrame()
 
     reporting_currency, trading_currency = detect_currencies(info, fast_info)
     sec_currencies = sec_currency_candidates(reporting_currency, trading_currency)
     sector = info.get("sector") or "Unknown sector"
     sector_model = get_sector_model(sector)
+    rates = model_rates(reporting_currency, sector)
+    discount_rate = rates["discount_rate"]
+    terminal_growth = rates["terminal_growth"]
 
     price = get_quote_price(info, fast_info)
     market_cap = get_market_cap(info, fast_info)
@@ -2238,10 +2375,13 @@ def analyze_company(yahoo_data, sec_facts):
 
     yahoo_operating_cash_flow = latest_value(cashflow, ["Operating Cash Flow", "Total Cash From Operating Activities"])
     yahoo_capex = latest_value(cashflow, ["Capital Expenditure", "Capital Expenditures"])
-    yahoo_free_cash_flow = compute_fcf(
-        yahoo_operating_cash_flow,
-        yahoo_capex,
-        latest_value(cashflow, ["Free Cash Flow"]),
+    yahoo_reported_fcf = latest_value(cashflow, ["Free Cash Flow"])
+    yahoo_annual_fcf = compute_fcf(yahoo_operating_cash_flow, yahoo_capex, yahoo_reported_fcf)
+    yahoo_info_fcf = safe_float(info.get("freeCashflow"))
+    yahoo_ttm_fcf = compute_fcf(
+        ttm_sum(quarterly_cashflow, ["Operating Cash Flow", "Total Cash From Operating Activities"]),
+        ttm_sum(quarterly_cashflow, ["Capital Expenditure", "Capital Expenditures"]),
+        ttm_sum(quarterly_cashflow, ["Free Cash Flow"]),
     )
 
     yahoo_cash = latest_value(balance, ["Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"])
@@ -2260,7 +2400,11 @@ def analyze_company(yahoo_data, sec_facts):
 
     sec_ocf = sec_latest(sec_facts, SEC_TAGS["operating_cash_flow"], sec_currencies)
     sec_capex_value = sec_latest(sec_facts, SEC_TAGS["capex"], sec_currencies)
-    sec_fcf = compute_fcf(sec_ocf, sec_capex_value)
+    sec_fcf_raw = compute_fcf(sec_ocf, sec_capex_value)
+    if sec_fcf_raw is not None and sec_revenue_currency and reporting_currency and sec_revenue_currency != reporting_currency:
+        sec_fcf = convert_amount(sec_fcf_raw, sec_revenue_currency, reporting_currency)
+    else:
+        sec_fcf = sec_fcf_raw
 
     revenue, revenue_source = pick_value(
         sec_revenue_latest,
@@ -2275,7 +2419,11 @@ def analyze_company(yahoo_data, sec_facts):
     equity, equity_source = pick_value(sec_equity, yahoo_equity, "SEC EDGAR", "Yahoo Finance", sec_revenue_currency, reporting_currency)
     cash, cash_source = pick_value(sec_cash, yahoo_cash, "SEC EDGAR", "Yahoo Finance", sec_revenue_currency, reporting_currency)
     debt, debt_source = pick_value(sec_debt_value, yahoo_debt, "SEC EDGAR", "Yahoo Finance", sec_revenue_currency, reporting_currency)
-    free_cash_flow, fcf_source = pick_value(sec_fcf, yahoo_free_cash_flow, "SEC EDGAR", "Yahoo Finance", sec_revenue_currency, reporting_currency)
+
+    revenue_from_sec = bool(revenue_source and str(revenue_source).startswith("SEC"))
+    free_cash_flow, fcf_source = pick_fcf_from_sources(
+        sec_fcf, yahoo_annual_fcf, yahoo_ttm_fcf, yahoo_info_fcf, revenue_from_sec
+    )
 
     market_cap_reporting = convert_amount(market_cap, trading_currency, reporting_currency)
     enterprise_value_trading = safe_float(info.get("enterpriseValue"))
@@ -2288,16 +2436,18 @@ def analyze_company(yahoo_data, sec_facts):
     if enterprise_value is None and market_cap_reporting is not None:
         enterprise_value = market_cap_reporting + (debt or 0) - (cash or 0)
 
-    revenue_history, _ = sec_fact_values(sec_facts, SEC_TAGS["revenue"], sec_currencies)
-    if revenue_history.empty:
-        revenue_history = historical_series(financials, ["Total Revenue", "Operating Revenue"])
+    revenue_history_sec, _ = sec_fact_values(sec_facts, SEC_TAGS["revenue"], sec_currencies)
+    revenue_history_yahoo = historical_series(financials, ["Total Revenue", "Operating Revenue"])
+    revenue_history = choose_revenue_history(revenue_history_sec, revenue_history_yahoo)
 
     historical_growth = None
-    if len(revenue_history) >= 2:
-        years = min(len(revenue_history) - 1, 3)
-        newest = revenue_history.iloc[0]
-        oldest = revenue_history.iloc[years]
-        historical_growth = cagr(oldest, newest, years)
+    historical_growth_years = 0
+    history_values = revenue_history.tolist() if hasattr(revenue_history, "tolist") else list(revenue_history)
+    if len(history_values) >= 2:
+        historical_growth, historical_growth_years = history_cagr(history_values, max_years=10)
+    historical_growth_3y = None
+    if len(history_values) >= 2:
+        historical_growth_3y, _ = history_cagr(history_values, max_years=3)
 
     gross_margin = safe_float(info.get("grossMargins"))
     if gross_margin is None and yahoo_gross_profit is not None and revenue:
@@ -2315,7 +2465,12 @@ def analyze_company(yahoo_data, sec_facts):
     if free_cash_flow is not None and revenue:
         fcf_margin = free_cash_flow / revenue
 
-    model_fcf_margin = fcf_margin if fcf_margin is not None and fcf_margin > 0 else DEFAULT_FCF_MARGIN
+    trailing_margins = trailing_fcf_margins(cashflow, financials, years=4)
+    sector_mature_fcf = safe_float(sector_model.get("financial_benchmarks", {}).get("fcf"), DEFAULT_FCF_MARGIN)
+    model_fcf_margin, model_fcf_refused, model_fcf_note = choose_model_fcf_margin(
+        fcf_margin, trailing_margins, sector_mature_fcf
+    )
+    model_fcf_assumed = False
 
     roe = safe_float(info.get("returnOnEquity"))
     if roe is None and net_income is not None and equity:
@@ -2335,7 +2490,16 @@ def analyze_company(yahoo_data, sec_facts):
     if pe is not None and pe <= 0:
         pe = None
 
-    required_growth = solve_required_growth(enterprise_value, revenue, model_fcf_margin)
+    required_growth, growth_clamped = (None, False)
+    if model_fcf_margin is not None:
+        required_growth, growth_clamped = solve_required_growth(
+            enterprise_value,
+            revenue,
+            model_fcf_margin,
+            discount_rate,
+            terminal_growth,
+            start_margin=fcf_margin if fcf_margin is not None and fcf_margin > 0 else model_fcf_margin,
+        )
 
     consensus_growth = None
     revenue_estimate = yahoo_data.get("revenue_estimate")
@@ -2352,16 +2516,22 @@ def analyze_company(yahoo_data, sec_facts):
     quality_flags = []
     if revenue is None:
         quality_flags.append(("Revenue unavailable", "bad"))
-    if required_growth is None:
+    if model_fcf_refused:
+        quality_flags.append(("Required growth N/A — no positive free-cash margin to reverse-solve", "bad"))
+    elif required_growth is None:
         quality_flags.append(("Required growth not solvable", "bad"))
     if free_cash_flow is None:
-        quality_flags.append(("Free cash flow unavailable", "warn"))
-    if fcf_margin is None or fcf_margin <= 0:
-        quality_flags.append((f"FCF margin defaulted to {DEFAULT_FCF_MARGIN:.0%}", "warn"))
+        quality_flags.append(("Free cash flow unavailable (SEC + Yahoo exhausted)", "warn"))
+    elif fcf_margin is not None and fcf_margin <= 0:
+        quality_flags.append((f"Actual FCF margin {fcf_margin:.0%} — reverse DCF not run on negative cash", "warn"))
     if historical_growth is None:
-        quality_flags.append(("No revenue growth history", "warn"))
+        quality_flags.append(("No revenue growth history — growth scored as incomplete (not assumed 5%)", "warn"))
     if cash is None or debt is None:
-        quality_flags.append(("Balance sheet incomplete", "warn"))
+        quality_flags.append(("Balance sheet incomplete — leverage scored as missing evidence", "warn"))
+    if growth_clamped:
+        quality_flags.append(("Required growth hit solver bound — shown as a range, not an exact rate", "warn"))
+    if sector == "Real Estate":
+        quality_flags.append(("REIT caveat: model uses FCF/P-E, not FFO/AFFO — scores are approximate", "warn"))
     if ev_ebitda is None or ev_ebitda <= 0:
         quality_flags.append(("EV/EBITDA unavailable", "info"))
     if pe is None:
@@ -2370,15 +2540,34 @@ def analyze_company(yahoo_data, sec_facts):
         quality_flags.append(("No analyst estimates", "info"))
     if sec_facts is None:
         quality_flags.append(("Yahoo data only, no SEC facts", "info"))
+    if rates["used_fallback_currency"]:
+        quality_flags.append((f"Unknown reporting currency — used USD rate world as fallback", "warn"))
+    quality_flags.append(
+        (
+            f"{rates['currency']} discount {discount_rate:.1%} · terminal {terminal_growth:.1%} · {sector} spread",
+            "info",
+        )
+    )
+    quality_flags.append((f"FCF margin in model: {model_fcf_note}", "info"))
 
-    bad_count = sum(1 for _, level in quality_flags if level == "bad")
-    warn_count = sum(1 for _, level in quality_flags if level == "warn")
-    if bad_count:
+    coverage_fields = {
+        "revenue": revenue is not None,
+        "free_cash_flow": free_cash_flow is not None,
+        "historical_growth": historical_growth is not None,
+        "cash": cash is not None,
+        "debt": debt is not None,
+        "enterprise_value": enterprise_value is not None,
+    }
+    confidence, coverage_ratio = data_coverage_confidence(coverage_fields, quality_flags)
+    if model_fcf_refused or growth_clamped:
         confidence = "Low"
-    elif warn_count >= 2:
+    elif confidence == "High" and historical_growth is None:
         confidence = "Medium"
-    else:
-        confidence = "High"
+    filled = sum(1 for v in coverage_fields.values() if v)
+    quality_flags.insert(
+        0,
+        (f"Data coverage {filled}/{len(coverage_fields)} fields ({coverage_ratio:.0%})", "info"),
+    )
 
     business_quality = business_quality_score(
         historical_growth,
@@ -2404,18 +2593,19 @@ def analyze_company(yahoo_data, sec_facts):
     gap = business_quality - market_expectations
 
     probability = probability_score(
-        required_growth,
+        None if growth_clamped else required_growth,
         historical_growth,
         business_quality,
-        market_expectations,
+        consensus_growth,
     )
 
     final_score = reality_score(
         business_quality,
         financial_strength,
-        market_expectations,
         historical_growth,
         required_growth,
+        consensus_growth,
+        growth_clamped=growth_clamped or model_fcf_refused,
     )
 
     sources = {
@@ -2425,7 +2615,7 @@ def analyze_company(yahoo_data, sec_facts):
         "Equity": equity_source,
         "Cash": cash_source,
         "Debt": debt_source,
-        "Free Cash Flow": fcf_source,
+        "Free Cash Flow": fcf_source or "Unavailable",
         "Price / Market Data": "Yahoo Finance",
         "Reporting Currency": f"Yahoo Finance ({reporting_currency})",
         "Trading Currency": f"Yahoo Finance ({trading_currency})",
@@ -2450,8 +2640,20 @@ def analyze_company(yahoo_data, sec_facts):
         "profit_margin": profit_margin,
         "fcf_margin": fcf_margin,
         "model_fcf_margin": model_fcf_margin,
+        "model_fcf_assumed": model_fcf_assumed,
+        "model_fcf_refused": model_fcf_refused,
+        "model_fcf_note": model_fcf_note,
+        "discount_rate": discount_rate,
+        "terminal_growth": terminal_growth,
+        "risk_free": rates["risk_free"],
+        "erp": rates["erp"],
+        "sector_spread": rates["sector_spread"],
+        "rate_currency": rates["currency"],
         "historical_growth": historical_growth,
+        "historical_growth_years": historical_growth_years,
+        "historical_growth_3y": historical_growth_3y,
         "required_growth": required_growth,
+        "growth_clamped": growth_clamped,
         "business_quality": business_quality,
         "market_expectations": market_expectations,
         "financial_strength": financial_strength,
@@ -2472,6 +2674,10 @@ def analyze_company(yahoo_data, sec_facts):
 
 
 def conclusion_text(analysis):
+    if analysis.get("model_fcf_refused"):
+        return "Required growth is not computed here. Free cash is missing or negative, so inventing a healthy cash margin would fake the answer."
+    if analysis.get("growth_clamped"):
+        return "The price sits outside the model's growth search range. Treat the score as a warning label, not a precise implied growth rate."
     if analysis["reality_score"] >= 80:
         return "The company evidence appears to strongly support the expectations embedded in the price."
     if analysis["reality_score"] >= 65:
@@ -2485,10 +2691,11 @@ def conclusion_text(analysis):
 
 def pricing_points(analysis, display_currency=None, display_fx=1.0):
     points = [
-        ("Required revenue growth", f"{percent(analysis['required_growth'])} per year"),
+        ("Required revenue growth", required_growth_label(analysis)),
         ("FCF margin used in model", percent(analysis["model_fcf_margin"])),
+        ("Discount rate", percent(analysis.get("discount_rate"))),
+        ("Terminal growth", percent(analysis.get("terminal_growth"))),
         ("EV/Sales pressure", multiple(analysis["ev_sales"])),
-        ("Probability estimate", f"{score(analysis['probability'])}/100"),
     ]
     if analysis.get("target_mean_price") is not None:
         points.append(
@@ -2508,8 +2715,11 @@ def pricing_points(analysis, display_currency=None, display_fx=1.0):
 
 
 def reality_points(analysis, display_currency, display_fx):
+    years = analysis.get("historical_growth_years") or 0
+    hist_label = f"Historical revenue growth ({years}y)" if years else "Historical revenue growth"
     return [
-        ("Historical revenue growth", percent(analysis["historical_growth"])),
+        (hist_label, percent(analysis["historical_growth"])),
+        ("Analyst consensus growth", percent(analysis.get("consensus_growth"))),
         ("Operating margin", percent(analysis["operating_margin"])),
         ("Free cash flow margin", percent(analysis["fcf_margin"])),
         (
@@ -2584,7 +2794,7 @@ def score_panel_html(analysis, tone):
         f'<div class="score-kicker">Expectation Reality Score</div>'
         f'{score_ring_svg(analysis["reality_score"], tone)}'
         f'<div class="score-status">{score_label(analysis["reality_score"])}</div>'
-        f'<div class="score-caption">How well current company evidence supports the expectations implied by the market price.</div>'
+        f'<div class="score-caption">Heuristic dashboard — not a buy/sell call. Main tell is required growth vs history and consensus.</div>'
         f"</div>"
     )
 
@@ -2706,9 +2916,12 @@ def compare_table_html(results):
         ("Business Quality", lambda a: score_cell(a["business_quality"])),
         ("Financial Strength", lambda a: score_cell(a["financial_strength"])),
         ("Market Expectations", lambda a: plain_cell(score(a["market_expectations"]))),
-        ("Required growth /yr", lambda a: plain_cell(percent(a["required_growth"]))),
+        ("Required growth /yr", lambda a: plain_cell(required_growth_label(a))),
         ("Analyst consensus (next FY)", lambda a: plain_cell(percent(a.get("consensus_growth")))),
-        ("Historical growth (3y)", lambda a: plain_cell(percent(a["historical_growth"]))),
+        ("Historical growth", lambda a: plain_cell(percent(a["historical_growth"]))),
+        ("Discount rate", lambda a: plain_cell(percent(a.get("discount_rate")))),
+        ("Terminal growth", lambda a: plain_cell(percent(a.get("terminal_growth")))),
+        ("Reporting currency", lambda a: plain_cell(a.get("reporting_currency"))),
         ("Operating margin", lambda a: plain_cell(percent(a["operating_margin"]))),
         ("FCF margin", lambda a: plain_cell(percent(a["fcf_margin"]))),
         ("EV/Sales", lambda a: plain_cell(multiple(a["ev_sales"]))),
@@ -2765,84 +2978,91 @@ def watch_quote_html(quote):
     )
 
 
-with st.sidebar:
-    st.markdown('<div class="watch-heading">Watchlist</div>', unsafe_allow_html=True)
+def render_sidebar():
+    with st.sidebar:
+        st.markdown('<div class="watch-heading">Watchlist</div>', unsafe_allow_html=True)
 
-    with st.form("watch_add_form", clear_on_submit=True):
-        add_col, btn_col = st.columns([2.2, 1])
-        with add_col:
-            new_symbol = st.text_input("Add ticker", placeholder="Ticker", label_visibility="collapsed")
-        with btn_col:
-            add_clicked = st.form_submit_button("Add", use_container_width=True)
+        with st.form("watch_add_form", clear_on_submit=True):
+            add_col, btn_col = st.columns([2.2, 1])
+            with add_col:
+                new_symbol = st.text_input("Add ticker", placeholder="Ticker", label_visibility="collapsed")
+            with btn_col:
+                add_clicked = st.form_submit_button("Add", use_container_width=True)
 
-    if add_clicked:
-        new_symbol = normalize_ticker(new_symbol)
-        if not new_symbol:
-            st.sidebar.error("Enter a ticker symbol.")
-        elif not ticker_format_ok(new_symbol):
-            st.sidebar.error(f"Invalid ticker format: {new_symbol}")
-        elif new_symbol in st.session_state.watchlist:
-            st.sidebar.warning(f"{new_symbol} is already on the watchlist.")
-        elif not ticker_exists(new_symbol):
-            st.sidebar.error(f"Invalid ticker: {new_symbol}")
-        else:
-            st.session_state.watchlist.append(new_symbol)
-            st.sidebar.success(f"Added {new_symbol}")
-
-    if not st.session_state.watchlist:
-        st.caption("Watchlist is empty. Add a ticker above.")
-
-    show_watch_scores = st.toggle("Reality scores", value=True, key="watch_show_scores")
-
-    for symbol in list(st.session_state.watchlist):
-        quote = fetch_watch_quote(symbol)
-        if show_watch_scores:
-            sym_col, quote_col, score_col, rm_col = st.columns([1.15, 1.0, 0.62, 0.4])
-        else:
-            sym_col, quote_col, rm_col = st.columns([1.3, 1.3, 0.5])
-        with sym_col:
-            if st.button(symbol, key=f"watch_{symbol}", use_container_width=True):
-                st.session_state.ticker = symbol
-                st.session_state.ticker_error = None
-                st.rerun()
-        with quote_col:
-            st.markdown(watch_quote_html(quote), unsafe_allow_html=True)
-        if show_watch_scores:
-            with score_col:
-                watch_score = fetch_watch_score(symbol)
-                if watch_score is None:
-                    st.markdown('<div class="watch-score">—</div>', unsafe_allow_html=True)
-                else:
-                    st.markdown(
-                        f'<div class="watch-score {score_tone(watch_score)}">{score(watch_score)}</div>',
-                        unsafe_allow_html=True,
-                    )
-        with rm_col:
-            if st.button("✕", key=f"watch_rm_{symbol}", use_container_width=True):
-                st.session_state.watchlist.remove(symbol)
-                st.rerun()
-
-    current = st.session_state.ticker
-    if current and current not in st.session_state.watchlist and not st.session_state.ticker_error:
-        st.divider()
-        if st.button(f"☆ Watch {current}", key="watch_current", use_container_width=True):
-            if ticker_exists(current):
-                st.session_state.watchlist.append(current)
-                st.rerun()
+        if add_clicked:
+            new_symbol = normalize_ticker(new_symbol)
+            if not new_symbol:
+                st.sidebar.error("Enter a ticker symbol.")
+            elif not ticker_format_ok(new_symbol):
+                st.sidebar.error(f"Invalid ticker format: {new_symbol}")
+            elif new_symbol in st.session_state.watchlist:
+                st.sidebar.warning(f"{new_symbol} is already on the watchlist.")
+            elif not ticker_exists(new_symbol):
+                st.sidebar.error(f"Invalid ticker: {new_symbol}")
             else:
-                st.sidebar.error(f"Invalid ticker: {current}")
+                st.session_state.watchlist.append(new_symbol)
+                st.sidebar.success(f"Added {new_symbol}")
 
-    if st.session_state.recent:
-        st.divider()
-        st.markdown('<div class="watch-heading">Recent</div>', unsafe_allow_html=True)
-        recent_cols = st.columns(min(4, len(st.session_state.recent)))
-        for col, symbol in zip(recent_cols, st.session_state.recent[:4]):
-            with col:
-                if st.button(symbol, key=f"recent_{symbol}", use_container_width=True):
+        if not st.session_state.watchlist:
+            st.caption("Watchlist is empty. Add a ticker above.")
+
+        show_watch_quotes = st.toggle("Live quotes", value=False, key="watch_show_quotes")
+        show_watch_scores = st.toggle("Reality scores", value=False, key="watch_show_scores")
+
+        for symbol in list(st.session_state.watchlist):
+            if show_watch_quotes and show_watch_scores:
+                sym_col, quote_col, score_col, rm_col = st.columns([1.15, 1.0, 0.62, 0.4])
+            elif show_watch_quotes:
+                sym_col, quote_col, rm_col = st.columns([1.3, 1.3, 0.5])
+                score_col = None
+            else:
+                sym_col, rm_col = st.columns([3.2, 0.6])
+                quote_col = None
+                score_col = None
+            with sym_col:
+                if st.button(symbol, key=f"watch_{symbol}", use_container_width=True):
                     st.session_state.ticker = symbol
                     st.session_state.ticker_error = None
-                    st.session_state.invalid_ticker = ""
                     st.rerun()
+            if quote_col is not None:
+                with quote_col:
+                    st.markdown(watch_quote_html(fetch_watch_quote(symbol)), unsafe_allow_html=True)
+            if score_col is not None:
+                with score_col:
+                    watch_score = fetch_watch_score(symbol)
+                    if watch_score is None:
+                        st.markdown('<div class="watch-score">—</div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(
+                            f'<div class="watch-score {score_tone(watch_score)}">{score(watch_score)}</div>',
+                            unsafe_allow_html=True,
+                        )
+            with rm_col:
+                if st.button("✕", key=f"watch_rm_{symbol}", use_container_width=True):
+                    st.session_state.watchlist.remove(symbol)
+                    st.rerun()
+
+        current = st.session_state.ticker
+        if current and current not in st.session_state.watchlist and not st.session_state.ticker_error:
+            st.divider()
+            if st.button(f"☆ Watch {current}", key="watch_current", use_container_width=True):
+                if ticker_exists(current):
+                    st.session_state.watchlist.append(current)
+                    st.rerun()
+                else:
+                    st.sidebar.error(f"Invalid ticker: {current}")
+
+        if st.session_state.recent:
+            st.divider()
+            st.markdown('<div class="watch-heading">Recent</div>', unsafe_allow_html=True)
+            recent_cols = st.columns(min(4, len(st.session_state.recent)))
+            for col, symbol in zip(recent_cols, st.session_state.recent[:4]):
+                with col:
+                    if st.button(symbol, key=f"recent_{symbol}", use_container_width=True):
+                        st.session_state.ticker = symbol
+                        st.session_state.ticker_error = None
+                        st.session_state.invalid_ticker = ""
+                        st.rerun()
 
 
 st.markdown('<div class="app-wrap">', unsafe_allow_html=True)
@@ -2852,12 +3072,15 @@ render_html(
 <div class="terminal-header">
   {brand_lockup_html()}
   <div class="header-actions">
-    <div class="live-pill"><span class="live-dot"></span>Live market data</div>
-    <div class="live-pill badge-muted">Not investment advice</div>
+    <div class="live-pill"><span class="live-dot"></span>Live data</div>
+    <div class="live-pill badge-muted">{esc(EDUCATIONAL_DISCLAIMER)}</div>
   </div>
 </div>
+<div class="edu-banner"><b>{esc(APP_NAME)}</b> · {esc(EDUCATIONAL_DISCLAIMER)}</div>
 """
 )
+
+render_html('<div class="section-kicker">Analyze a company</div>')
 
 with st.form("search_form"):
     col_a, col_b, col_c = st.columns([3, 1.2, 1])
@@ -2892,6 +3115,8 @@ if submitted:
 else:
     display_currency = st.session_state.display_currency
 
+render_sidebar()
+
 if st.session_state.ticker_error:
     render_ticker_error(st.session_state.invalid_ticker or "input", st.session_state.ticker_error)
     st.markdown("</div>", unsafe_allow_html=True)
@@ -2902,9 +3127,9 @@ if not st.session_state.ticker:
         f"""
 <div class="empty-state">
   {brand_logo_svg("lg")}
-  <div class="eyebrow">Expectation Reality Check</div>
-  <div class="hero-title">See what the price is asking for</div>
-  <div class="hero-copy">Enter a ticker to translate market price into implied expectations, then compare those against revenue growth, margins, cash flow, and balance sheet evidence.</div>
+  <div class="eyebrow">{esc(APP_NAME)}</div>
+  <div class="hero-title">What growth is the price asking for?</div>
+  <div class="hero-copy">Type a ticker to reverse-solve required sales growth from today’s price — with currency-aware discount and terminal rates, then compare against history, cash, and analyst consensus.</div>
 </div>
 """
     )
@@ -2927,8 +3152,8 @@ if not st.session_state.ticker:
     render_html(
         """
 <div class="feature-grid">
-  <div class="panel panel-pricing"><h3>What it does</h3><p>Turns valuation into a simple question: does the business evidence support what the price appears to require?</p></div>
-  <div class="panel panel-reality"><h3>Where data comes from</h3><p>Yahoo Finance for market data. SEC EDGAR for official U.S. filing facts when available.</p></div>
+  <div class="panel panel-pricing"><h3>What it does</h3><p>Locks the current price and asks how fast sales must grow for projected free cash to justify it. Rates follow the reporting currency, not a global 10% / 3%.</p></div>
+  <div class="panel panel-reality"><h3>Where data comes from</h3><p>Yahoo Finance for market data. SEC EDGAR for official U.S. filing facts when available. Missing cash is shown as N/A, not a fake healthy margin.</p></div>
 </div>
 """
     )
@@ -2984,9 +3209,14 @@ if trading_currency != display_currency and raw_fx_trading is None:
     )
 
 render_html(
-    f'<div class="info-strip"><span>Reporting <b>{esc(reporting_currency)}</b> · Trading <b>{esc(trading_currency)}</b></span>'
-    f'<span>Display <b>{esc(display_currency)}</b>'
-    f'{f" · FX {esc(currency_note)}" if reporting_currency != display_currency else ""}</span></div>'
+    f'<div class="info-strip">'
+    f'<span>Reporting <b>{esc(reporting_currency)}</b> · Trading <b>{esc(trading_currency)}</b>'
+    f'{f" · Display <b>{esc(display_currency)}</b>" if reporting_currency != display_currency or trading_currency != display_currency else ""}'
+    f'{f" · FX {esc(currency_note)}" if reporting_currency != display_currency else ""}</span>'
+    f'<span>'
+    f'<span class="rate-chip">Discount {esc(percent(analysis.get("discount_rate")))}</span> '
+    f'<span class="rate-chip">Terminal {esc(percent(analysis.get("terminal_growth")))}</span>'
+    f'</span></div>'
 )
 
 flag_chips = "".join(
@@ -3002,8 +3232,10 @@ tone = score_tone(analysis["reality_score"])
 
 summary = (
     f"{company_name} ({ticker}) · Reality {score(analysis['reality_score'])}/100 · "
-    f"{score_label(analysis['reality_score'])} · Required growth {percent(analysis['required_growth'])} · "
-    f"Consensus {percent(analysis.get('consensus_growth'))} · Confidence {analysis.get('confidence')}"
+    f"{score_label(analysis['reality_score'])} · Required growth {required_growth_label(analysis)} · "
+    f"Consensus {percent(analysis.get('consensus_growth'))} · "
+    f"Discount {percent(analysis.get('discount_rate'))} · Terminal {percent(analysis.get('terminal_growth'))} · "
+    f"Confidence {analysis.get('confidence')}"
 )
 with st.expander("Copy summary", expanded=False):
     st.code(summary, language=None)
@@ -3049,6 +3281,10 @@ def growth_bar(label, value, css_class):
 
 
 def growth_verdict(analysis):
+    if analysis.get("model_fcf_refused"):
+        return '<div class="gbar-verdict">No required growth until free cash is positive. Showing history and consensus only.</div>'
+    if analysis.get("growth_clamped"):
+        return '<div class="gbar-verdict">Implied growth sits outside the solver range, so the bars skip a fake-precise required rate.</div>'
     required = analysis["required_growth"]
     consensus = analysis["consensus_growth"]
     if required is None or consensus is None:
@@ -3073,11 +3309,13 @@ def growth_verdict(analysis):
 
 
 if any(analysis[k] is not None for k in ("required_growth", "consensus_growth", "historical_growth")):
+    years = analysis.get("historical_growth_years") or 0
+    hist_caption = f"Historical ({years}y CAGR)" if years else "Historical CAGR"
     render_html(
         f'<div class="panel" style="margin-bottom:14px"><h3>Growth: required vs expected</h3>'
-        f'{growth_bar("Market requires (10y, implied)", analysis["required_growth"], "req")}'
+        f'{growth_bar("Market requires (10y, faded path)", analysis["required_growth"] if not analysis.get("growth_clamped") else None, "req")}'
         f'{growth_bar("Analyst consensus (next FY)", analysis["consensus_growth"], "con")}'
-        f'{growth_bar("Historical (3y CAGR)", analysis["historical_growth"], "his")}'
+        f'{growth_bar(hist_caption, analysis["historical_growth"], "his")}'
         f"{growth_verdict(analysis)}"
         f"</div>"
     )
@@ -3137,26 +3375,43 @@ with tab_whatif:
         if base_growth is None:
             base_growth = analysis["historical_growth"] if analysis["historical_growth"] is not None else 0.08
         base_growth_pct = float(min(max(base_growth * 100, -10.0), 40.0))
-        base_margin_pct = float(min(max(analysis["model_fcf_margin"] * 100, 1.0), 50.0))
+        # What-If may start from DEFAULT only as an explicit slider seed — never used in the scored model
+        seed_margin = analysis["model_fcf_margin"] if analysis["model_fcf_margin"] is not None else DEFAULT_FCF_MARGIN
+        base_margin_pct = float(min(max(seed_margin * 100, 1.0), 50.0))
+        margin_note = (
+            " Reverse DCF was not solved on the main page because free cash is not positive. These sliders are a hypothetical."
+            if analysis.get("model_fcf_refused")
+            else f" Model cash margin: {analysis.get('model_fcf_note', '')}."
+        )
+        base_discount = safe_float(analysis.get("discount_rate"), DISCOUNT_RATE)
+        base_terminal = safe_float(analysis.get("terminal_growth"), TERMINAL_GROWTH)
 
         render_html(
             '<div class="whatif-note">Set your own assumptions and see the price they justify. '
-            "The sliders start at the assumptions currently baked into the market price, so the initial "
-            "result is roughly the price today. Push growth or margin to what <b>you</b> believe and see the gap.</div>"
+            "The sliders start at this company’s currency-aware rates and the growth the main model implied, "
+            "so the first result should sit near today’s price. Change growth or margin to what <b>you</b> believe."
+            f"{margin_note}</div>"
         )
 
         sl_left, sl_right = st.columns(2)
         with sl_left:
-            wi_growth = st.slider("Revenue growth per year (10 yrs)", -10.0, 40.0, round(base_growth_pct, 1), 0.5, format="%.1f%%") / 100
+            wi_growth = st.slider("Starting revenue growth (fades to terminal)", -10.0, 40.0, round(base_growth_pct, 1), 0.5, format="%.1f%%") / 100
             wi_margin = st.slider("FCF margin at maturity", 1.0, 50.0, round(base_margin_pct, 1), 0.5, format="%.1f%%") / 100
         with sl_right:
-            wi_discount = st.slider("Discount rate", 6.0, 15.0, DISCOUNT_RATE * 100, 0.25, format="%.2f%%") / 100
-            wi_terminal = st.slider("Terminal growth", 0.0, 4.0, TERMINAL_GROWTH * 100, 0.25, format="%.2f%%") / 100
+            wi_discount = st.slider("Discount rate", 3.0, 20.0, round(base_discount * 100, 2), 0.25, format="%.2f%%") / 100
+            wi_terminal = st.slider("Terminal growth", 0.0, 6.0, round(min(max(base_terminal * 100, 0.0), 6.0), 2), 0.25, format="%.2f%%") / 100
 
         if wi_discount <= wi_terminal:
             st.warning("Discount rate must be above terminal growth for the model to converge.")
         else:
-            implied_ev = dcf_enterprise_value(analysis["revenue"], wi_growth, wi_margin, wi_discount, wi_terminal)
+            implied_ev = dcf_enterprise_value(
+                analysis["revenue"],
+                wi_growth,
+                wi_margin,
+                wi_discount,
+                wi_terminal,
+                start_margin=analysis["fcf_margin"] if analysis.get("fcf_margin") and analysis["fcf_margin"] > 0 else wi_margin,
+            )
             if implied_ev is None:
                 st.info("These inputs do not produce a valid valuation.")
             else:
@@ -3185,8 +3440,9 @@ with tab_whatif:
                 if req is not None:
                     render_html(
                         f'<div class="whatif-note">For reference, the current price implies about '
-                        f"<b>{percent(req)}</b> annual revenue growth at a {percent(analysis['model_fcf_margin'])} FCF margin, "
-                        f"{DISCOUNT_RATE:.0%} discount rate, and {TERMINAL_GROWTH:.0%} terminal growth.</div>"
+                        f"<b>{required_growth_label(analysis)}</b> starting growth at a {percent(analysis['model_fcf_margin'])} FCF margin, "
+                        f"{percent(analysis.get('discount_rate'))} discount rate, and {percent(analysis.get('terminal_growth'))} terminal growth "
+                        f"(faded path, {analysis.get('rate_currency', reporting_currency)} money world).</div>"
                     )
 
 with tab_compare:
@@ -3232,16 +3488,19 @@ with tab_compare:
         if len(compare_results) > 1:
             render_compare_chart(compare_results)
             render_html(f'<div class="panel">{compare_table_html(compare_results)}</div>')
-            st.caption("Scores use each company's own sector model. Absolute values are omitted because reporting currencies differ.")
+            st.caption(
+                "Each ticker uses its own reporting-currency discount and terminal rates. "
+                "Scores are heuristics — compare required growth vs consensus inside the same money world, not as a global ranking."
+            )
 
 with tab_learn:
     render_html(
         """
 <div class="learn-grid">
-  <div class="learn-card"><h4>Market expectations</h4><p>The future performance that appears necessary to support the current valuation.</p></div>
-  <div class="learn-card"><h4>Business reality</h4><p>The company evidence today: growth, margins, cash flow, cash, debt, and profitability.</p></div>
-  <div class="learn-card"><h4>Reality gap</h4><p>Business Quality minus Market Expectations. It shows whether evidence is ahead of or behind the expectation burden.</p></div>
-  <div class="learn-card"><h4>Expectation Reality Score</h4><p>The final score summarizing whether company evidence supports what the market appears to expect.</p></div>
+  <div class="learn-card"><h4>Required growth</h4><p>The starting sales growth that makes projected free cash, after a fade to terminal growth, match today’s price.</p></div>
+  <div class="learn-card"><h4>Discount rate</h4><p>How hard future cash is converted into today’s terms. Built from reporting-currency safe yield + risk + sector, not a global 10%.</p></div>
+  <div class="learn-card"><h4>Terminal growth</h4><p>The small forever rate after year 10. Matched to the same currency world as the cash flows.</p></div>
+  <div class="learn-card"><h4>Score</h4><p>A heuristic summary. The useful tell is required growth vs history and analyst consensus — the 0–100 is not a calibrated probability.</p></div>
 </div>
 """
     )
@@ -3292,7 +3551,11 @@ with tab_sources:
 with tab_model:
     model = analysis["sector_model"]
     st.markdown(f'<div class="section-heading">Sector framework · {sector}</div>', unsafe_allow_html=True)
-    st.caption("Weights and benchmarks are selected from Yahoo Finance sector classification.")
+    st.caption(
+        f"Discount {percent(analysis.get('discount_rate'))} = {percent(analysis.get('risk_free'))} "
+        f"{analysis.get('rate_currency', reporting_currency)} safe yield + {percent(analysis.get('erp'))} equity risk "
+        f"+ {percent(analysis.get('sector_spread'))} sector. Terminal growth {percent(analysis.get('terminal_growth'))}."
+    )
 
     business_rows = [
         ["Revenue growth", model["business_weights"]["growth"]],
@@ -3354,8 +3617,10 @@ with tab_risk:
     render_html(f'<div class="risk-list">{risk_html}</div>')
 
 render_html(
-    f'<div class="app-footer">Yahoo Finance · SEC EDGAR · {reporting_currency} reporting · '
-    f'{display_currency} display · Not investment advice · '
+    f'<div class="app-footer"><strong>{esc(APP_NAME)}</strong> ({esc(APP_SHORT)}) · '
+    f'Yahoo Finance · SEC EDGAR · {reporting_currency} reporting · '
+    f'{percent(analysis.get("discount_rate"))} discount · {percent(analysis.get("terminal_growth"))} terminal · '
+    f'{display_currency} display · {esc(EDUCATIONAL_DISCLAIMER)} · '
     f'Refreshed {datetime.now().strftime("%Y-%m-%d %H:%M")}</div>'
 )
 
