@@ -1,9 +1,9 @@
 [theme]
-base = "dark"
-primaryColor = "#ffc107"
-backgroundColor = "#0b0c0f"
-secondaryBackgroundColor = "#181714"
-textColor = "#fff4dc"
+base = "light"
+primaryColor = "#2359c7"
+backgroundColor = "#f4f6f8"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#14202b"
 font = "sans serif"
 
 [runner]
