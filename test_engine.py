@@ -7,6 +7,7 @@ from engine import (
     model_rates,
     reality_score,
     solve_required_growth,
+    solve_required_growth_detail,
     year_growth,
 )
 
@@ -47,6 +48,15 @@ class DcfTests(unittest.TestCase):
         self.assertTrue(hit)
         self.assertIsNotNone(growth)
 
+    def test_solver_classifies_below_and_above_range(self):
+        low_target = dcf_enterprise_value(200, -0.40, 0.18, 0.09, 0.02)
+        high_target = dcf_enterprise_value(200, 1.20, 0.18, 0.09, 0.02)
+        self.assertEqual(solve_required_growth_detail(low_target * 0.5, 200, 0.18, 0.09, 0.02)["status"], "below_range")
+        self.assertEqual(solve_required_growth_detail(high_target * 2, 200, 0.18, 0.09, 0.02)["status"], "above_range")
+
+    def test_invalid_discount_terminal_pair_is_unavailable(self):
+        self.assertIsNone(dcf_enterprise_value(100, 0.08, 0.15, 0.03, 0.03))
+
     def test_round_trip_solver(self):
         target = dcf_enterprise_value(200, 0.12, 0.18, 0.09, 0.02)
         implied, hit = solve_required_growth(target, 200, 0.18, 0.09, 0.02)
@@ -65,6 +75,12 @@ class HistoryAndMarginTests(unittest.TestCase):
         margin, refused, _ = choose_model_fcf_margin(-0.04, [-0.02, -0.01], 0.12)
         self.assertTrue(refused)
         self.assertIsNone(margin)
+
+    def test_refuses_negative_latest_even_with_positive_history(self):
+        margin, refused, note = choose_model_fcf_margin(-0.04, [0.12, 0.10], 0.12)
+        self.assertTrue(refused)
+        self.assertIsNone(margin)
+        self.assertIn("non-positive", note)
 
     def test_does_not_invent_mature_margin(self):
         margin, refused, _ = choose_model_fcf_margin(None, [], 0.12)

@@ -1,7 +1,10 @@
 [theme]
 base = "dark"
-primaryColor = "#2962ff"
-backgroundColor = "#030405"
-secondaryBackgroundColor = "#10141b"
-textColor = "#f2f4f8"
+primaryColor = "#ffc107"
+backgroundColor = "#0b0c0f"
+secondaryBackgroundColor = "#181714"
+textColor = "#fff4dc"
 font = "sans serif"
+
+[runner]
+fastReruns = true
