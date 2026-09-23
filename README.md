@@ -1,6 +1,6 @@
 # The Saleh Research Project (TSRP)
 
-TSRP is an educational equity-research application that compares what a current market price appears to require with historical revenue growth, analyst expectations, financial quality, free-cash-flow conversion, and balance-sheet evidence.
+TSRP is an educational equity-research application for listed company stocks. It compares what a current market price appears to require with historical revenue growth, analyst expectations, financial quality, free-cash-flow conversion, and balance-sheet evidence. Indexes, commodities, currencies, funds, and other non-company instruments are excluded.
 
 > Educational research only. Not financial, investment, tax, accounting, or legal advice. TSRP does not make recommendations, predict returns, or guarantee data accuracy. Market data may be delayed, incomplete, or incorrect. Do your own research and consult a qualified professional before making financial decisions.
 
