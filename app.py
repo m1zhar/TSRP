@@ -46,25 +46,25 @@ st.set_page_config(
 )
 
 INK = {
-    "bg": "#080A0D",
-    "bg_elevated": "#101419",
-    "card": "#101419",
-    "card_hover": "#1B222B",
-    "surface": "#151B22",
-    "surface_2": "#1B222B",
-    "text": "#F5F7FA",
-    "text_secondary": "#A0AAB6",
-    "text_tertiary": "#737F8D",
-    "blue": "#6EA8FF",
-    "blue_bright": "#8DBBFF",
-    "cyan": "#58D5C9",
-    "purple": "#A99BFF",
-    "green": "#43D17C",
-    "orange": "#F4B860",
-    "red": "#FF6B76",
-    "border": "#26313D",
-    "border_strong": "#354352",
-    "fill": "#1B222B",
+    "bg": "#f4f6f8",
+    "bg_elevated": "#ffffff",
+    "card": "#ffffff",
+    "card_hover": "#f8fafc",
+    "surface": "#ffffff",
+    "surface_2": "#edf1f5",
+    "text": "#14202b",
+    "text_secondary": "#5f6d7a",
+    "text_tertiary": "#8a97a5",
+    "blue": "#2359c7",
+    "blue_bright": "#1746a2",
+    "cyan": "#187f78",
+    "purple": "#6b55b5",
+    "green": "#18794e",
+    "orange": "#9b6500",
+    "red": "#b53b49",
+    "border": "#d9e0e7",
+    "border_strong": "#bbc6d1",
+    "fill": "#eef2f6",
 }
 
 
@@ -73,7 +73,7 @@ def current_scheme():
 
 
 SEC_USER_AGENT = os.getenv("SEC_USER_AGENT", "").strip()
-SEC_STATE = {"kind": "not_configured", "detail": "SEC_USER_AGENT is not configured"}
+SEC_STATE = {"kind": "not_configured", "detail": "Live SEC EDGAR facts require a monitored contact identity"}
 
 DISCOUNT_RATE = 0.10
 TERMINAL_GROWTH = 0.03
@@ -113,10 +113,10 @@ DOWN_COLOR = "#f23645"
 
 _AXIS_STYLE = dict(
     showgrid=True,
-    gridcolor="rgba(255,255,255,0.04)",
+    gridcolor="#e7ebf0",
     zeroline=False,
-    tickfont=dict(color="#6a6d78", size=11),
-    linecolor="rgba(255,255,255,0.06)",
+    tickfont=dict(color="#7a8793", size=11),
+    linecolor="#d9e0e7",
 )
 
 
@@ -133,7 +133,7 @@ def slice_timeframe(df, timeframe):
     return sliced if not sliced.empty else df
 
 
-SMA_COLORS = {20: "#f7931a", 50: "#00bcd4", 200: "#7c5cff"}
+SMA_COLORS = {20: "#a96a00", 50: "#187f78", 200: "#6b55b5"}
 
 
 def render_price_chart(history, display_fx=1.0, kind="Candles", timeframe="1Y", smas=()):
@@ -194,7 +194,7 @@ def render_price_chart(history, display_fx=1.0, kind="Candles", timeframe="1Y", 
                 mode="lines",
                 line=dict(color=accent, width=2.2),
                 fill="tozeroy",
-                fillcolor="rgba(41, 98, 255, 0.14)",
+                fillcolor="rgba(35, 89, 199, 0.10)",
                 hovertemplate="%{y:,.2f}<extra></extra>",
                 name="",
                 showlegend=False,
@@ -243,16 +243,16 @@ def render_price_chart(history, display_fx=1.0, kind="Candles", timeframe="1Y", 
             y=1.01,
             xanchor="left",
             x=0,
-            font=dict(color="#9aa0ab", size=11),
-            bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#5f6d7a", size=11),
+            bgcolor="rgba(255,255,255,0)",
         ),
         hovermode="x unified",
-        hoverlabel=dict(bgcolor="#12161e", bordercolor="rgba(255,255,255,0.1)", font_color="#e8eaed"),
+        hoverlabel=dict(bgcolor="#ffffff", bordercolor="#d9e0e7", font_color="#14202b"),
         xaxis_rangeslider_visible=False,
     )
     fig.update_xaxes(**_AXIS_STYLE)
     fig.update_yaxes(**_AXIS_STYLE)
-    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 
 def render_html(markup):
@@ -2085,6 +2085,570 @@ st.markdown(
         .stTabs [data-baseweb="tab"] { min-height: 40px; }
         .stButton button { min-height: 44px !important; }
     }
+    /* Editorial research workspace reset: quiet hierarchy, useful density, no decorative chrome. */
+    :root {
+        --bg: #f4f6f8;
+        --bg-elevated: #ffffff;
+        --card: #ffffff;
+        --card-hover: #f8fafc;
+        --surface: #ffffff;
+        --surface-2: #edf1f5;
+        --text: #14202b;
+        --text-secondary: #5f6d7a;
+        --text-tertiary: #8a97a5;
+        --blue: #2359c7;
+        --blue-bright: #1746a2;
+        --blue-soft: #edf3ff;
+        --cyan: #187f78;
+        --cyan-soft: #e7f5f3;
+        --purple: #6b55b5;
+        --green: #18794e;
+        --green-soft: #e8f5ed;
+        --orange: #9b6500;
+        --orange-soft: #fff4d9;
+        --red: #b53b49;
+        --red-soft: #fbecef;
+        --border: #d9e0e7;
+        --border-strong: #bbc6d1;
+        --fill: #eef2f6;
+        --grid: #e9edf2;
+        --shadow: 0 1px 2px rgba(20, 32, 43, .04);
+        --shadow-soft: 0 1px 2px rgba(20, 32, 43, .04);
+        --glow-blue: none;
+        --radius-xl: 10px;
+        --radius-lg: 8px;
+        --radius-md: 7px;
+        --radius-sm: 5px;
+        --mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+        --display: "Avenir Next", "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    html, body, [class*="css"] {
+        font-family: var(--display) !important;
+        letter-spacing: 0 !important;
+    }
+
+    .stApp,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"] {
+        background: var(--bg) !important;
+        color: var(--text) !important;
+    }
+
+    header[data-testid="stHeader"] { background: var(--bg) !important; }
+
+    .block-container {
+        max-width: 1240px !important;
+        padding: 28px 38px 48px !important;
+    }
+
+    .terminal-header {
+        background: transparent !important;
+        border: 0 !important;
+        border-bottom: 1px solid var(--border) !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        padding: 0 0 18px !important;
+        margin-bottom: 25px !important;
+        min-height: 64px;
+    }
+
+    .brand-title {
+        color: var(--text) !important;
+        font-size: 18px !important;
+        font-weight: 700 !important;
+        letter-spacing: -.02em !important;
+    }
+
+    .brand-name { color: var(--text-secondary) !important; font-size: 12px !important; }
+    .header-context { color: var(--text-tertiary) !important; font-size: 11px !important; }
+    .header-actions { gap: 14px !important; }
+
+    .live-pill,
+    .live-pill.badge-muted {
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        color: var(--text-tertiary) !important;
+        padding: 0 !important;
+        font-size: 11px !important;
+    }
+
+    .live-pill.badge-muted {
+        border-left: 1px solid var(--border) !important;
+        padding-left: 14px !important;
+    }
+
+    .status-dot, .live-dot { width: 6px !important; height: 6px !important; }
+
+    [data-testid="stForm"] {
+        background: transparent !important;
+        border: 0 !important;
+        padding: 0 !important;
+        margin-bottom: 28px !important;
+    }
+
+    .stTextInput input,
+    .stSelectbox > div > div {
+        background: var(--card) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 7px !important;
+        color: var(--text) !important;
+        min-height: 46px !important;
+        height: 46px !important;
+        font-size: 14px !important;
+        box-shadow: var(--shadow) !important;
+    }
+
+    .stTextInput input:focus,
+    .stTextInput input:focus-within {
+        border-color: var(--blue) !important;
+        box-shadow: 0 0 0 3px rgba(35, 89, 199, .12) !important;
+    }
+
+    .stTextInput input::placeholder { color: var(--text-tertiary) !important; }
+
+    .stButton button {
+        background: var(--card) !important;
+        color: var(--text) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 7px !important;
+        box-shadow: var(--shadow) !important;
+        font-weight: 600 !important;
+        min-height: 40px !important;
+    }
+
+    [data-testid="stMain"] [data-testid="stForm"] .stButton button,
+    [data-testid="stMain"] [data-testid="stForm"] .stButton button[kind="secondary"] {
+        background: var(--blue) !important;
+        border-color: var(--blue) !important;
+        color: #ffffff !important;
+        border-radius: 7px !important;
+    }
+
+    .stButton button:hover {
+        background: var(--card-hover) !important;
+        border-color: var(--border-strong) !important;
+        box-shadow: var(--shadow) !important;
+    }
+
+    [data-testid="stMain"] [data-testid="stForm"] .stButton button:hover,
+    [data-testid="stMain"] [data-testid="stForm"] .stButton button[kind="secondary"]:hover {
+        background: var(--blue-bright) !important;
+        border-color: var(--blue-bright) !important;
+    }
+
+    [data-testid="stFormSubmitButton"] button,
+    [data-testid="stFormSubmitButton"] button[kind="primary"],
+    [data-testid="stFormSubmitButton"] button[kind="secondary"] {
+        background: var(--blue) !important;
+        border: 1px solid var(--blue) !important;
+        color: #ffffff !important;
+        border-radius: 7px !important;
+        font-weight: 700 !important;
+    }
+
+    [data-testid="stFormSubmitButton"] button:hover {
+        background: var(--blue-bright) !important;
+        border-color: var(--blue-bright) !important;
+    }
+
+    /* One control language everywhere: neutral options, blue selected state. */
+    div[data-testid="stSegmentedControl"] [role="radiogroup"],
+    div[data-testid="stSegmentedControl"] [data-baseweb="button-group"],
+    .stSegmentedControl [role="radiogroup"] {
+        background: var(--surface-2) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+        gap: 3px !important;
+        padding: 3px !important;
+    }
+
+    div[data-testid="stSegmentedControl"] button,
+    div[data-testid="stSegmentedControl"] [role="radio"],
+    .stSegmentedControl button,
+    .stSegmentedControl [role="radio"] {
+        background: transparent !important;
+        border: 0 !important;
+        border-radius: 5px !important;
+        color: var(--text-secondary) !important;
+        font-size: 12px !important;
+        font-weight: 650 !important;
+        min-height: 32px !important;
+        padding: 7px 11px !important;
+        box-shadow: none !important;
+        white-space: nowrap !important;
+    }
+
+    div[data-testid="stSegmentedControl"] button[aria-checked="true"],
+    div[data-testid="stSegmentedControl"] button[aria-pressed="true"],
+    div[data-testid="stSegmentedControl"] [role="radio"][aria-checked="true"],
+    .stSegmentedControl button[aria-checked="true"],
+    .stSegmentedControl [role="radio"][aria-checked="true"] {
+        background: var(--card) !important;
+        border: 1px solid var(--border) !important;
+        color: var(--blue) !important;
+        box-shadow: 0 1px 2px rgba(20, 32, 43, .08) !important;
+    }
+
+    div[data-testid="stSegmentedControl"] button:hover,
+    .stSegmentedControl button:hover { color: var(--text) !important; background: #f8fafc !important; }
+
+    /* Streamlit 1.50 renders some segmented controls as a bare BaseWeb group. */
+    div[data-baseweb="button-group"],
+    div[data-testid*="SegmentedControl"] [role="group"],
+    div[data-testid*="Pills"] [role="group"] {
+        background: var(--surface-2) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+        padding: 3px !important;
+    }
+
+    div[data-baseweb="button-group"] button,
+    div[data-testid*="SegmentedControl"] [role="group"] button,
+    div[data-testid*="Pills"] [role="group"] button {
+        background: var(--surface-2) !important;
+        border: 1px solid transparent !important;
+        border-radius: 5px !important;
+        color: var(--text-secondary) !important;
+        min-height: 32px !important;
+        padding: 7px 11px !important;
+    }
+
+    div[data-baseweb="button-group"] button[aria-checked="true"],
+    div[data-baseweb="button-group"] button[aria-pressed="true"],
+    div[data-baseweb="button-group"] button[aria-selected="true"],
+    div[data-baseweb="button-group"] button[data-selected="true"] {
+        background: var(--card) !important;
+        border-color: var(--border) !important;
+        color: var(--blue) !important;
+        box-shadow: 0 1px 2px rgba(20, 32, 43, .08) !important;
+    }
+
+    .home {
+        min-height: auto !important;
+        padding: 56px 0 0 !important;
+    }
+
+    .home-lead { max-width: 690px !important; }
+
+    .home-lead .hero-title {
+        color: var(--text) !important;
+        font-size: clamp(40px, 5vw, 58px) !important;
+        line-height: 1.03 !important;
+        letter-spacing: -.065em !important;
+        max-width: 13ch !important;
+        margin: 14px 0 19px !important;
+    }
+
+    .home-lead .hero-copy {
+        color: var(--text-secondary) !important;
+        font-size: 17px !important;
+        line-height: 1.55 !important;
+        max-width: 610px !important;
+    }
+
+    .eyebrow { color: var(--blue) !important; letter-spacing: .08em !important; }
+
+    .home-steps {
+        border-top: 1px solid var(--border) !important;
+        gap: 0 !important;
+        margin-top: 68px !important;
+        padding-top: 22px !important;
+    }
+
+    .home-steps > div {
+        min-height: 76px;
+        padding: 0 28px 0 0;
+        margin-right: 28px;
+        border-right: 1px solid var(--border);
+    }
+
+    .home-steps > div:last-child { border-right: 0; margin-right: 0; }
+    .home-steps .n { color: var(--text) !important; font-size: 13px !important; font-weight: 700 !important; }
+    .home-steps p { color: var(--text-secondary) !important; font-size: 13px !important; }
+
+    .source-line {
+        max-width: 850px;
+        border-top: 1px solid var(--border);
+        padding-top: 13px;
+        margin-top: 74px !important;
+        color: var(--text-tertiary) !important;
+        font-size: 11px !important;
+    }
+
+    .result-head {
+        padding-bottom: 23px !important;
+        margin-bottom: 22px !important;
+        border-bottom: 1px solid var(--border) !important;
+    }
+
+    .result-head .hero-title { font-size: 34px !important; letter-spacing: -.045em !important; }
+    .result-meta { color: var(--text-tertiary) !important; font-size: 12px !important; }
+    .badge-row { gap: 0 !important; margin-top: 12px !important; }
+
+    .source-chip {
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        color: var(--text-secondary) !important;
+        padding: 0 !important;
+        font-size: 11px !important;
+    }
+
+    .source-chip + .source-chip {
+        border-left: 1px solid var(--border) !important;
+        margin-left: 13px;
+        padding-left: 13px !important;
+    }
+
+    .result-score b { color: var(--blue) !important; font-size: 38px !important; }
+    .result-score em { color: var(--text-secondary) !important; letter-spacing: .03em !important; }
+
+    .section-label {
+        color: var(--text) !important;
+        font-size: 16px !important;
+        font-weight: 700 !important;
+        margin: 30px 0 12px !important;
+    }
+
+    .section-label small { color: var(--text-tertiary) !important; font-size: 11px !important; }
+
+    .metric-grid { gap: 12px !important; }
+
+    .metric-card,
+    .panel,
+    .hero-card,
+    .score-panel,
+    .learn-card,
+    .empty-state {
+        background: var(--card) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+        box-shadow: var(--shadow) !important;
+    }
+
+    .metric-card { padding: 17px 18px 15px !important; }
+    .metric-card::before { display: none !important; }
+    .metric-label { color: var(--text-tertiary) !important; font-size: 11px !important; letter-spacing: .035em !important; }
+    .metric-value { color: var(--text) !important; font-family: var(--display) !important; font-size: 24px !important; letter-spacing: -.035em !important; }
+    .metric-meta { color: var(--text-tertiary) !important; font-size: 11px !important; }
+
+    .panel, .hero-card, .score-panel, .learn-card { padding: 21px 23px !important; }
+    .panel-kicker { color: var(--text-secondary) !important; text-transform: none !important; letter-spacing: .015em !important; font-size: 12px !important; }
+    .signal-copy { color: var(--text) !important; font-size: 20px !important; letter-spacing: -.025em !important; }
+    .signal-limitations { color: var(--text-tertiary) !important; font-size: 11px !important; }
+
+    .implied-line {
+        background: var(--blue-soft) !important;
+        border: 1px solid #d6e2fb !important;
+        border-left: 3px solid var(--blue) !important;
+        border-radius: 7px !important;
+    }
+
+    .implied-main { color: var(--text) !important; }
+    .implied-sub { color: var(--text-secondary) !important; }
+    .gbar-track { background: #e2e7ed !important; }
+    .gbar-verdict, .note-box { background: #f7f9fb !important; border-color: var(--border) !important; color: var(--text-secondary) !important; }
+
+    .risk-row { border-top-color: var(--grid) !important; }
+    .risk-row strong { color: var(--text) !important; }
+    .risk-row span { color: var(--text-secondary) !important; }
+
+    [data-testid="stSegmentedControl"] {
+        border-bottom: 1px solid var(--border) !important;
+        margin: 24px 0 20px !important;
+    }
+
+    [data-testid="stSegmentedControl"] button {
+        background: transparent !important;
+        border: 0 !important;
+        border-bottom: 2px solid transparent !important;
+        border-radius: 0 !important;
+        color: var(--text-tertiary) !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        padding: 10px 13px !important;
+    }
+
+    [data-testid="stSegmentedControl"] button[aria-checked="true"],
+    [data-testid="stSegmentedControl"] button[aria-pressed="true"] {
+        background: transparent !important;
+        border-bottom-color: var(--blue) !important;
+        color: var(--text) !important;
+    }
+
+    div[data-testid="stDataFrame"],
+    [data-testid="stLineChart"],
+    .chart-wrap {
+        background: var(--card) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+        box-shadow: var(--shadow) !important;
+    }
+
+    .chart-wrap { padding: 10px 6px 3px !important; }
+    .app-footer {
+        background: transparent !important;
+        border: 0 !important;
+        border-top: 1px solid var(--border) !important;
+        border-radius: 0 !important;
+        color: var(--text-tertiary) !important;
+        padding: 14px 0 !important;
+        font-size: 11px !important;
+    }
+
+    div[data-baseweb="popover"], div[data-baseweb="menu"] {
+        background: var(--card) !important;
+        border: 1px solid var(--border) !important;
+    }
+
+    div[data-baseweb="popover"] li, div[data-baseweb="menu"] li { color: var(--text) !important; }
+    div[data-baseweb="popover"] li:hover, div[data-baseweb="menu"] li:hover { background: var(--fill) !important; }
+
+    @media (max-width: 900px) {
+        .block-container { padding: 20px 18px 36px !important; }
+        .terminal-header { margin-bottom: 20px !important; }
+        .home { padding-top: 38px !important; }
+        .home-lead .hero-title { font-size: 42px !important; }
+        .home-steps { margin-top: 48px !important; }
+        .home-steps > div { padding-right: 0; margin: 0 0 18px; border-right: 0; border-bottom: 1px solid var(--border); padding-bottom: 17px; }
+        .home-steps > div:last-child { border-bottom: 0; padding-bottom: 0; }
+        .header-actions { justify-content: flex-start !important; }
+        .result-head { align-items: flex-start !important; flex-direction: column !important; }
+        .result-score { text-align: left !important; }
+    }
+
+    @media (max-width: 560px) {
+        .block-container { padding-left: 14px !important; padding-right: 14px !important; }
+        .home-lead .hero-title { font-size: 37px !important; }
+        .home-lead .hero-copy { font-size: 15px !important; }
+        .home-steps { grid-template-columns: 1fr !important; }
+        .result-head .hero-title { font-size: 29px !important; }
+        .metric-grid { grid-template-columns: 1fr 1fr !important; }
+        .metric-card { padding: 14px !important; }
+        .metric-value { font-size: 20px !important; }
+    }
+
+    .sec-status-strip {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 7px 10px;
+        margin: -7px 0 22px;
+        padding: 10px 13px;
+        background: #f8fafc;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text-secondary);
+        font-size: 12px;
+        line-height: 1.35;
+    }
+
+    .sec-status-strip .status-dot { margin-right: 1px; }
+    .sec-status-title { color: var(--text); font-weight: 750; }
+    .sec-status-copy { color: var(--text-secondary); }
+    .sec-status-detail {
+        margin-left: auto;
+        color: var(--text-tertiary);
+        font-size: 11px;
+    }
+
+    .quality-flags {
+        margin: 10px 0 0 !important;
+        color: var(--text-tertiary) !important;
+        font-size: 11px !important;
+        line-height: 1.4;
+    }
+
+    .methodology-panel,
+    .data-quality-panel { background: var(--card) !important; }
+    .methodology-panel p { max-width: 900px; }
+    .methodology-panel code {
+        color: var(--blue) !important;
+        background: var(--blue-soft) !important;
+        border-radius: 4px;
+        padding: 2px 4px;
+    }
+
+    .whatif-note {
+        background: #f8fafc !important;
+        border: 1px solid var(--border) !important;
+        border-left: 3px solid var(--blue) !important;
+        border-radius: 8px !important;
+        color: var(--text-secondary) !important;
+        line-height: 1.5 !important;
+    }
+
+    .whatif-note b { color: var(--text) !important; }
+
+    [data-testid="stCaptionContainer"] {
+        color: var(--text-tertiary) !important;
+        font-size: 11px !important;
+    }
+
+    [data-testid="stAlert"] {
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+        background: #fffdf7 !important;
+        color: var(--text-secondary) !important;
+        box-shadow: none !important;
+    }
+
+    .stDownloadButton button {
+        background: var(--card) !important;
+        border: 1px solid var(--border) !important;
+        color: var(--text) !important;
+        border-radius: 7px !important;
+    }
+
+    .stDownloadButton button:hover {
+        background: var(--card-hover) !important;
+        border-color: var(--border-strong) !important;
+    }
+
+    [data-testid="stDataFrame"] { overflow: hidden !important; }
+
+    .cmp-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--card);
+        color: var(--text);
+        font-size: 12px;
+    }
+
+    .cmp-table th,
+    .cmp-table td {
+        padding: 11px 13px;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        vertical-align: middle;
+    }
+
+    .cmp-table th {
+        color: var(--text-secondary);
+        background: #f8fafc;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .cmp-table th:not(:first-child) { border-top: 3px solid var(--blue); }
+    .cmp-table td:first-child { color: var(--text-secondary); font-weight: 650; }
+    .cmp-table tr:last-child td { border-bottom: 0; }
+    .cmp-table tr:hover td { background: #fbfcfd; }
+    .cmp-name { display: block; color: var(--text); font-weight: 700; }
+    .cmp-ticker { display: block; margin-top: 3px; color: var(--text-tertiary); font-size: 10px; font-weight: 500; }
+    .cmp-swatch { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; }
+
+    @media (max-width: 700px) {
+        .sec-status-strip { align-items: flex-start; }
+        .sec-status-detail { width: 100%; margin-left: 17px; }
+        .cmp-table { display: block; overflow-x: auto; white-space: nowrap; }
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -2961,7 +3525,16 @@ def evidence_dataframe(analysis, company_name, ticker, sector, industry, reporti
     add("Discount rate", percent(analysis.get("discount_rate")), "%", reporting_currency, "Model assumption", "TSRP model", "Assumption", "Currency-aware heuristic rate")
     add("Terminal growth", percent(analysis.get("terminal_growth")), "%", reporting_currency, "Model assumption", "TSRP model", "Assumption", "Long-run model assumption")
     add("Data confidence", quality, "label", "", "Current analysis", "TSRP coverage", quality, "Based on field coverage and quality flags")
-    add("SEC EDGAR status", analysis.get("sec_status", "N/A"), "status", "", sec_period, "SEC EDGAR", "Available" if analysis.get("has_sec") else "Unavailable", "Optional configured source")
+    add(
+        "SEC EDGAR status",
+        analysis.get("sec_status", "N/A"),
+        "status",
+        "",
+        sec_period,
+        "SEC EDGAR",
+        "Available" if analysis.get("has_sec") else "Status disclosed",
+        "Live annual company facts are used when coverage is available; unavailable facts remain N/A.",
+    )
     add("Data freshness", analysis.get("freshness", "N/A"), "status", "", "Current analysis", "TSRP", "Available", "Cached snapshot status")
     add("Educational disclaimer", EDUCATIONAL_DISCLAIMER, "text", "", "Export", "TSRP", "Required", "Include with any shared output")
     return pd.DataFrame(rows, columns=["Metric", "Value", "Unit", "Currency", "Period", "Data source", "As of", "Status", "Notes"])
@@ -3024,9 +3597,30 @@ def render_data_quality(analysis):
         f'<div class="row"><span>Yahoo Finance</span><b>{esc("Available" if not analysis.get("yahoo_errors") else "Partial / endpoint errors")}</b></div>'
         f'<div class="row"><span>SEC EDGAR</span><b>{esc(analysis.get("sec_status", "N/A"))}</b></div>'
         f'<div class="row"><span>SEC annual fact</span><b>{esc(f"period {period} · filed {filed}" if provenance else "N/A")}</b></div>'
+        f'<div class="row"><span>SEC source policy</span><b>Live facts only; status always disclosed</b></div>'
         f'<div class="row"><span>Freshness</span><b>{esc(analysis.get("freshness", "N/A"))}</b></div>'
         f'<div class="row"><span>Last refresh</span><b>{esc(analysis.get("last_refreshed", "N/A"))}</b></div>'
         f'<div class="source-line">{esc(flag_text)}</div>'
+        f'</div>'
+    )
+
+
+def render_sec_status_strip(analysis):
+    """Keep SEC provenance visible on every company view without fabricating facts."""
+    has_sec = bool(analysis.get("has_sec"))
+    status = analysis.get("sec_status", "N/A")
+    detail = (
+        "Annual filing facts are live for this company."
+        if has_sec
+        else "Live annual filing facts are unavailable until SEC_USER_AGENT has a monitored contact identity."
+    )
+    dot_class = "status-dot" if has_sec else "status-dot warn"
+    render_html(
+        f'<div class="sec-status-strip">'
+        f'<span class="{dot_class}" aria-hidden="true"></span>'
+        f'<span class="sec-status-title">SEC EDGAR</span>'
+        f'<span class="sec-status-copy">{esc(status)}</span>'
+        f'<span class="sec-status-detail">{esc(detail)}</span>'
         f'</div>'
     )
 
@@ -3038,7 +3632,7 @@ def render_methodology():
 <p><b>What TSRP measures.</b> TSRP compares what the current market price appears to require with historical performance, analyst expectations, operating quality, and balance-sheet evidence.</p>
 <p><b>Reverse DCF.</b> The model projects revenue for {FORECAST_YEARS} years, fades the starting growth assumption toward terminal growth, converts revenue to free cash flow using an evidence-based margin, discounts those cash flows, and solves for the growth rate that matches enterprise value. If inputs are missing, non-positive, or outside the solver range, the result is N/A or a disclosed bound.</p>
 <p><b>Scores.</b> Business quality, financial strength, and market expectations are weighted heuristic dashboards with sector benchmarks. Missing evidence receives a missing-evidence treatment and lowers confidence; it is not positive evidence. The score is not a probability, recommendation, target price, or expected return.</p>
-<p><b>Sources and limits.</b> Yahoo Finance supplies market data, history, estimates, and supplemental fundamentals. SEC EDGAR supplies annual company facts when a monitored <code>SEC_USER_AGENT</code> is configured and the company is covered. Reporting and trading currencies are kept separate; unavailable FX blocks affected calculations.</p>
+<p><b>Sources and limits.</b> Yahoo Finance supplies market data, history, estimates, and supplemental fundamentals. SEC EDGAR is always shown as a provenance source: when a monitored <code>SEC_USER_AGENT</code> and company coverage are available, TSRP uses annual company facts; otherwise those facts stay N/A and the live status is disclosed. Reporting and trading currencies are kept separate; unavailable FX blocks affected calculations.</p>
 <p><b>Interpretation.</b> Historical growth and analyst consensus are comparison points, not guarantees. The model cannot determine future returns, business quality beyond the selected evidence, accounting comparability, or whether any security is suitable for a person.</p>
 <div class="source-line">{esc(EDUCATIONAL_DISCLAIMER)}</div>
 </div>'''
@@ -3062,7 +3656,7 @@ def fetch_compare_analysis(symbol):
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_sec_ticker_map():
     if not SEC_USER_AGENT or "@" not in SEC_USER_AGENT:
-        SEC_STATE.update(kind="not_configured", detail="SEC_USER_AGENT is not configured")
+        SEC_STATE.update(kind="not_configured", detail="Live SEC EDGAR facts require a monitored contact identity")
         return pd.DataFrame(columns=["ticker", "cik", "company"])
     url = "https://www.sec.gov/files/company_tickers.json"
     try:
@@ -3096,7 +3690,7 @@ def fetch_sec_ticker_map():
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_sec_companyfacts(ticker):
     if not SEC_USER_AGENT or "@" not in SEC_USER_AGENT:
-        SEC_STATE.update(kind="not_configured", detail="SEC_USER_AGENT is not configured")
+        SEC_STATE.update(kind="not_configured", detail="Live SEC EDGAR facts require a monitored contact identity")
         return None
     try:
         ticker_map = fetch_sec_ticker_map()
@@ -3136,7 +3730,7 @@ def fetch_sec_companyfacts(ticker):
 def sec_status(sec_facts):
     """Return a user-facing SEC state without exposing request internals."""
     if SEC_STATE["kind"] == "not_configured":
-        return "Disabled — set SEC_USER_AGENT to a monitored contact email"
+        return "Live facts unavailable — SEC_USER_AGENT not configured"
     if sec_facts:
         return "Available for this company"
     labels = {
@@ -3617,7 +4211,7 @@ def analyze_company(yahoo_data, sec_facts):
     if rates["used_fallback_currency"]:
         quality_flags.append(("Unknown reporting currency — USD rate world used as a disclosed fallback", "warn"))
     if not SEC_USER_AGENT or "@" not in SEC_USER_AGENT:
-        quality_flags.append(("SEC EDGAR disabled — configure SEC_USER_AGENT for filing data", "warn"))
+        quality_flags.append(("SEC EDGAR live facts unavailable — add a monitored SEC_USER_AGENT", "warn"))
     elif not sec_facts:
         quality_flags.append(("SEC EDGAR did not return usable company facts", "warn"))
     if yahoo_errors:
@@ -4000,20 +4594,20 @@ def render_compare_chart(results):
             y=1.02,
             xanchor="left",
             x=0,
-            font=dict(color="#e8eaed", size=12),
-            bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#5f6d7a", size=12),
+            bgcolor="rgba(255,255,255,0)",
         ),
-        xaxis=dict(tickfont=dict(color="#e8eaed", size=12), linecolor="rgba(255,255,255,0.06)"),
+        xaxis=dict(tickfont=dict(color="#5f6d7a", size=12), linecolor="#d9e0e7"),
         yaxis=dict(
             range=[0, 100],
             showgrid=True,
-            gridcolor="rgba(255,255,255,0.04)",
+            gridcolor="#e7ebf0",
             zeroline=False,
-            tickfont=dict(color="#6a6d78", size=11),
+            tickfont=dict(color="#7a8793", size=11),
         ),
-        hoverlabel=dict(bgcolor="#12161e", bordercolor="rgba(255,255,255,0.1)", font_color="#e8eaed"),
+        hoverlabel=dict(bgcolor="#ffffff", bordercolor="#d9e0e7", font_color="#14202b"),
     )
-    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 
 def compare_table_html(results):
@@ -4308,7 +4902,7 @@ render_html(
     f' · {esc(price_change_label)} vs prior close · As of {esc(as_of)}</div>'
     f'<div class="badge-row">'
     f'<span class="source-chip"><span class="status-dot"></span>Yahoo Finance</span>'
-    f'<span class="source-chip">SEC: {esc("available" if analysis.get("has_sec") else "not configured / unavailable")}</span>'
+    f'<span class="source-chip">SEC EDGAR · {esc("live facts" if analysis.get("has_sec") else "status disclosed")}</span>'
     f'<span class="source-chip">Reporting currency: {esc(reporting_currency)}</span>'
     f'</div>'
     f'<div class="hero-copy" style="margin-top:10px">{esc(conclusion_text(analysis))}</div></div>'
@@ -4316,9 +4910,11 @@ render_html(
     f"</div>"
 )
 
+render_sec_status_strip(analysis)
+
 bad_flags = [label for label, level in analysis["quality_flags"] if level in ("warn", "bad")]
 if bad_flags:
-    render_html(f'<div class="source-line">{esc(" · ".join(bad_flags[:3]))}</div>')
+    render_html(f'<div class="quality-flags">{esc(" · ".join(bad_flags[:3]))}</div>')
 
 render_html(implied_line_html(analysis))
 
@@ -4817,7 +5413,7 @@ elif detail == "Methodology":
     render_methodology()
 
 render_html(
-    f'<div class="app-footer">{esc(APP_SHORT)} · Yahoo Finance · SEC EDGAR when configured · {esc(EDUCATIONAL_DISCLAIMER)}</div>'
+    f'<div class="app-footer">{esc(APP_SHORT)} · Yahoo Finance · SEC EDGAR status disclosed · {esc(EDUCATIONAL_DISCLAIMER)}</div>'
 )
 
 st.markdown("</div>", unsafe_allow_html=True)
