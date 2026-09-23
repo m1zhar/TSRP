@@ -1612,6 +1612,15 @@ st.markdown(
         text-transform: none;
         letter-spacing: 0;
         margin: 8px 0 6px;
+        max-width: 980px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .watch-heading small {
+        color: var(--text-tertiary);
+        font-size: 11px;
+        font-weight: 500;
     }
 
     .watch-heading::before,
@@ -3510,6 +3519,84 @@ NAME_ALIASES = {
 }
 
 
+LOCAL_SEARCH_NAMES = {
+    "AAPL": "Apple Inc.",
+    "APLE": "Apple Hospitality REIT, Inc.",
+    "MSFT": "Microsoft Corporation",
+    "NVDA": "NVIDIA Corporation",
+    "GOOGL": "Alphabet Inc.",
+    "META": "Meta Platforms, Inc.",
+    "AMZN": "Amazon.com, Inc.",
+    "TSLA": "Tesla, Inc.",
+    "SAP": "SAP SE",
+    "ASML": "ASML Holding N.V.",
+    "TM": "Toyota Motor Corporation",
+    "SONY": "Sony Group Corporation",
+    "BABA": "Alibaba Group Holding Limited",
+    "NVS": "Novartis AG",
+    "SHEL": "Shell plc",
+    "BP": "BP p.l.c.",
+    "JPM": "JPMorgan Chase & Co.",
+    "V": "Visa Inc.",
+    "MA": "Mastercard Incorporated",
+    "WMT": "Walmart Inc.",
+    "COST": "Costco Wholesale Corporation",
+    "KO": "The Coca-Cola Company",
+    "PEP": "PepsiCo, Inc.",
+    "DIS": "The Walt Disney Company",
+    "AMD": "Advanced Micro Devices, Inc.",
+    "AVGO": "Broadcom Inc.",
+    "ORCL": "Oracle Corporation",
+    "CRM": "Salesforce, Inc.",
+    "ADBE": "Adobe Inc.",
+    "UBER": "Uber Technologies, Inc.",
+    "ABNB": "Airbnb, Inc.",
+    "PYPL": "PayPal Holdings, Inc.",
+    "SHOP": "Shopify Inc.",
+    "PLTR": "Palantir Technologies Inc.",
+    "BA": "The Boeing Company",
+    "IBM": "International Business Machines Corporation",
+    "CSCO": "Cisco Systems, Inc.",
+    "QCOM": "QUALCOMM Incorporated",
+    "TSM": "Taiwan Semiconductor Manufacturing Company Limited",
+    "XOM": "Exxon Mobil Corporation",
+    "CVX": "Chevron Corporation",
+    "JNJ": "Johnson & Johnson",
+    "PG": "The Procter & Gamble Company",
+    "HD": "The Home Depot, Inc.",
+    "MCD": "McDonald's Corporation",
+    "NKE": "NIKE, Inc.",
+    "SBUX": "Starbucks Corporation",
+}
+
+
+def local_company_search(query):
+    """Return name/symbol matches when Yahoo's search endpoint is unavailable."""
+    needle = str(query or "").strip().lower()
+    if not needle:
+        return []
+    directory = dict(LOCAL_SEARCH_NAMES)
+    for alias, symbol in NAME_ALIASES.items():
+        directory.setdefault(symbol, alias.title())
+    hits = []
+    for symbol, name in directory.items():
+        if needle not in name.lower() and needle not in symbol.lower():
+            continue
+        hits.append(
+            {
+                "symbol": symbol,
+                "name": name,
+                "type": "Equity",
+                "exchange": "",
+                "sector": "",
+                "industry": "",
+                "quote_type": "EQUITY",
+            }
+        )
+    hits.sort(key=lambda hit: (not hit["symbol"].lower().startswith(needle), not hit["name"].lower().startswith(needle), hit["name"]))
+    return hits[:16]
+
+
 def lookup_alias(query):
     needle = re.sub(r"[^a-z0-9]+", " ", str(query or "").lower())
     needle = " ".join(needle.split())
@@ -3554,7 +3641,10 @@ def search_companies(query):
     results = search_companies_v2(query)
     if results:
         return results
-    return _yahoo_search_live(query)
+    live_results = _yahoo_search_live(query)
+    if live_results:
+        return live_results
+    return local_company_search(query)
 
 
 def resolve_company_query(query):
@@ -4803,6 +4893,12 @@ if "search_hits" not in st.session_state:
 if "company_search" not in st.session_state:
     st.session_state.company_search = ""
 
+if "compare_search" not in st.session_state:
+    st.session_state.compare_search = ""
+
+if "suppress_company_suggestions" not in st.session_state:
+    st.session_state.suppress_company_suggestions = False
+
 if "detail_section" not in st.session_state:
     st.session_state.detail_section = "Overview"
 
@@ -4848,29 +4944,50 @@ def render_watch_row(items, key_prefix):
                 st.rerun()
 
 
+def search_hit_label(hit):
+    bits = [hit.get("name") or hit.get("symbol"), hit.get("symbol")]
+    if hit.get("exchange"):
+        bits.append(hit["exchange"])
+    return "  ·  ".join(str(bit) for bit in bits if bit)
+
+
+def render_company_suggestions(hits, key_prefix):
+    """Render live, equity-only search matches and return the selected hit."""
+    hits = [hit for hit in hits if hit]
+    if not hits:
+        return None
+    render_html('<div class="watch-heading">Company matches <small>Choose a listed stock</small></div>')
+    selected = None
+    for hit in hits[:8]:
+        if st.button(
+            search_hit_label(hit),
+            key=f"{key_prefix}_{hit['symbol']}",
+            width="stretch",
+            type="secondary",
+        ):
+            selected = hit
+            break
+    st.caption("Select a company to continue. Indexes, commodities, currencies, and funds are excluded.")
+    return selected
+
+
 st.markdown('<div class="app-wrap">', unsafe_allow_html=True)
 
 render_app_header()
 
 try:
-    search_form = st.form("search_form", border=False)
+    col_a, col_c = st.columns([5.2, 1], gap="small", vertical_alignment="center")
 except TypeError:
-    search_form = st.form("search_form")
-
-with search_form:
-    try:
-        col_a, col_c = st.columns([5.2, 1], gap="small", vertical_alignment="center")
-    except TypeError:
-        col_a, col_c = st.columns([5.2, 1])
-    with col_a:
-        typed = st.text_input(
-            "Search",
-            placeholder="Search a company stock or ticker",
-            label_visibility="collapsed",
-            key="company_search",
-        )
-    with col_c:
-        submitted = st.form_submit_button("Analyze company", width="stretch")
+    col_a, col_c = st.columns([5.2, 1])
+with col_a:
+    typed = st.text_input(
+        "Search",
+        placeholder="Search a company stock or ticker",
+        label_visibility="collapsed",
+        key="company_search",
+    )
+with col_c:
+    submitted = st.button("Analyze company", key="analyze_company", width="stretch", type="primary")
 
 if submitted:
     typed = str(typed or "").strip()
@@ -4893,26 +5010,26 @@ if submitted:
             st.session_state.invalid_ticker = typed
             st.session_state.ticker_error = error
 
+if not submitted:
+    st.session_state.search_hits = []
+
+typed_query = str(typed or "").strip()
+live_hits = []
+show_live_company_search = not st.session_state.pop("suppress_company_suggestions", False)
+if show_live_company_search and len(typed_query) >= 2 and typed_query.upper() != st.session_state.get("ticker", "").upper():
+    live_hits = search_companies(typed_query)
+
+selected_hit = render_company_suggestions(st.session_state.search_hits or live_hits, "pick_company")
+if selected_hit:
+    st.session_state.ticker = selected_hit["symbol"]
+    st.session_state.pending_search = selected_hit.get("name") or selected_hit["symbol"]
+    st.session_state.search_hits = []
+    st.session_state.suppress_company_suggestions = True
+    st.session_state.ticker_error = None
+    st.session_state.invalid_ticker = ""
+    st.rerun()
+
 if st.session_state.search_hits:
-    render_html('<div class="watch-heading">Pick a listing</div>')
-    for hit in st.session_state.search_hits:
-        bits = [hit["name"], hit["symbol"]]
-        if hit.get("exchange"):
-            bits.append(hit["exchange"])
-        if hit.get("sector"):
-            bits.append(hit["sector"])
-        elif hit.get("type"):
-            bits.append(hit["type"])
-        label = "  ·  ".join(bits)
-        if st.button(label, key=f"pick_{hit['symbol']}", width="stretch", type="secondary"):
-            st.session_state.ticker = hit["symbol"]
-            st.session_state.pending_search = hit["name"]
-            st.session_state.search_hits = []
-            st.session_state.ticker_error = None
-            st.session_state.invalid_ticker = ""
-            st.rerun()
-    st.caption("Tap a row. Company name or ticker both work.")
-    st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
 if st.session_state.ticker_error:
@@ -5454,17 +5571,33 @@ elif detail == "Scenarios":
                 st.caption("Sensitivity outputs are hypothetical model results. They are not target prices, recommendations, or expected returns.")
 
 elif detail == "Compare":
-    with st.form("compare_form"):
-        cmp_col, btn_col = st.columns([3, 1])
-        with cmp_col:
-            cmp_input = st.text_input(
-                "Peers to compare",
-                placeholder="Microsoft, Google, Samsung",
-                help="Up to 3 companies, comma separated. Names or tickers both work. The current company is always included.",
-            )
-        with btn_col:
-            st.write("")
-            cmp_submit = st.form_submit_button("Compare", width="stretch")
+    if st.session_state.pop("clear_compare_search", False):
+        st.session_state.compare_search = ""
+    cmp_col, btn_col = st.columns([3, 1])
+    with cmp_col:
+        cmp_input = st.text_input(
+            "Peers to compare",
+            placeholder="Search a company to add as a peer",
+            key="compare_search",
+            help="Type a company name or ticker and choose a result. You can also enter comma-separated names.",
+        )
+    with btn_col:
+        st.write("")
+        cmp_submit = st.button("Compare", key="compare_submit", width="stretch", type="primary")
+
+    compare_query = str(cmp_input or "").strip()
+    compare_hits = []
+    if compare_query and "," not in compare_query and ";" not in compare_query and len(compare_query) >= 2:
+        compare_hits = search_companies(compare_query)
+
+    selected_peer = render_company_suggestions(compare_hits, "pick_compare")
+    if selected_peer:
+        selected_symbol = selected_peer["symbol"]
+        existing = [symbol for symbol in st.session_state.get("compare_symbols", []) if symbol != ticker]
+        if selected_symbol != ticker and selected_symbol not in existing:
+            st.session_state.compare_symbols = (existing + [selected_symbol])[:3]
+        st.session_state.clear_compare_search = True
+        st.rerun()
 
     if cmp_submit:
         tokens = [part.strip() for part in cmp_input.replace(";", ",").split(",") if part.strip()]
