@@ -319,7 +319,7 @@ def render_app_header():
     with right:
         action_col, status_col = st.columns([1, 1.5], gap="small")
         with action_col:
-            if st.session_state.get("ticker") and st.button("Refresh data", key="header_refresh", width="stretch"):
+            if st.session_state.get("ticker") and st.button("↻", key="header_refresh", help="Refresh all market data"):
                 fetch_yahoo_data.clear()
                 fetch_price_history.clear()
                 fetch_sec_companyfacts.clear()
@@ -2186,6 +2186,9 @@ st.markdown(
         border: 0 !important;
         padding: 0 !important;
         margin-bottom: 28px !important;
+        max-width: 980px !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
     }
 
     .stTextInput input,
@@ -2323,6 +2326,26 @@ st.markdown(
         border-color: var(--border) !important;
         color: var(--blue) !important;
         box-shadow: 0 1px 2px rgba(20, 32, 43, .08) !important;
+    }
+
+    [data-testid="stSegmentedControl"],
+    div[data-baseweb="button-group"] {
+        width: max-content !important;
+        max-width: 100% !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
+
+    .overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+
+    button[title="Refresh all market data"],
+    button[title="Refresh price history"] {
+        width: 40px !important;
+        min-width: 40px !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        font-size: 19px !important;
+        line-height: 1 !important;
     }
 
     .home {
@@ -2648,6 +2671,17 @@ st.markdown(
         .sec-status-strip { align-items: flex-start; }
         .sec-status-detail { width: 100%; margin-left: 17px; }
         .cmp-table { display: block; overflow-x: auto; white-space: nowrap; }
+        .overview-grid { grid-template-columns: 1fr !important; }
+        div[data-baseweb="button-group"] {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            justify-content: center !important;
+        }
+        div[data-baseweb="button-group"] button {
+            font-size: 11px !important;
+            padding-left: 8px !important;
+            padding-right: 8px !important;
+        }
     }
     </style>
     """,
@@ -3036,13 +3070,25 @@ def _yf_part(ticker, kind):
     try:
         stock = yf.Ticker(ticker)
         if kind == "financials":
-            return stock.financials
+            frame = stock.financials
+            if frame is not None and not frame.empty:
+                return frame
+            return stock.get_income_stmt(freq="yearly")
         if kind == "balance":
-            return stock.balance_sheet
+            frame = stock.balance_sheet
+            if frame is not None and not frame.empty:
+                return frame
+            return stock.get_balance_sheet(freq="yearly")
         if kind == "cashflow":
-            return stock.cashflow
+            frame = stock.cashflow
+            if frame is not None and not frame.empty:
+                return frame
+            return stock.get_cash_flow(freq="yearly")
         if kind == "quarterly_cashflow":
-            return stock.quarterly_cashflow
+            frame = stock.quarterly_cashflow
+            if frame is not None and not frame.empty:
+                return frame
+            return stock.get_cash_flow(freq="quarterly")
         if kind == "estimate":
             return stock.revenue_estimate
     except Exception:
@@ -3060,7 +3106,7 @@ def quote_to_info(quote):
     mcap = first_value(quote, "marketCap", "market_cap")
     currency = quote.get("currency") or quote.get("financialCurrency")
     return {
-        "symbol": quote.get("symbol"),
+        "symbol": quote.get("symbol") or quote.get("ticker"),
         "shortName": quote.get("shortName") or quote.get("short_name"),
         "longName": quote.get("longName") or quote.get("displayName") or quote.get("shortName") or quote.get("long_name"),
         "currency": currency,
@@ -3085,6 +3131,16 @@ def quote_to_info(quote):
         "freeCashflow": first_value(quote, "freeCashflow"),
         "returnOnEquity": first_value(quote, "returnOnEquity"),
         "enterpriseToEbitda": first_value(quote, "enterpriseToEbitda"),
+        "totalRevenue": first_value(quote, "totalRevenue", "totalRevenueTTM"),
+        "grossProfit": first_value(quote, "grossProfits", "grossProfit"),
+        "operatingIncome": first_value(quote, "operatingIncome"),
+        "netIncomeToCommon": first_value(quote, "netIncomeToCommon", "netIncome"),
+        "ebitda": first_value(quote, "ebitda", "normalized EBITDA"),
+        "operatingCashflow": first_value(quote, "operatingCashflow", "operatingCashFlow"),
+        "totalCash": first_value(quote, "totalCash"),
+        "totalDebt": first_value(quote, "totalDebt"),
+        "totalAssets": first_value(quote, "totalAssets"),
+        "totalStockholderEquity": first_value(quote, "totalStockholderEquity"),
     }
 
 
@@ -3101,30 +3157,49 @@ KNOWN_NAMES = {
 
 def _quote_live(ticker):
     ticker = normalize_ticker(ticker)
+    stock = yf.Ticker(ticker)
+    profile = {}
     try:
-        fast = dict(yf.Ticker(ticker).fast_info)
+        profile = stock.get_info() or {}
+    except Exception:
+        try:
+            profile = stock.info or {}
+        except Exception:
+            profile = {}
+    try:
+        fast = dict(stock.fast_info)
         price = first_value(fast, "lastPrice", "last_price", "regularMarketPrice", "currentPrice")
         prev = first_value(fast, "previousClose", "previous_close", "regularMarketPreviousClose")
         mcap = first_value(fast, "marketCap", "market_cap")
-        if price is not None or mcap is not None:
-            name = KNOWN_NAMES.get(ticker)
-            return {
-                "symbol": ticker,
-                "currency": fast.get("currency"),
-                "financialCurrency": fast.get("currency"),
-                "regularMarketPrice": price,
-                "currentPrice": price,
-                "regularMarketPreviousClose": prev,
-                "previousClose": prev,
-                "marketCap": mcap,
-                "exchange": fast.get("exchange") or fast.get("fullExchangeName"),
-                "shortName": name or ticker,
-                "longName": name,
-            }
     except Exception:
-        pass
+        fast = {}
+        price = None
+        prev = None
+        mcap = None
+
+    quote = dict(profile)
+    quote.update(
+        {
+            "symbol": quote.get("symbol") or ticker,
+            "currency": fast.get("currency") or quote.get("currency"),
+            "financialCurrency": fast.get("currency") or quote.get("financialCurrency") or quote.get("currency"),
+            "regularMarketPrice": price if price is not None else quote.get("regularMarketPrice"),
+            "currentPrice": price if price is not None else quote.get("currentPrice"),
+            "regularMarketPreviousClose": prev if prev is not None else quote.get("regularMarketPreviousClose"),
+            "previousClose": prev if prev is not None else quote.get("previousClose"),
+            "marketCap": mcap if mcap is not None else quote.get("marketCap"),
+            "exchange": fast.get("exchange") or fast.get("fullExchangeName") or quote.get("exchange"),
+        }
+    )
+    name = KNOWN_NAMES.get(ticker)
+    if name:
+        quote["shortName"] = quote.get("shortName") or name
+        quote["longName"] = quote.get("longName") or name
+    if profile or price is not None or mcap is not None:
+        return quote
+
     try:
-        history = yf.Ticker(ticker).history(period="5d", auto_adjust=True, timeout=10)
+        history = stock.history(period="5d", auto_adjust=True, timeout=10)
         if history is not None and not history.empty and "Close" in history.columns:
             close = history["Close"].dropna()
             if not close.empty:
@@ -3203,14 +3278,58 @@ def normalize_ticker(symbol):
 
 
 def ticker_format_ok(symbol):
-    return bool(re.fullmatch(r"[A-Z0-9][A-Z0-9.\-=^]{0,14}", symbol or ""))
+    # Company tickers can contain dots or hyphens; index/futures syntax is not
+    # accepted as a company ticker fallback.
+    return bool(re.fullmatch(r"[A-Z0-9][A-Z0-9.\-]{0,14}", symbol or ""))
 
 
-def yahoo_data_is_valid(yahoo_data):
+COMPANY_ONLY_MESSAGE = (
+    "TSRP covers listed company stocks only. Indexes, commodities, currencies, funds, and other instruments are not supported."
+)
+NON_EQUITY_QUOTE_TYPES = {
+    "INDEX",
+    "ETF",
+    "MUTUALFUND",
+    "FUND",
+    "COMMODITY",
+    "CURRENCY",
+    "CRYPTOCURRENCY",
+    "FUTURE",
+    "OPTION",
+    "WARRANT",
+    "BOND",
+    "CONTRACT",
+    "ECNQUOTE",
+}
+
+
+def non_equity_reason(symbol, quote_type=None):
+    """Return a reason for rejecting a non-company instrument, if obvious."""
+    symbol = normalize_ticker(symbol)
+    quote_type = str(quote_type or "").upper().replace(" ", "")
+    if quote_type in NON_EQUITY_QUOTE_TYPES:
+        return quote_type
+    if symbol.startswith("^"):
+        return "INDEX"
+    if symbol.endswith(("=F", "=X")) or "=" in symbol:
+        return "DERIVATIVE"
+    if re.search(r"-(USD|EUR|GBP|JPY|BTC|ETH)$", symbol):
+        return "CRYPTOCURRENCY"
+    return None
+
+
+def company_symbol_allowed(symbol, quote_type=None):
+    return not non_equity_reason(symbol, quote_type)
+
+
+def yahoo_data_is_valid(yahoo_data, ticker=None):
     if not yahoo_data:
         return False
     info = yahoo_data.get("info") or {}
     fast_info = yahoo_data.get("fast_info") or {}
+    symbol = normalize_ticker(ticker) or info.get("symbol") or yahoo_data.get("symbol")
+    if symbol and not company_symbol_allowed(symbol, info.get("quoteType")):
+        return False
     if not info and not fast_info:
         return False
     if info.get("quoteType") == "NONE" or info.get("trailingPegRatio") == "None":
@@ -3259,11 +3378,10 @@ def sync_ticker_query(symbol):
 def _quote_rows_to_hits(rows):
     results = []
     seen = set()
-    skip_types = {"OPTION", "CRYPTOCURRENCY", "FUTURE", "CURRENCY", "ECNQUOTE"}
     for row in rows or []:
         symbol = str(row.get("symbol") or "").strip()
         quote_type = str(row.get("quoteType") or "").upper()
-        if not symbol or symbol in seen or quote_type in skip_types:
+        if not symbol or symbol in seen or not company_symbol_allowed(symbol, quote_type):
             continue
         seen.add(symbol)
         results.append(
@@ -3413,7 +3531,7 @@ def search_companies_v2(query):
     results = _yahoo_search_live(query)
     needle = query.lower()
     ticker_needle = query.strip().upper()
-    type_rank = {"EQUITY": 0, "ETF": 1, "INDEX": 2, "MUTUALFUND": 3}
+    type_rank = {"EQUITY": 0}
 
     def rank(hit):
         name = str(hit["name"] or "").lower()
@@ -3446,21 +3564,30 @@ def resolve_company_query(query):
 
     alias = lookup_alias(raw)
     if alias:
-        return alias, None, []
+        if company_symbol_allowed(alias):
+            return alias, None, []
+        return None, COMPANY_ONLY_MESSAGE, []
 
     as_ticker = normalize_ticker(raw)
     hits = search_companies(raw)
 
     symbol_hits = [hit for hit in hits if hit["symbol"].upper() == as_ticker]
     if symbol_hits:
-        return symbol_hits[0]["symbol"], None, []
+        hit = symbol_hits[0]
+        if not company_symbol_allowed(hit["symbol"], hit.get("quote_type")):
+            return None, COMPANY_ONLY_MESSAGE, []
+        return hit["symbol"], None, []
 
     if not hits:
-        if ticker_format_ok(as_ticker):
+        if ticker_format_ok(as_ticker) and company_symbol_allowed(as_ticker):
             return as_ticker, None, []
+        if non_equity_reason(as_ticker):
+            return None, COMPANY_ONLY_MESSAGE, []
         return None, f"No company found for “{raw}”. Try the company name or ticker.", []
 
     if len(hits) == 1:
+        if not company_symbol_allowed(hits[0]["symbol"], hits[0].get("quote_type")):
+            return None, COMPANY_ONLY_MESSAGE, []
         return hits[0]["symbol"], None, []
 
     return None, None, hits
@@ -3643,7 +3770,7 @@ def render_methodology():
 def fetch_compare_analysis(symbol):
     try:
         data = fetch_yahoo_data(symbol)
-        if not yahoo_data_is_valid(data):
+        if not yahoo_data_is_valid(data, symbol):
             return None
         result = analyze_company(data, fetch_sec_companyfacts(symbol))
         info = data.get("info") or {}
@@ -4019,13 +4146,13 @@ def analyze_company(yahoo_data, sec_facts):
     price = get_quote_price(info, fast_info)
     market_cap = get_market_cap(info, fast_info)
 
-    yahoo_revenue = latest_value(financials, ["Total Revenue", "Operating Revenue"])
-    yahoo_gross_profit = latest_value(financials, ["Gross Profit"])
-    yahoo_operating_income = latest_value(financials, ["Operating Income"])
-    yahoo_net_income = latest_value(financials, ["Net Income", "Net Income Common Stockholders"])
-    yahoo_ebitda = latest_value(financials, ["EBITDA", "Normalized EBITDA"])
+    yahoo_revenue = latest_value(financials, ["Total Revenue", "Operating Revenue"]) or safe_float(info.get("totalRevenue"))
+    yahoo_gross_profit = latest_value(financials, ["Gross Profit"]) or safe_float(info.get("grossProfit"))
+    yahoo_operating_income = latest_value(financials, ["Operating Income"]) or safe_float(info.get("operatingIncome"))
+    yahoo_net_income = latest_value(financials, ["Net Income", "Net Income Common Stockholders"]) or safe_float(info.get("netIncomeToCommon"))
+    yahoo_ebitda = latest_value(financials, ["EBITDA", "Normalized EBITDA"]) or safe_float(info.get("ebitda"))
 
-    yahoo_operating_cash_flow = latest_value(cashflow, ["Operating Cash Flow", "Total Cash From Operating Activities"])
+    yahoo_operating_cash_flow = latest_value(cashflow, ["Operating Cash Flow", "Total Cash From Operating Activities"]) or safe_float(info.get("operatingCashflow"))
     yahoo_capex = latest_value(cashflow, ["Capital Expenditure", "Capital Expenditures"])
     yahoo_reported_fcf = latest_value(cashflow, ["Free Cash Flow"])
     yahoo_annual_fcf = compute_fcf(yahoo_operating_cash_flow, yahoo_capex, yahoo_reported_fcf)
@@ -4036,10 +4163,10 @@ def analyze_company(yahoo_data, sec_facts):
         ttm_sum(quarterly_cashflow, ["Free Cash Flow"]),
     )
 
-    yahoo_cash = latest_value(balance, ["Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"])
-    yahoo_debt = latest_value(balance, ["Total Debt", "Long Term Debt And Capital Lease Obligation"])
-    yahoo_assets = latest_value(balance, ["Total Assets"])
-    yahoo_equity = latest_value(balance, ["Stockholders Equity", "Total Equity Gross Minority Interest"])
+    yahoo_cash = latest_value(balance, ["Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"]) or safe_float(info.get("totalCash"))
+    yahoo_debt = latest_value(balance, ["Total Debt", "Long Term Debt And Capital Lease Obligation"]) or safe_float(info.get("totalDebt"))
+    yahoo_assets = latest_value(balance, ["Total Assets"]) or safe_float(info.get("totalAssets"))
+    yahoo_equity = latest_value(balance, ["Stockholders Equity", "Total Equity Gross Minority Interest"]) or safe_float(info.get("totalStockholderEquity"))
 
     sec_revenue, sec_revenue_currency = sec_fact_values(sec_facts, SEC_TAGS["revenue"], sec_currencies)
     sec_revenue_record = sec_latest_record(sec_facts, SEC_TAGS["revenue"], sec_currencies)
@@ -4692,10 +4819,13 @@ if (
     and not st.session_state.ticker_error
 ):
     incoming = query_ticker()
-    if incoming and ticker_format_ok(incoming):
+    if incoming and ticker_format_ok(incoming) and company_symbol_allowed(incoming):
         st.session_state.ticker = incoming
         if not st.session_state.company_search:
             st.session_state.company_search = incoming
+    elif incoming:
+        st.session_state.invalid_ticker = incoming
+        st.session_state.ticker_error = COMPANY_ONLY_MESSAGE
 
 
 def render_watch_row(items, key_prefix):
@@ -4735,7 +4865,7 @@ with search_form:
     with col_a:
         typed = st.text_input(
             "Search",
-            placeholder="Search a company or ticker",
+            placeholder="Search a company stock or ticker",
             label_visibility="collapsed",
             key="company_search",
         )
@@ -4798,7 +4928,7 @@ if not st.session_state.ticker:
     <div class="home-lead">
       <div class="eyebrow">{esc(APP_NAME)}</div>
       <div class="hero-title">What growth is the price asking for?</div>
-      <div class="hero-copy">Search a name or ticker. The model reverse-solves the sales growth today’s price needs, then sets it next to history and consensus. Missing cash stays N/A.</div>
+      <div class="hero-copy">Search a company name or stock ticker. Indexes, commodities, currencies, and funds are excluded. The model reverse-solves the sales growth today’s price needs, then sets it next to history and consensus.</div>
     </div>
     <div class="home-steps">
       <div><div class="n">1 · Price</div><p>Start from the latest Yahoo Finance quote available. No fair-value guess first.</p></div>
@@ -4821,14 +4951,26 @@ if not st.session_state.ticker:
 
 ticker = st.session_state.ticker
 
+if not ticker_format_ok(ticker) or not company_symbol_allowed(ticker):
+    st.session_state.ticker = ""
+    st.session_state.invalid_ticker = ticker
+    st.session_state.ticker_error = COMPANY_ONLY_MESSAGE
+    render_ticker_error(ticker, st.session_state.ticker_error)
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.stop()
+
 with st.spinner(f"Loading {ticker}..."):
     yahoo_data = fetch_yahoo_data(ticker)
     info = yahoo_data["info"]
 
-if not yahoo_data_is_valid(yahoo_data):
+if not yahoo_data_is_valid(yahoo_data, ticker):
     st.session_state.ticker = ""
     st.session_state.invalid_ticker = ticker
-    st.session_state.ticker_error = f"“{ticker}” was not found on Yahoo Finance."
+    st.session_state.ticker_error = (
+        COMPANY_ONLY_MESSAGE
+        if non_equity_reason(ticker, (yahoo_data.get("info") or {}).get("quoteType"))
+        else f"“{ticker}” was not found on Yahoo Finance."
+    )
     render_ticker_error(ticker, st.session_state.ticker_error)
     st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
@@ -4842,7 +4984,7 @@ analysis = analyze_company(yahoo_data, sec_facts)
 reporting_currency = analysis["reporting_currency"]
 trading_currency = analysis["trading_currency"]
 
-cur_col, _ = st.columns([1.4, 3.6])
+_, cur_col, _ = st.columns([1.0, 1.8, 1.0])
 with cur_col:
     display_currency = st.selectbox(
         "Show amounts in",
@@ -4975,7 +5117,7 @@ def growth_verdict(analysis):
 
 def render_overview_sections(analysis, company_name, ticker, sector, industry, display_currency, display_fx_reporting):
     render_html('<div class="section-label">Core research signal <small>Evidence first · heuristic, not a recommendation</small></div>')
-    left, right = st.columns([1.25, .75], gap="large")
+    left, right = st.columns([1, 1], gap="large")
     with left:
         render_html(
             f'<div class="panel"><div class="panel-kicker">Price reality</div>'
@@ -5117,7 +5259,7 @@ def render_expectations_view(analysis, yahoo_data, display_currency, display_fx_
         f'{metric_card("Current FCF margin", percent(analysis.get("fcf_margin")), "Latest compatible period", "cyan")}'
         f'</div>'
     )
-    left, right = st.columns([1.25, .75], gap="large")
+    left, right = st.columns([1, 1], gap="large")
     with left:
         render_html('<div class="panel"><div class="panel-kicker">Growth reality</div><div class="signal-copy">The price is a claim about future operating performance.</div>')
         render_html(implied_line_html(analysis))
@@ -5166,7 +5308,7 @@ if detail == "Price":
 
     refresh_col, _ = st.columns([1, 5])
     with refresh_col:
-            if st.button("↻ Refresh chart data", key="refresh_chart"):
+            if st.button("↻", key="refresh_chart", help="Refresh price history"):
                 fetch_yahoo_data.clear()
                 fetch_price_history.clear()
                 st.rerun()
