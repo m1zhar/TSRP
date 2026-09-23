@@ -504,6 +504,16 @@ st.markdown(
     .risk-row span { color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
     .risk-severity { color: var(--orange) !important; font-size: 10px !important; font-weight: 700; text-transform: uppercase; }
 
+    .risk-cell {
+        min-height: 46px;
+        padding: 11px 0;
+        border-top: 1px solid var(--grid);
+    }
+
+    .risk-cell.risk-first { border-top: 0; padding-top: 0; }
+    .risk-cell strong { color: var(--text); font-size: 13px; }
+    .risk-cell span { color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
+
     .note-box {
         padding: 11px 13px;
         border: 1px solid var(--border);
@@ -3946,10 +3956,10 @@ def fetch_sec_companyfacts(ticker):
 
 def sec_status(sec_facts):
     """Return a user-facing SEC state without exposing request internals."""
-    if SEC_STATE["kind"] == "not_configured":
-        return "Live facts unavailable — SEC_USER_AGENT not configured"
     if sec_facts:
         return "Available for this company"
+    if SEC_STATE["kind"] == "not_configured":
+        return "Live facts unavailable — SEC_USER_AGENT not configured"
     labels = {
         "not_covered": "Unavailable — ticker is not covered by SEC EDGAR",
         "rate_limited": "Unavailable — SEC rate limit response",
@@ -4519,6 +4529,9 @@ def analyze_company(yahoo_data, sec_facts):
         "enterprise_value": enterprise_value,
         "enterprise_value_trading": enterprise_value_trading,
         "revenue": revenue,
+        "net_income": net_income,
+        "assets": total_assets,
+        "equity": equity,
         "free_cash_flow": free_cash_flow,
         "cash": cash,
         "debt": debt,
@@ -4723,6 +4736,26 @@ def make_rows(items):
     for label, value in items:
         html_rows += f"<div class='row'><span>{esc(label)}</span><b>{esc(value)}</b></div>"
     return html_rows
+
+
+def provenance_values(analysis, display_currency, display_fx_reporting, display_fx_trading):
+    """Return the displayed value for each provenance row."""
+    reporting_currency = analysis.get("reporting_currency") or "USD"
+    trading_currency = analysis.get("trading_currency") or reporting_currency
+    return {
+        "Revenue": money(analysis.get("revenue"), reporting_currency, display_currency, display_fx_reporting),
+        "Net Income": money(analysis.get("net_income"), reporting_currency, display_currency, display_fx_reporting),
+        "Assets": money(analysis.get("assets"), reporting_currency, display_currency, display_fx_reporting),
+        "Equity": money(analysis.get("equity"), reporting_currency, display_currency, display_fx_reporting),
+        "Cash": money(analysis.get("cash"), reporting_currency, display_currency, display_fx_reporting),
+        "Debt": money(analysis.get("debt"), reporting_currency, display_currency, display_fx_reporting),
+        "Free Cash Flow": money(analysis.get("free_cash_flow"), reporting_currency, display_currency, display_fx_reporting),
+        "Price / Market Data": money(analysis.get("price"), trading_currency, display_currency, display_fx_trading),
+        "Reporting Currency": reporting_currency,
+        "Trading Currency": trading_currency,
+        "SEC EDGAR status": analysis.get("sec_status", "N/A"),
+        "Yahoo Finance status": "Available" if not analysis.get("yahoo_errors") else "Partial / endpoint errors",
+    }
 
 
 def conclusion_text(analysis):
@@ -5232,7 +5265,7 @@ def growth_verdict(analysis):
     return f'<div class="gbar-verdict">{text}</div>'
 
 
-def render_overview_sections(analysis, company_name, ticker, sector, industry, display_currency, display_fx_reporting):
+def render_overview_sections(analysis, company_name, ticker, sector, industry, display_currency, display_fx_reporting, display_fx_trading):
     render_html('<div class="section-label">Core research signal <small>Evidence first · heuristic, not a recommendation</small></div>')
     left, right = st.columns([1, 1], gap="large")
     with left:
@@ -5260,16 +5293,42 @@ def render_overview_sections(analysis, company_name, ticker, sector, industry, d
         )
 
     risks = risk_rows(analysis)
-    risk_markup = "".join(
-        f'<div class="risk-row"><strong>{esc(title)}</strong><span>{esc(detail)}<br>{esc(why)}</span><span class="risk-severity">Review</span></div>'
-        for title, detail, why in risks
-    )
     render_html(
         f'<div class="section-label">Key risks <small>Readable warnings tied to the current evidence</small></div>'
-        f'<div class="panel"><div class="panel-kicker">Key risks</div>{risk_markup}</div>'
+        f'<div class="panel"><div class="panel-kicker">Key risks</div>'
     )
+    for risk_index, (title, detail, why) in enumerate(risks):
+        risk_cols = st.columns([0.75, 1.8, 0.45], gap="small")
+        with risk_cols[0]:
+            first_class = " risk-first" if risk_index == 0 else ""
+            render_html(f'<div class="risk-cell{first_class}"><strong>{esc(title)}</strong></div>')
+        with risk_cols[1]:
+            render_html(f'<div class="risk-cell{first_class}"><span>{esc(detail)}<br>{esc(why)}</span></div>')
+        with risk_cols[2]:
+            review_target = "Expectations" if title in {"Growth burden", "Expectation burden", "Cash conversion"} else "Data"
+            if st.button(
+                "Review",
+                key=f"review_risk_{ticker}_{risk_index}",
+                width="stretch",
+                type="secondary",
+                help=f"Open {review_target} for {title.lower()} evidence",
+            ):
+                st.session_state.detail_section = review_target
+                st.session_state.pending_review = title
+                st.rerun()
+    render_html('</div></div>')
 
-    sources_markup = make_rows([(label, source or "Unavailable") for label, source in analysis.get("sources", {}).items()])
+    source_values = provenance_values(analysis, display_currency, display_fx_reporting, display_fx_trading)
+    source_rows = []
+    for label, source in analysis.get("sources", {}).items():
+        source_label = source or "Unavailable"
+        if label == "SEC EDGAR status":
+            source_label = "SEC EDGAR"
+        elif label == "Yahoo Finance status":
+            source_label = "Yahoo Finance"
+        value = source_values.get(label, "N/A")
+        source_rows.append((label, value if value == source_label else f"{value} · {source_label}"))
+    sources_markup = make_rows(source_rows)
     render_html(
         f'<div class="overview-grid">'
         f'<div class="panel"><div class="panel-kicker">Data sources</div>{sources_markup}</div>'
@@ -5293,7 +5352,7 @@ if active_detail in {"Overview", "Expectations"} and any(analysis[k] is not None
     )
 
 if active_detail == "Overview":
-    render_overview_sections(analysis, company_name, ticker, sector, industry, display_currency, display_fx_reporting)
+    render_overview_sections(analysis, company_name, ticker, sector, industry, display_currency, display_fx_reporting, display_fx_trading)
 
 def pick_detail_section():
     options = ["Overview", "Price", "Expectations", "Scenarios", "Compare", "Data", "Methodology"]
@@ -5412,6 +5471,10 @@ def render_expectations_view(analysis, yahoo_data, display_currency, display_fx_
 
 
 detail = pick_detail_section()
+
+pending_review = st.session_state.pop("pending_review", None)
+if pending_review:
+    st.info(f"Reviewing {pending_review}: supporting evidence is shown below.")
 
 if detail == "Price":
     ctrl_kind, ctrl_tf, ctrl_ma = st.columns([1, 1.7, 1.5])
@@ -5672,9 +5735,16 @@ elif detail == "Data":
         mime="application/json",
         width="content",
     )
+    source_values = provenance_values(analysis, display_currency, display_fx_reporting, display_fx_trading)
+    source_labels = dict(analysis["sources"])
+    source_labels["SEC EDGAR status"] = "SEC EDGAR"
+    source_labels["Yahoo Finance status"] = "Yahoo Finance"
     source_table = pd.DataFrame(
-        [[k, v] for k, v in analysis["sources"].items()],
-        columns=["Data item", "Source"],
+        [
+            [label, source_values.get(label, "N/A"), source_labels.get(label) or "Unavailable"]
+            for label in analysis["sources"]
+        ],
+        columns=["Data item", "Value", "Source"],
     )
     render_html('<div class="section-label">Data sources <small>Source coverage for this analysis</small></div>')
     st.dataframe(source_table, width="stretch", hide_index=True)
