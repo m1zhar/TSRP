@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 FORECAST_YEARS = 10
 FADE_START_YEAR = 5
 SOLVER_LOW = -0.40
@@ -53,7 +55,7 @@ def _f(value, default=None):
         if value is None:
             return default
         out = float(value)
-        if out != out:  # NaN
+        if not math.isfinite(out):
             return default
         return out
     except (TypeError, ValueError):
@@ -125,9 +127,15 @@ def dcf_enterprise_value(
     terminal_growth = _f(terminal_growth)
     start_margin = _f(start_margin, fcf_margin)
 
+    years = int(_f(years, 0) or 0)
+    fade_start = int(_f(fade_start, 0) or 0)
     if revenue is None or fcf_margin is None or discount_rate is None or terminal_growth is None:
         return None
-    if revenue <= 0 or fcf_margin <= 0 or discount_rate <= terminal_growth:
+    if years <= 0 or fade_start < 0 or fade_start > years:
+        return None
+    if revenue <= 0 or fcf_margin <= 0 or growth <= -1 or discount_rate <= terminal_growth:
+        return None
+    if terminal_growth < -1 or discount_rate <= -1:
         return None
 
     present_value = 0.0
@@ -159,13 +167,52 @@ def solve_required_growth(
     high=SOLVER_HIGH,
 ):
     """Return (growth, hit_bound). hit_bound True if result sits on the search wall."""
-    enterprise_value = _f(enterprise_value)
-    if enterprise_value is None or enterprise_value <= 0:
-        return None, False
-    if dcf_enterprise_value(
-        revenue, 0.0, fcf_margin, discount_rate, terminal_growth, years, fade_start, start_margin
-    ) is None:
-        return None, False
+    detail = solve_required_growth_detail(
+        enterprise_value,
+        revenue,
+        fcf_margin,
+        discount_rate,
+        terminal_growth,
+        years,
+        fade_start,
+        start_margin,
+        low,
+        high,
+    )
+    return detail["growth"], detail["status"] in {"below_range", "above_range"}
+
+
+def solve_required_growth_detail(
+    enterprise_value,
+    revenue,
+    fcf_margin,
+    discount_rate,
+    terminal_growth,
+    years=FORECAST_YEARS,
+    fade_start=FADE_START_YEAR,
+    start_margin=None,
+    low=SOLVER_LOW,
+    high=SOLVER_HIGH,
+):
+    """Solve reverse DCF growth and explicitly classify bracket outcomes."""
+    target = _f(enterprise_value)
+    low = _f(low)
+    high = _f(high)
+    if target is None or target <= 0 or low is None or high is None or low >= high:
+        return {"growth": None, "status": "unavailable", "low": low, "high": high}
+
+    low_value = dcf_enterprise_value(
+        revenue, low, fcf_margin, discount_rate, terminal_growth, years, fade_start, start_margin
+    )
+    high_value = dcf_enterprise_value(
+        revenue, high, fcf_margin, discount_rate, terminal_growth, years, fade_start, start_margin
+    )
+    if low_value is None or high_value is None:
+        return {"growth": None, "status": "unavailable", "low": low, "high": high}
+    if target < low_value:
+        return {"growth": low, "status": "below_range", "low": low, "high": high}
+    if target > high_value:
+        return {"growth": high, "status": "above_range", "low": low, "high": high}
 
     lo, hi = low, high
     for _ in range(90):
@@ -174,15 +221,13 @@ def solve_required_growth(
             revenue, mid, fcf_margin, discount_rate, terminal_growth, years, fade_start, start_margin
         )
         if value is None:
-            return None, False
-        if value < enterprise_value:
+            return {"growth": None, "status": "unavailable", "low": low, "high": high}
+        if value < target:
             lo = mid
         else:
             hi = mid
 
-    result = (lo + hi) / 2
-    hit_bound = result <= low + 0.004 or result >= high - 0.004
-    return result, hit_bound
+    return {"growth": (lo + hi) / 2, "status": "exact", "low": low, "high": high}
 
 
 def cagr(start, end, years):
@@ -227,6 +272,8 @@ def choose_model_fcf_margin(latest_margin, trailing_margins, mature_margin=None)
     avg = average_positive_margins(trailing_margins)
     _ = mature_margin  # kept for callers that still pass sector mature as a label only
 
+    if latest is not None and latest <= 0:
+        return None, True, "latest free-cash-flow margin is non-positive — reverse DCF not solved"
     if latest is not None and latest > 0 and avg is not None:
         blended = 0.5 * latest + 0.5 * avg
         return blended, False, "blend of latest and multi-year average"
@@ -301,19 +348,6 @@ def financial_strength_score(cash, debt, operating_margin, fcf_margin, debt_to_a
         + fcf_score * weights["fcf"]
         + leverage_score * weights["leverage"]
     )
-
-
-def probability_score(required_growth, historical_growth, business_quality, consensus_growth=None):
-    if required_growth is None:
-        return MISSING_EVIDENCE_SCORE
-    benchmark = historical_growth if historical_growth is not None else consensus_growth
-    if benchmark is None:
-        return MISSING_EVIDENCE_SCORE
-
-    growth_gap = required_growth - benchmark
-    quality_support = (business_quality - 50) * 0.35
-    growth_penalty = max(0, growth_gap) * 120
-    return clamp(55 + quality_support - growth_penalty)
 
 
 def reality_score(
