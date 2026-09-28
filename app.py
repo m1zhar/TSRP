@@ -3836,11 +3836,22 @@ def render_sec_status_strip(analysis):
     """Keep SEC provenance visible on every company view without fabricating facts."""
     has_sec = bool(analysis.get("has_sec"))
     status = analysis.get("sec_status", "N/A")
-    detail = (
-        "Annual filing facts are live for this company."
-        if has_sec
-        else "Live annual filing facts are unavailable until SEC_USER_AGENT has a monitored contact identity."
-    )
+    if has_sec:
+        detail = "Annual filing facts are live for this company."
+    else:
+        detail_by_kind = {
+            "not_configured": "Live annual filing facts require a monitored SEC_USER_AGENT contact identity.",
+            "not_covered": "SEC EDGAR does not publish company facts for this ticker.",
+            "rate_limited": "SEC EDGAR temporarily rate-limited the company-facts request.",
+            "timeout": "SEC EDGAR did not respond before the request timed out.",
+            "network_error": "SEC EDGAR could not be reached for this request.",
+            "parse_error": "SEC EDGAR returned data TSRP could not parse.",
+            "http_error": "SEC EDGAR returned an HTTP error for this request.",
+        }
+        detail = detail_by_kind.get(
+            SEC_STATE.get("kind"),
+            "No usable SEC EDGAR company facts were returned.",
+        )
     dot_class = "status-dot" if has_sec else "status-dot warn"
     render_html(
         f'<div class="sec-status-strip">'
