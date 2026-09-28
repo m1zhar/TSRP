@@ -3,7 +3,9 @@ from datetime import datetime
 from pathlib import Path
 import base64
 import html
+import json
 import math
+import os
 import re
 
 import pandas as pd
@@ -20,10 +22,9 @@ from engine import (
     financial_strength_score,
     history_cagr,
     model_rates,
-    probability_score,
     reality_score,
     score_label,
-    solve_required_growth,
+    solve_required_growth_detail,
 )
 
 
@@ -31,7 +32,11 @@ ROOT = Path(__file__).resolve().parent
 LOGO_PATH = ROOT / "assets" / "tsrp-logo.png"
 APP_NAME = "The Saleh Research Project"
 APP_SHORT = "TSRP"
-EDUCATIONAL_DISCLAIMER = "For educational purposes only. Not investment advice."
+EDUCATIONAL_DISCLAIMER = (
+    "Educational research only. Not financial, investment, tax, accounting, or legal advice. "
+    "TSRP does not make recommendations, predict returns, or guarantee data accuracy. "
+    "Market data may be delayed, incomplete, or incorrect. Do your own research and consult a qualified professional before making financial decisions."
+)
 
 st.set_page_config(
     page_title=f"{APP_SHORT} · {APP_NAME}",
@@ -41,25 +46,25 @@ st.set_page_config(
 )
 
 INK = {
-    "bg": "#0b0c0f",
-    "bg_elevated": "#181714",
-    "card": "#181714",
-    "card_hover": "#221f1a",
-    "surface": "#181714",
-    "surface_2": "#2a261f",
-    "text": "#fff4dc",
-    "text_secondary": "#d2c09a",
-    "text_tertiary": "#a39068",
-    "blue": "#ffc107",
-    "blue_bright": "#ffd54f",
-    "cyan": "#ffd27a",
-    "purple": "#e6b422",
-    "green": "#2ee56b",
-    "orange": "#ff9100",
-    "red": "#ff3b3b",
-    "border": "#3d3420",
-    "border_strong": "#5a4a28",
-    "fill": "#221f18",
+    "bg": "#f4f6f8",
+    "bg_elevated": "#ffffff",
+    "card": "#ffffff",
+    "card_hover": "#f8fafc",
+    "surface": "#ffffff",
+    "surface_2": "#edf1f5",
+    "text": "#14202b",
+    "text_secondary": "#5f6d7a",
+    "text_tertiary": "#8a97a5",
+    "blue": "#2359c7",
+    "blue_bright": "#1746a2",
+    "cyan": "#187f78",
+    "purple": "#6b55b5",
+    "green": "#18794e",
+    "orange": "#9b6500",
+    "red": "#b53b49",
+    "border": "#d9e0e7",
+    "border_strong": "#bbc6d1",
+    "fill": "#eef2f6",
 }
 
 
@@ -67,7 +72,8 @@ def current_scheme():
     return INK
 
 
-SEC_USER_AGENT = "TSRP Intelligence app contact@example.com"
+SEC_USER_AGENT = os.getenv("SEC_USER_AGENT", "").strip()
+SEC_STATE = {"kind": "not_configured", "detail": "Live SEC EDGAR facts require a monitored contact identity"}
 
 DISCOUNT_RATE = 0.10
 TERMINAL_GROWTH = 0.03
@@ -100,34 +106,34 @@ CURRENCY_SYMBOLS = {
 }
 
 
-CHART_TIMEFRAMES = ["1M", "3M", "6M", "YTD", "1Y", "5Y"]
+CHART_TIMEFRAMES = ["1M", "3M", "6M", "1Y", "3Y", "5Y", "Max"]
 
 UP_COLOR = "#089981"
 DOWN_COLOR = "#f23645"
 
 _AXIS_STYLE = dict(
     showgrid=True,
-    gridcolor="rgba(255,255,255,0.04)",
+    gridcolor="#e7ebf0",
     zeroline=False,
-    tickfont=dict(color="#6a6d78", size=11),
-    linecolor="rgba(255,255,255,0.06)",
+    tickfont=dict(color="#7a8793", size=11),
+    linecolor="#d9e0e7",
 )
 
 
 def slice_timeframe(df, timeframe):
-    if df.empty or timeframe == "5Y":
+    if df.empty or timeframe == "Max":
         return df
     end = df.index.max()
     if timeframe == "YTD":
         cutoff = pd.Timestamp(year=end.year, month=1, day=1, tz=getattr(end, "tz", None))
     else:
-        months = {"1M": 1, "3M": 3, "6M": 6, "1Y": 12}[timeframe]
+        months = {"1M": 1, "3M": 3, "6M": 6, "1Y": 12, "3Y": 36, "5Y": 60}[timeframe]
         cutoff = end - pd.DateOffset(months=months)
     sliced = df[df.index >= cutoff]
     return sliced if not sliced.empty else df
 
 
-SMA_COLORS = {20: "#f7931a", 50: "#00bcd4", 200: "#7c5cff"}
+SMA_COLORS = {20: "#a96a00", 50: "#187f78", 200: "#6b55b5"}
 
 
 def render_price_chart(history, display_fx=1.0, kind="Candles", timeframe="1Y", smas=()):
@@ -188,7 +194,7 @@ def render_price_chart(history, display_fx=1.0, kind="Candles", timeframe="1Y", 
                 mode="lines",
                 line=dict(color=accent, width=2.2),
                 fill="tozeroy",
-                fillcolor="rgba(41, 98, 255, 0.14)",
+                fillcolor="rgba(35, 89, 199, 0.10)",
                 hovertemplate="%{y:,.2f}<extra></extra>",
                 name="",
                 showlegend=False,
@@ -237,11 +243,11 @@ def render_price_chart(history, display_fx=1.0, kind="Candles", timeframe="1Y", 
             y=1.01,
             xanchor="left",
             x=0,
-            font=dict(color="#9aa0ab", size=11),
-            bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#5f6d7a", size=11),
+            bgcolor="rgba(255,255,255,0)",
         ),
         hovermode="x unified",
-        hoverlabel=dict(bgcolor="#12161e", bordercolor="rgba(255,255,255,0.1)", font_color="#e8eaed"),
+        hoverlabel=dict(bgcolor="#ffffff", bordercolor="#d9e0e7", font_color="#14202b"),
         xaxis_rangeslider_visible=False,
     )
     fig.update_xaxes(**_AXIS_STYLE)
@@ -308,13 +314,25 @@ def render_app_header():
         with text_col:
             render_html(
                 f"<div class='brand-title'>{esc(APP_SHORT)}</div>"
-                f"<div class='brand-name'>{esc(APP_NAME)}</div>"
+                f"<div class='brand-name'>{esc(APP_NAME)} · Evidence before opinion</div>"
             )
     with right:
+        action_col, status_col = st.columns([1, 1.5], gap="small")
+        with action_col:
+            if st.session_state.get("ticker") and st.button("↻", key="header_refresh", help="Refresh all market data"):
+                fetch_yahoo_data.clear()
+                fetch_price_history.clear()
+                fetch_sec_companyfacts.clear()
+                fetch_sec_ticker_map.clear()
+                st.rerun()
+        with status_col:
+            current_ticker = st.session_state.get("ticker")
+            context = f"Analyzing {current_ticker}" if current_ticker else "Ready for a company search"
+            render_html(f'<div class="header-context">{esc(context)}<br>Market data is refreshed on demand and may be delayed.</div>')
         render_html(
             f'<div class="header-actions">'
-            f'<div class="live-pill"><span class="live-dot"></span>Live data</div>'
-            f'<div class="live-pill badge-muted">{esc(EDUCATIONAL_DISCLAIMER)}</div>'
+            f'<div class="live-pill"><span class="status-dot"></span>Yahoo Finance · source disclosed</div>'
+            f'<div class="live-pill badge-muted">Educational research only</div>'
             f"</div>"
         )
 
@@ -322,43 +340,41 @@ def render_app_header():
 st.markdown(
     """
     <style>
-    @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@500;600&display=swap");
-
     :root {
-        --bg: #0b0c0f;
-        --bg-elevated: #181714;
-        --card: #181714;
-        --card-hover: #221f1a;
-        --surface: #181714;
-        --surface-2: #2a261f;
-        --text: #fff4dc;
-        --text-secondary: #d2c09a;
-        --text-tertiary: #a39068;
-        --blue: #ffc107;
-        --blue-bright: #ffd54f;
-        --blue-soft: rgba(255, 193, 7, 0.22);
-        --cyan: #ffd27a;
-        --cyan-soft: rgba(255, 210, 122, 0.18);
-        --purple: #e6b422;
-        --green: #2ee56b;
-        --green-soft: rgba(46, 229, 107, 0.18);
-        --orange: #ff9100;
-        --orange-soft: rgba(255, 145, 0, 0.18);
-        --red: #ff3b3b;
-        --red-soft: rgba(255, 59, 59, 0.18);
-        --border: #3d3420;
-        --border-strong: #5a4a28;
-        --fill: #221f18;
+        --bg: #080A0D;
+        --bg-elevated: #101419;
+        --card: #101419;
+        --card-hover: #1B222B;
+        --surface: #151B22;
+        --surface-2: #1B222B;
+        --text: #F5F7FA;
+        --text-secondary: #A0AAB6;
+        --text-tertiary: #737F8D;
+        --blue: #6EA8FF;
+        --blue-bright: #8DBBFF;
+        --blue-soft: rgba(110, 168, 255, 0.16);
+        --cyan: #58D5C9;
+        --cyan-soft: rgba(88, 213, 201, 0.14);
+        --purple: #A99BFF;
+        --green: #43D17C;
+        --green-soft: rgba(67, 209, 124, 0.14);
+        --orange: #F4B860;
+        --orange-soft: rgba(244, 184, 96, 0.14);
+        --red: #FF6B76;
+        --red-soft: rgba(255, 107, 118, 0.14);
+        --border: #26313D;
+        --border-strong: #354352;
+        --fill: #1B222B;
         --grid: rgba(255, 255, 255, 0.04);
         --shadow: none;
         --shadow-soft: none;
         --glow-blue: none;
-        --radius-xl: 4px;
-        --radius-lg: 4px;
-        --radius-md: 4px;
-        --radius-sm: 2px;
-        --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
-        --display: "IBM Plex Sans", "Segoe UI", -apple-system, sans-serif;
+        --radius-xl: 14px;
+        --radius-lg: 12px;
+        --radius-md: 10px;
+        --radius-sm: 8px;
+        --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+        --display: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         --control-h: 40px;
         --side-w: 120px;
     }
@@ -382,6 +398,130 @@ st.markdown(
     .stApp {
         background: var(--bg) !important;
         color: var(--text);
+    }
+
+    button:focus-visible, input:focus-visible, [role="button"]:focus-visible,
+    [data-baseweb="select"]:focus-within, [data-baseweb="slider"]:focus-within {
+        outline: 2px solid var(--blue) !important;
+        outline-offset: 2px !important;
+    }
+
+    .section-label {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        margin: 22px 0 10px;
+        color: var(--text);
+        font-size: 15px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+    }
+
+    .section-label small {
+        color: var(--text-tertiary);
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0;
+    }
+
+    .panel-kicker {
+        color: var(--text-tertiary);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        margin-bottom: 7px;
+    }
+
+    .header-context {
+        color: var(--text-tertiary);
+        font-size: 11px;
+        line-height: 1.35;
+        margin-top: 2px;
+    }
+
+    .source-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 8px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        color: var(--text-secondary);
+        background: var(--surface);
+        font-size: 11px;
+        white-space: nowrap;
+    }
+
+    .status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 6px;
+        background: var(--green);
+    }
+
+    .status-dot.warn { background: var(--orange); }
+    .status-dot.bad { background: var(--red); }
+
+    .overview-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr);
+        gap: 14px;
+        margin-top: 14px;
+    }
+
+    .overview-stack { display: grid; gap: 14px; }
+
+    .signal-copy {
+        color: var(--text);
+        font-size: 18px;
+        font-weight: 600;
+        line-height: 1.35;
+        letter-spacing: -0.02em;
+        margin-bottom: 10px;
+    }
+
+    .signal-limitations {
+        color: var(--text-tertiary);
+        font-size: 12px;
+        line-height: 1.5;
+        margin-top: 10px;
+    }
+
+    .risk-row {
+        display: grid;
+        grid-template-columns: minmax(100px, .7fr) minmax(0, 1.4fr) auto;
+        gap: 12px;
+        align-items: start;
+        padding: 11px 0;
+        border-top: 1px solid var(--grid);
+    }
+
+    .risk-row:first-child { border-top: 0; padding-top: 0; }
+    .risk-row strong { color: var(--text); font-size: 13px; }
+    .risk-row span { color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
+    .risk-severity { color: var(--orange) !important; font-size: 10px !important; font-weight: 700; text-transform: uppercase; }
+
+    .risk-cell {
+        min-height: 46px;
+        padding: 11px 0;
+        border-top: 1px solid var(--grid);
+    }
+
+    .risk-cell.risk-first { border-top: 0; padding-top: 0; }
+    .risk-cell strong { color: var(--text); font-size: 13px; }
+    .risk-cell span { color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
+
+    .note-box {
+        padding: 11px 13px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        color: var(--text-secondary);
+        background: var(--surface);
+        font-size: 12px;
+        line-height: 1.5;
     }
 
     .block-container {
@@ -1272,10 +1412,25 @@ st.markdown(
         border-bottom: 2px solid var(--blue) !important;
     }
 
-    [data-testid="stMain"] .st-key-nav_chart button,
-    [data-testid="stMain"] .st-key-nav_whatif button,
+    @media (max-width: 900px) {
+        [data-testid="stSegmentedControl"] {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+
+        [data-testid="stSegmentedControl"]::-webkit-scrollbar { display: none; }
+        [data-testid="stSegmentedControl"] [data-baseweb="button-group"] { width: max-content; min-width: 100%; }
+        [data-testid="stSegmentedControl"] button { flex: 0 0 auto; padding-left: 11px !important; padding-right: 11px !important; white-space: nowrap; }
+    }
+
+    [data-testid="stMain"] .st-key-nav_overview button,
+    [data-testid="stMain"] .st-key-nav_price button,
+    [data-testid="stMain"] .st-key-nav_expectations button,
+    [data-testid="stMain"] .st-key-nav_scenarios button,
     [data-testid="stMain"] .st-key-nav_compare button,
-    [data-testid="stMain"] .st-key-nav_data button {
+    [data-testid="stMain"] .st-key-nav_data button,
+    [data-testid="stMain"] .st-key-nav_methodology button {
         background: transparent !important;
         border: none !important;
         border-bottom: 2px solid transparent !important;
@@ -1290,18 +1445,24 @@ st.markdown(
         padding: 8px 12px !important;
     }
 
-    [data-testid="stMain"] .st-key-nav_chart button:hover,
-    [data-testid="stMain"] .st-key-nav_whatif button:hover,
+    [data-testid="stMain"] .st-key-nav_overview button:hover,
+    [data-testid="stMain"] .st-key-nav_price button:hover,
+    [data-testid="stMain"] .st-key-nav_expectations button:hover,
+    [data-testid="stMain"] .st-key-nav_scenarios button:hover,
     [data-testid="stMain"] .st-key-nav_compare button:hover,
-    [data-testid="stMain"] .st-key-nav_data button:hover {
+    [data-testid="stMain"] .st-key-nav_data button:hover,
+    [data-testid="stMain"] .st-key-nav_methodology button:hover {
         color: var(--text) !important;
         background: transparent !important;
     }
 
-    [data-testid="stMain"] .st-key-nav_chart button[kind="primary"],
-    [data-testid="stMain"] .st-key-nav_whatif button[kind="primary"],
+    [data-testid="stMain"] .st-key-nav_overview button[kind="primary"],
+    [data-testid="stMain"] .st-key-nav_price button[kind="primary"],
+    [data-testid="stMain"] .st-key-nav_expectations button[kind="primary"],
+    [data-testid="stMain"] .st-key-nav_scenarios button[kind="primary"],
     [data-testid="stMain"] .st-key-nav_compare button[kind="primary"],
-    [data-testid="stMain"] .st-key-nav_data button[kind="primary"] {
+    [data-testid="stMain"] .st-key-nav_data button[kind="primary"],
+    [data-testid="stMain"] .st-key-nav_methodology button[kind="primary"] {
         color: var(--text) !important;
         background: transparent !important;
         border-bottom: 2px solid var(--blue) !important;
@@ -1461,6 +1622,15 @@ st.markdown(
         text-transform: none;
         letter-spacing: 0;
         margin: 8px 0 6px;
+        max-width: 980px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .watch-heading small {
+        color: var(--text-tertiary);
+        font-size: 11px;
+        font-weight: 500;
     }
 
     .watch-heading::before,
@@ -1934,6 +2104,604 @@ st.markdown(
         .stTabs [data-baseweb="tab"] { min-height: 40px; }
         .stButton button { min-height: 44px !important; }
     }
+    /* Editorial research workspace reset: quiet hierarchy, useful density, no decorative chrome. */
+    :root {
+        --bg: #f4f6f8;
+        --bg-elevated: #ffffff;
+        --card: #ffffff;
+        --card-hover: #f8fafc;
+        --surface: #ffffff;
+        --surface-2: #edf1f5;
+        --text: #14202b;
+        --text-secondary: #5f6d7a;
+        --text-tertiary: #8a97a5;
+        --blue: #2359c7;
+        --blue-bright: #1746a2;
+        --blue-soft: #edf3ff;
+        --cyan: #187f78;
+        --cyan-soft: #e7f5f3;
+        --purple: #6b55b5;
+        --green: #18794e;
+        --green-soft: #e8f5ed;
+        --orange: #9b6500;
+        --orange-soft: #fff4d9;
+        --red: #b53b49;
+        --red-soft: #fbecef;
+        --border: #d9e0e7;
+        --border-strong: #bbc6d1;
+        --fill: #eef2f6;
+        --grid: #e9edf2;
+        --shadow: 0 1px 2px rgba(20, 32, 43, .04);
+        --shadow-soft: 0 1px 2px rgba(20, 32, 43, .04);
+        --glow-blue: none;
+        --radius-xl: 10px;
+        --radius-lg: 8px;
+        --radius-md: 7px;
+        --radius-sm: 5px;
+        --mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+        --display: "Avenir Next", "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    html, body, [class*="css"] {
+        font-family: var(--display) !important;
+        letter-spacing: 0 !important;
+    }
+
+    .stApp,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"] {
+        background: var(--bg) !important;
+        color: var(--text) !important;
+    }
+
+    header[data-testid="stHeader"] { background: var(--bg) !important; }
+
+    .block-container {
+        max-width: 1240px !important;
+        padding: 28px 38px 48px !important;
+    }
+
+    .terminal-header {
+        background: transparent !important;
+        border: 0 !important;
+        border-bottom: 1px solid var(--border) !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        padding: 0 0 18px !important;
+        margin-bottom: 25px !important;
+        min-height: 64px;
+    }
+
+    .brand-title {
+        color: var(--text) !important;
+        font-size: 18px !important;
+        font-weight: 700 !important;
+        letter-spacing: -.02em !important;
+    }
+
+    .brand-name { color: var(--text-secondary) !important; font-size: 12px !important; }
+    .header-context { color: var(--text-tertiary) !important; font-size: 11px !important; }
+    .header-actions { gap: 14px !important; }
+
+    .live-pill,
+    .live-pill.badge-muted {
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        color: var(--text-tertiary) !important;
+        padding: 0 !important;
+        font-size: 11px !important;
+    }
+
+    .live-pill.badge-muted {
+        border-left: 1px solid var(--border) !important;
+        padding-left: 14px !important;
+    }
+
+    .status-dot, .live-dot { width: 6px !important; height: 6px !important; }
+
+    [data-testid="stForm"] {
+        background: transparent !important;
+        border: 0 !important;
+        padding: 0 !important;
+        margin-bottom: 28px !important;
+        max-width: 980px !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
+
+    .stTextInput input,
+    .stSelectbox > div > div {
+        background: var(--card) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 7px !important;
+        color: var(--text) !important;
+        min-height: 46px !important;
+        height: 46px !important;
+        font-size: 14px !important;
+        box-shadow: var(--shadow) !important;
+    }
+
+    .stTextInput input:focus,
+    .stTextInput input:focus-within {
+        border-color: var(--blue) !important;
+        box-shadow: 0 0 0 3px rgba(35, 89, 199, .12) !important;
+    }
+
+    .stTextInput input::placeholder { color: var(--text-tertiary) !important; }
+
+    .stButton button {
+        background: var(--card) !important;
+        color: var(--text) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 7px !important;
+        box-shadow: var(--shadow) !important;
+        font-weight: 600 !important;
+        min-height: 40px !important;
+    }
+
+    [data-testid="stMain"] [data-testid="stForm"] .stButton button,
+    [data-testid="stMain"] [data-testid="stForm"] .stButton button[kind="secondary"] {
+        background: var(--blue) !important;
+        border-color: var(--blue) !important;
+        color: #ffffff !important;
+        border-radius: 7px !important;
+    }
+
+    .stButton button:hover {
+        background: var(--card-hover) !important;
+        border-color: var(--border-strong) !important;
+        box-shadow: var(--shadow) !important;
+    }
+
+    [data-testid="stMain"] [data-testid="stForm"] .stButton button:hover,
+    [data-testid="stMain"] [data-testid="stForm"] .stButton button[kind="secondary"]:hover {
+        background: var(--blue-bright) !important;
+        border-color: var(--blue-bright) !important;
+    }
+
+    [data-testid="stFormSubmitButton"] button,
+    [data-testid="stFormSubmitButton"] button[kind="primary"],
+    [data-testid="stFormSubmitButton"] button[kind="secondary"] {
+        background: var(--blue) !important;
+        border: 1px solid var(--blue) !important;
+        color: #ffffff !important;
+        border-radius: 7px !important;
+        font-weight: 700 !important;
+    }
+
+    [data-testid="stFormSubmitButton"] button:hover {
+        background: var(--blue-bright) !important;
+        border-color: var(--blue-bright) !important;
+    }
+
+    /* One control language everywhere: neutral options, blue selected state. */
+    div[data-testid="stSegmentedControl"] [role="radiogroup"],
+    div[data-testid="stSegmentedControl"] [data-baseweb="button-group"],
+    .stSegmentedControl [role="radiogroup"] {
+        background: var(--surface-2) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+        gap: 3px !important;
+        padding: 3px !important;
+    }
+
+    div[data-testid="stSegmentedControl"] button,
+    div[data-testid="stSegmentedControl"] [role="radio"],
+    .stSegmentedControl button,
+    .stSegmentedControl [role="radio"] {
+        background: transparent !important;
+        border: 0 !important;
+        border-radius: 5px !important;
+        color: var(--text-secondary) !important;
+        font-size: 12px !important;
+        font-weight: 650 !important;
+        min-height: 32px !important;
+        padding: 7px 11px !important;
+        box-shadow: none !important;
+        white-space: nowrap !important;
+    }
+
+    div[data-testid="stSegmentedControl"] button[aria-checked="true"],
+    div[data-testid="stSegmentedControl"] button[aria-pressed="true"],
+    div[data-testid="stSegmentedControl"] [role="radio"][aria-checked="true"],
+    .stSegmentedControl button[aria-checked="true"],
+    .stSegmentedControl [role="radio"][aria-checked="true"] {
+        background: var(--card) !important;
+        border: 1px solid var(--border) !important;
+        color: var(--blue) !important;
+        box-shadow: 0 1px 2px rgba(20, 32, 43, .08) !important;
+    }
+
+    div[data-testid="stSegmentedControl"] button:hover,
+    .stSegmentedControl button:hover { color: var(--text) !important; background: #f8fafc !important; }
+
+    /* Streamlit 1.50 renders some segmented controls as a bare BaseWeb group. */
+    div[data-baseweb="button-group"],
+    div[data-testid*="SegmentedControl"] [role="group"],
+    div[data-testid*="Pills"] [role="group"] {
+        background: var(--surface-2) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+        padding: 3px !important;
+    }
+
+    div[data-baseweb="button-group"] button,
+    div[data-testid*="SegmentedControl"] [role="group"] button,
+    div[data-testid*="Pills"] [role="group"] button {
+        background: var(--surface-2) !important;
+        border: 1px solid transparent !important;
+        border-radius: 5px !important;
+        color: var(--text-secondary) !important;
+        min-height: 32px !important;
+        padding: 7px 11px !important;
+    }
+
+    div[data-baseweb="button-group"] button[aria-checked="true"],
+    div[data-baseweb="button-group"] button[aria-pressed="true"],
+    div[data-baseweb="button-group"] button[aria-selected="true"],
+    div[data-baseweb="button-group"] button[data-selected="true"] {
+        background: var(--card) !important;
+        border-color: var(--border) !important;
+        color: var(--blue) !important;
+        box-shadow: 0 1px 2px rgba(20, 32, 43, .08) !important;
+    }
+
+    [data-testid="stSegmentedControl"],
+    div[data-baseweb="button-group"] {
+        width: max-content !important;
+        max-width: 100% !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
+
+    .overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+
+    button[title="Refresh all market data"],
+    button[title="Refresh price history"] {
+        width: 40px !important;
+        min-width: 40px !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        font-size: 19px !important;
+        line-height: 1 !important;
+    }
+
+    .home {
+        min-height: auto !important;
+        padding: 56px 0 0 !important;
+    }
+
+    .home-lead { max-width: 690px !important; }
+
+    .home-lead .hero-title {
+        color: var(--text) !important;
+        font-size: clamp(40px, 5vw, 58px) !important;
+        line-height: 1.03 !important;
+        letter-spacing: -.065em !important;
+        max-width: 13ch !important;
+        margin: 14px 0 19px !important;
+    }
+
+    .home-lead .hero-copy {
+        color: var(--text-secondary) !important;
+        font-size: 17px !important;
+        line-height: 1.55 !important;
+        max-width: 610px !important;
+    }
+
+    .eyebrow { color: var(--blue) !important; letter-spacing: .08em !important; }
+
+    .home-steps {
+        border-top: 1px solid var(--border) !important;
+        gap: 0 !important;
+        margin-top: 68px !important;
+        padding-top: 22px !important;
+    }
+
+    .home-steps > div {
+        min-height: 76px;
+        padding: 0 28px 0 0;
+        margin-right: 28px;
+        border-right: 1px solid var(--border);
+    }
+
+    .home-steps > div:last-child { border-right: 0; margin-right: 0; }
+    .home-steps .n { color: var(--text) !important; font-size: 13px !important; font-weight: 700 !important; }
+    .home-steps p { color: var(--text-secondary) !important; font-size: 13px !important; }
+
+    .source-line {
+        max-width: 850px;
+        border-top: 1px solid var(--border);
+        padding-top: 13px;
+        margin-top: 74px !important;
+        color: var(--text-tertiary) !important;
+        font-size: 11px !important;
+    }
+
+    .result-head {
+        padding-bottom: 23px !important;
+        margin-bottom: 22px !important;
+        border-bottom: 1px solid var(--border) !important;
+    }
+
+    .result-head .hero-title { font-size: 34px !important; letter-spacing: -.045em !important; }
+    .result-meta { color: var(--text-tertiary) !important; font-size: 12px !important; }
+    .badge-row { gap: 0 !important; margin-top: 12px !important; }
+
+    .source-chip {
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        color: var(--text-secondary) !important;
+        padding: 0 !important;
+        font-size: 11px !important;
+    }
+
+    .source-chip + .source-chip {
+        border-left: 1px solid var(--border) !important;
+        margin-left: 13px;
+        padding-left: 13px !important;
+    }
+
+    .result-score b { color: var(--blue) !important; font-size: 38px !important; }
+    .result-score em { color: var(--text-secondary) !important; letter-spacing: .03em !important; }
+
+    .section-label {
+        color: var(--text) !important;
+        font-size: 16px !important;
+        font-weight: 700 !important;
+        margin: 30px 0 12px !important;
+    }
+
+    .section-label small { color: var(--text-tertiary) !important; font-size: 11px !important; }
+
+    .metric-grid { gap: 12px !important; }
+
+    .metric-card,
+    .panel,
+    .hero-card,
+    .score-panel,
+    .learn-card,
+    .empty-state {
+        background: var(--card) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+        box-shadow: var(--shadow) !important;
+    }
+
+    .metric-card { padding: 17px 18px 15px !important; }
+    .metric-card::before { display: none !important; }
+    .metric-label { color: var(--text-tertiary) !important; font-size: 11px !important; letter-spacing: .035em !important; }
+    .metric-value { color: var(--text) !important; font-family: var(--display) !important; font-size: 24px !important; letter-spacing: -.035em !important; }
+    .metric-meta { color: var(--text-tertiary) !important; font-size: 11px !important; }
+
+    .panel, .hero-card, .score-panel, .learn-card { padding: 21px 23px !important; }
+    .panel-kicker { color: var(--text-secondary) !important; text-transform: none !important; letter-spacing: .015em !important; font-size: 12px !important; }
+    .signal-copy { color: var(--text) !important; font-size: 20px !important; letter-spacing: -.025em !important; }
+    .signal-limitations { color: var(--text-tertiary) !important; font-size: 11px !important; }
+
+    .implied-line {
+        background: var(--blue-soft) !important;
+        border: 1px solid #d6e2fb !important;
+        border-left: 3px solid var(--blue) !important;
+        border-radius: 7px !important;
+    }
+
+    .implied-main { color: var(--text) !important; }
+    .implied-sub { color: var(--text-secondary) !important; }
+    .gbar-track { background: #e2e7ed !important; }
+    .gbar-verdict, .note-box { background: #f7f9fb !important; border-color: var(--border) !important; color: var(--text-secondary) !important; }
+
+    .risk-row { border-top-color: var(--grid) !important; }
+    .risk-row strong { color: var(--text) !important; }
+    .risk-row span { color: var(--text-secondary) !important; }
+
+    [data-testid="stSegmentedControl"] {
+        border-bottom: 1px solid var(--border) !important;
+        margin: 24px 0 20px !important;
+    }
+
+    [data-testid="stSegmentedControl"] button {
+        background: transparent !important;
+        border: 0 !important;
+        border-bottom: 2px solid transparent !important;
+        border-radius: 0 !important;
+        color: var(--text-tertiary) !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        padding: 10px 13px !important;
+    }
+
+    [data-testid="stSegmentedControl"] button[aria-checked="true"],
+    [data-testid="stSegmentedControl"] button[aria-pressed="true"] {
+        background: transparent !important;
+        border-bottom-color: var(--blue) !important;
+        color: var(--text) !important;
+    }
+
+    div[data-testid="stDataFrame"],
+    [data-testid="stLineChart"],
+    .chart-wrap {
+        background: var(--card) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+        box-shadow: var(--shadow) !important;
+    }
+
+    .chart-wrap { padding: 10px 6px 3px !important; }
+    .app-footer {
+        background: transparent !important;
+        border: 0 !important;
+        border-top: 1px solid var(--border) !important;
+        border-radius: 0 !important;
+        color: var(--text-tertiary) !important;
+        padding: 14px 0 !important;
+        font-size: 11px !important;
+    }
+
+    div[data-baseweb="popover"], div[data-baseweb="menu"] {
+        background: var(--card) !important;
+        border: 1px solid var(--border) !important;
+    }
+
+    div[data-baseweb="popover"] li, div[data-baseweb="menu"] li { color: var(--text) !important; }
+    div[data-baseweb="popover"] li:hover, div[data-baseweb="menu"] li:hover { background: var(--fill) !important; }
+
+    @media (max-width: 900px) {
+        .block-container { padding: 20px 18px 36px !important; }
+        .terminal-header { margin-bottom: 20px !important; }
+        .home { padding-top: 38px !important; }
+        .home-lead .hero-title { font-size: 42px !important; }
+        .home-steps { margin-top: 48px !important; }
+        .home-steps > div { padding-right: 0; margin: 0 0 18px; border-right: 0; border-bottom: 1px solid var(--border); padding-bottom: 17px; }
+        .home-steps > div:last-child { border-bottom: 0; padding-bottom: 0; }
+        .header-actions { justify-content: flex-start !important; }
+        .result-head { align-items: flex-start !important; flex-direction: column !important; }
+        .result-score { text-align: left !important; }
+    }
+
+    @media (max-width: 560px) {
+        .block-container { padding-left: 14px !important; padding-right: 14px !important; }
+        .home-lead .hero-title { font-size: 37px !important; }
+        .home-lead .hero-copy { font-size: 15px !important; }
+        .home-steps { grid-template-columns: 1fr !important; }
+        .result-head .hero-title { font-size: 29px !important; }
+        .metric-grid { grid-template-columns: 1fr 1fr !important; }
+        .metric-card { padding: 14px !important; }
+        .metric-value { font-size: 20px !important; }
+    }
+
+    .sec-status-strip {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 7px 10px;
+        margin: -7px 0 22px;
+        padding: 10px 13px;
+        background: #f8fafc;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text-secondary);
+        font-size: 12px;
+        line-height: 1.35;
+    }
+
+    .sec-status-strip .status-dot { margin-right: 1px; }
+    .sec-status-title { color: var(--text); font-weight: 750; }
+    .sec-status-copy { color: var(--text-secondary); }
+    .sec-status-detail {
+        margin-left: auto;
+        color: var(--text-tertiary);
+        font-size: 11px;
+    }
+
+    .quality-flags {
+        margin: 10px 0 0 !important;
+        color: var(--text-tertiary) !important;
+        font-size: 11px !important;
+        line-height: 1.4;
+    }
+
+    .methodology-panel,
+    .data-quality-panel { background: var(--card) !important; }
+    .methodology-panel p { max-width: 900px; }
+    .methodology-panel code {
+        color: var(--blue) !important;
+        background: var(--blue-soft) !important;
+        border-radius: 4px;
+        padding: 2px 4px;
+    }
+
+    .whatif-note {
+        background: #f8fafc !important;
+        border: 1px solid var(--border) !important;
+        border-left: 3px solid var(--blue) !important;
+        border-radius: 8px !important;
+        color: var(--text-secondary) !important;
+        line-height: 1.5 !important;
+    }
+
+    .whatif-note b { color: var(--text) !important; }
+
+    [data-testid="stCaptionContainer"] {
+        color: var(--text-tertiary) !important;
+        font-size: 11px !important;
+    }
+
+    [data-testid="stAlert"] {
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+        background: #fffdf7 !important;
+        color: var(--text-secondary) !important;
+        box-shadow: none !important;
+    }
+
+    .stDownloadButton button {
+        background: var(--card) !important;
+        border: 1px solid var(--border) !important;
+        color: var(--text) !important;
+        border-radius: 7px !important;
+    }
+
+    .stDownloadButton button:hover {
+        background: var(--card-hover) !important;
+        border-color: var(--border-strong) !important;
+    }
+
+    [data-testid="stDataFrame"] { overflow: hidden !important; }
+
+    .cmp-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--card);
+        color: var(--text);
+        font-size: 12px;
+    }
+
+    .cmp-table th,
+    .cmp-table td {
+        padding: 11px 13px;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        vertical-align: middle;
+    }
+
+    .cmp-table th {
+        color: var(--text-secondary);
+        background: #f8fafc;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .cmp-table th:not(:first-child) { border-top: 3px solid var(--blue); }
+    .cmp-table td:first-child { color: var(--text-secondary); font-weight: 650; }
+    .cmp-table tr:last-child td { border-bottom: 0; }
+    .cmp-table tr:hover td { background: #fbfcfd; }
+    .cmp-name { display: block; color: var(--text); font-weight: 700; }
+    .cmp-ticker { display: block; margin-top: 3px; color: var(--text-tertiary); font-size: 10px; font-weight: 500; }
+    .cmp-swatch { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; }
+
+    @media (max-width: 700px) {
+        .sec-status-strip { align-items: flex-start; }
+        .sec-status-detail { width: 100%; margin-left: 17px; }
+        .cmp-table { display: block; overflow-x: auto; white-space: nowrap; }
+        .overview-grid { grid-template-columns: 1fr !important; }
+        div[data-baseweb="button-group"] {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            justify-content: center !important;
+        }
+        div[data-baseweb="button-group"] button {
+            font-size: 11px !important;
+            padding-left: 8px !important;
+            padding-right: 8px !important;
+        }
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -2086,7 +2854,9 @@ def money(value, currency, display_currency=None, display_fx=1.0):
     if value is None:
         return "N/A"
 
-    if display_currency and display_fx not in (None, 1.0):
+    if display_currency and display_currency != currency and display_fx is None:
+        return "N/A · FX unavailable"
+    if display_currency and display_currency != currency:
         value = value * display_fx
         currency = display_currency
 
@@ -2118,10 +2888,9 @@ def percent(value):
 def required_growth_label(analysis):
     if analysis.get("model_fcf_refused") or analysis.get("required_growth") is None:
         return "N/A"
-    if analysis.get("growth_clamped"):
-        growth = analysis["required_growth"]
-        if growth is not None and growth >= 1.0:
-            return ">120%/yr"
+    if analysis.get("solver_status") == "above_range":
+        return ">120%/yr"
+    if analysis.get("solver_status") == "below_range":
         return "<-40%/yr"
     return f"{percent(analysis['required_growth'])} /yr"
 
@@ -2135,7 +2904,7 @@ def implied_line_html(analysis):
     if analysis.get("model_fcf_refused"):
         main = "Price implied growth is N/A — no positive free cash to reverse-solve."
     elif analysis.get("growth_clamped"):
-        main = f"Price implies {esc(req)} sales growth — outside the solver’s precise range."
+        main = f"Price implies {esc(req)} sales growth — outside the model range."
     else:
         main = f"Price implies <b>{esc(req)}</b> sales growth"
     return (
@@ -2238,7 +3007,7 @@ def convert_amount(amount, from_currency, to_currency):
         return None
     rate = fx_rate(from_currency, to_currency)
     if rate is None:
-        return amount
+        return None
     return amount * rate
 
 
@@ -2316,19 +3085,33 @@ YAHOO_HEADERS = {
 
 
 def _yf_part(ticker, kind):
-    stock = yf.Ticker(ticker)
     empty = pd.DataFrame()
     try:
+        stock = yf.Ticker(ticker)
         if kind == "financials":
-            return stock.financials
+            frame = stock.financials
+            if frame is not None and not frame.empty:
+                return frame
+            return stock.get_income_stmt(freq="yearly")
         if kind == "balance":
-            return stock.balance_sheet
+            frame = stock.balance_sheet
+            if frame is not None and not frame.empty:
+                return frame
+            return stock.get_balance_sheet(freq="yearly")
         if kind == "cashflow":
-            return stock.cashflow
+            frame = stock.cashflow
+            if frame is not None and not frame.empty:
+                return frame
+            return stock.get_cash_flow(freq="yearly")
+        if kind == "quarterly_cashflow":
+            frame = stock.quarterly_cashflow
+            if frame is not None and not frame.empty:
+                return frame
+            return stock.get_cash_flow(freq="quarterly")
         if kind == "estimate":
             return stock.revenue_estimate
     except Exception:
-        pass
+        return None if kind == "estimate" else empty
     if kind == "estimate":
         return None
     return empty
@@ -2342,7 +3125,7 @@ def quote_to_info(quote):
     mcap = first_value(quote, "marketCap", "market_cap")
     currency = quote.get("currency") or quote.get("financialCurrency")
     return {
-        "symbol": quote.get("symbol"),
+        "symbol": quote.get("symbol") or quote.get("ticker"),
         "shortName": quote.get("shortName") or quote.get("short_name"),
         "longName": quote.get("longName") or quote.get("displayName") or quote.get("shortName") or quote.get("long_name"),
         "currency": currency,
@@ -2354,6 +3137,8 @@ def quote_to_info(quote):
         "trailingPE": first_value(quote, "trailingPE", "trailing_pe"),
         "forwardPE": first_value(quote, "forwardPE"),
         "quoteType": quote.get("quoteType") or quote.get("quote_type"),
+        "exchange": quote.get("exchange") or quote.get("exchangeName") or quote.get("fullExchangeName"),
+        "exchangeTimezoneName": quote.get("exchangeTimezoneName"),
         "sector": quote.get("sector"),
         "industry": quote.get("industry"),
         "enterpriseValue": first_value(quote, "enterpriseValue", "enterprise_value"),
@@ -2365,6 +3150,16 @@ def quote_to_info(quote):
         "freeCashflow": first_value(quote, "freeCashflow"),
         "returnOnEquity": first_value(quote, "returnOnEquity"),
         "enterpriseToEbitda": first_value(quote, "enterpriseToEbitda"),
+        "totalRevenue": first_value(quote, "totalRevenue", "totalRevenueTTM"),
+        "grossProfit": first_value(quote, "grossProfits", "grossProfit"),
+        "operatingIncome": first_value(quote, "operatingIncome"),
+        "netIncomeToCommon": first_value(quote, "netIncomeToCommon", "netIncome"),
+        "ebitda": first_value(quote, "ebitda", "normalized EBITDA"),
+        "operatingCashflow": first_value(quote, "operatingCashflow", "operatingCashFlow"),
+        "totalCash": first_value(quote, "totalCash"),
+        "totalDebt": first_value(quote, "totalDebt"),
+        "totalAssets": first_value(quote, "totalAssets"),
+        "totalStockholderEquity": first_value(quote, "totalStockholderEquity"),
     }
 
 
@@ -2381,29 +3176,49 @@ KNOWN_NAMES = {
 
 def _quote_live(ticker):
     ticker = normalize_ticker(ticker)
+    stock = yf.Ticker(ticker)
+    profile = {}
     try:
-        fast = dict(yf.Ticker(ticker).fast_info)
+        profile = stock.get_info() or {}
+    except Exception:
+        try:
+            profile = stock.info or {}
+        except Exception:
+            profile = {}
+    try:
+        fast = dict(stock.fast_info)
         price = first_value(fast, "lastPrice", "last_price", "regularMarketPrice", "currentPrice")
         prev = first_value(fast, "previousClose", "previous_close", "regularMarketPreviousClose")
         mcap = first_value(fast, "marketCap", "market_cap")
-        if price is not None or mcap is not None:
-            name = KNOWN_NAMES.get(ticker)
-            return {
-                "symbol": ticker,
-                "currency": fast.get("currency"),
-                "financialCurrency": fast.get("currency"),
-                "regularMarketPrice": price,
-                "currentPrice": price,
-                "regularMarketPreviousClose": prev,
-                "previousClose": prev,
-                "marketCap": mcap,
-                "shortName": name or ticker,
-                "longName": name,
-            }
     except Exception:
-        pass
+        fast = {}
+        price = None
+        prev = None
+        mcap = None
+
+    quote = dict(profile)
+    quote.update(
+        {
+            "symbol": quote.get("symbol") or ticker,
+            "currency": fast.get("currency") or quote.get("currency"),
+            "financialCurrency": fast.get("currency") or quote.get("financialCurrency") or quote.get("currency"),
+            "regularMarketPrice": price if price is not None else quote.get("regularMarketPrice"),
+            "currentPrice": price if price is not None else quote.get("currentPrice"),
+            "regularMarketPreviousClose": prev if prev is not None else quote.get("regularMarketPreviousClose"),
+            "previousClose": prev if prev is not None else quote.get("previousClose"),
+            "marketCap": mcap if mcap is not None else quote.get("marketCap"),
+            "exchange": fast.get("exchange") or fast.get("fullExchangeName") or quote.get("exchange"),
+        }
+    )
+    name = KNOWN_NAMES.get(ticker)
+    if name:
+        quote["shortName"] = quote.get("shortName") or name
+        quote["longName"] = quote.get("longName") or name
+    if profile or price is not None or mcap is not None:
+        return quote
+
     try:
-        history = yf.Ticker(ticker).history(period="5d", auto_adjust=True)
+        history = stock.history(period="5d", auto_adjust=True, timeout=10)
         if history is not None and not history.empty and "Close" in history.columns:
             close = history["Close"].dropna()
             if not close.empty:
@@ -2413,6 +3228,7 @@ def _quote_live(ticker):
                     "symbol": ticker,
                     "regularMarketPrice": price,
                     "currentPrice": price,
+                    "exchange": None,
                     "shortName": name,
                     "longName": name,
                 }
@@ -2425,16 +3241,23 @@ def _quote_live(ticker):
 def fetch_yahoo_data(ticker):
     ticker = normalize_ticker(ticker)
     parts = {}
+    errors = []
     with ThreadPoolExecutor(max_workers=5) as pool:
         futs = {
             pool.submit(_quote_live, ticker): "quote",
             pool.submit(_yf_part, ticker, "financials"): "financials",
             pool.submit(_yf_part, ticker, "balance"): "balance",
             pool.submit(_yf_part, ticker, "cashflow"): "cashflow",
+            pool.submit(_yf_part, ticker, "quarterly_cashflow"): "quarterly_cashflow",
             pool.submit(_yf_part, ticker, "estimate"): "estimate",
         }
         for fut in as_completed(futs):
-            parts[futs[fut]] = fut.result()
+            kind = futs[fut]
+            try:
+                parts[kind] = fut.result()
+            except Exception as exc:
+                parts[kind] = None if kind == "estimate" else pd.DataFrame()
+                errors.append(f"Yahoo Finance {kind} unavailable ({type(exc).__name__})")
     quote = parts.get("quote") or {}
     info = quote_to_info(quote)
     if KNOWN_NAMES.get(ticker):
@@ -2451,9 +3274,11 @@ def fetch_yahoo_data(ticker):
         "financials": parts.get("financials") if parts.get("financials") is not None else pd.DataFrame(),
         "balance": parts.get("balance") if parts.get("balance") is not None else pd.DataFrame(),
         "cashflow": parts.get("cashflow") if parts.get("cashflow") is not None else pd.DataFrame(),
-        "quarterly_cashflow": pd.DataFrame(),
+        "quarterly_cashflow": parts.get("quarterly_cashflow") if parts.get("quarterly_cashflow") is not None else pd.DataFrame(),
         "history": pd.DataFrame(),
         "revenue_estimate": parts.get("estimate"),
+        "errors": errors,
+        "last_refreshed": datetime.now().astimezone().isoformat(timespec="seconds"),
     }
 
 
@@ -2461,7 +3286,7 @@ def fetch_yahoo_data(ticker):
 def fetch_price_history(ticker, period="1y"):
     ticker = normalize_ticker(ticker)
     try:
-        history = yf.Ticker(ticker).history(period=period, auto_adjust=True)
+        history = yf.Ticker(ticker).history(period=period, auto_adjust=True, timeout=10)
         return history if history is not None else pd.DataFrame()
     except Exception:
         return pd.DataFrame()
@@ -2472,14 +3297,58 @@ def normalize_ticker(symbol):
 
 
 def ticker_format_ok(symbol):
-    return bool(re.fullmatch(r"[A-Z0-9][A-Z0-9.\-=^]{0,14}", symbol or ""))
+    # Company tickers can contain dots or hyphens; index/futures syntax is not
+    # accepted as a company ticker fallback.
+    return bool(re.fullmatch(r"[A-Z0-9][A-Z0-9.\-]{0,14}", symbol or ""))
 
 
-def yahoo_data_is_valid(yahoo_data):
+COMPANY_ONLY_MESSAGE = (
+    "TSRP covers listed company stocks only. Indexes, commodities, currencies, funds, and other instruments are not supported."
+)
+NON_EQUITY_QUOTE_TYPES = {
+    "INDEX",
+    "ETF",
+    "MUTUALFUND",
+    "FUND",
+    "COMMODITY",
+    "CURRENCY",
+    "CRYPTOCURRENCY",
+    "FUTURE",
+    "OPTION",
+    "WARRANT",
+    "BOND",
+    "CONTRACT",
+    "ECNQUOTE",
+}
+
+
+def non_equity_reason(symbol, quote_type=None):
+    """Return a reason for rejecting a non-company instrument, if obvious."""
+    symbol = normalize_ticker(symbol)
+    quote_type = str(quote_type or "").upper().replace(" ", "")
+    if quote_type in NON_EQUITY_QUOTE_TYPES:
+        return quote_type
+    if symbol.startswith("^"):
+        return "INDEX"
+    if symbol.endswith(("=F", "=X")) or "=" in symbol:
+        return "DERIVATIVE"
+    if re.search(r"-(USD|EUR|GBP|JPY|BTC|ETH)$", symbol):
+        return "CRYPTOCURRENCY"
+    return None
+
+
+def company_symbol_allowed(symbol, quote_type=None):
+    return not non_equity_reason(symbol, quote_type)
+
+
+def yahoo_data_is_valid(yahoo_data, ticker=None):
     if not yahoo_data:
         return False
     info = yahoo_data.get("info") or {}
     fast_info = yahoo_data.get("fast_info") or {}
+    symbol = normalize_ticker(ticker) or info.get("symbol") or yahoo_data.get("symbol")
+    if symbol and not company_symbol_allowed(symbol, info.get("quoteType")):
+        return False
     if not info and not fast_info:
         return False
     if info.get("quoteType") == "NONE" or info.get("trailingPegRatio") == "None":
@@ -2528,11 +3397,10 @@ def sync_ticker_query(symbol):
 def _quote_rows_to_hits(rows):
     results = []
     seen = set()
-    skip_types = {"OPTION", "CRYPTOCURRENCY", "FUTURE", "CURRENCY", "ECNQUOTE"}
     for row in rows or []:
         symbol = str(row.get("symbol") or "").strip()
         quote_type = str(row.get("quoteType") or "").upper()
-        if not symbol or symbol in seen or quote_type in skip_types:
+        if not symbol or symbol in seen or not company_symbol_allowed(symbol, quote_type):
             continue
         seen.add(symbol)
         results.append(
@@ -2661,6 +3529,84 @@ NAME_ALIASES = {
 }
 
 
+LOCAL_SEARCH_NAMES = {
+    "AAPL": "Apple Inc.",
+    "APLE": "Apple Hospitality REIT, Inc.",
+    "MSFT": "Microsoft Corporation",
+    "NVDA": "NVIDIA Corporation",
+    "GOOGL": "Alphabet Inc.",
+    "META": "Meta Platforms, Inc.",
+    "AMZN": "Amazon.com, Inc.",
+    "TSLA": "Tesla, Inc.",
+    "SAP": "SAP SE",
+    "ASML": "ASML Holding N.V.",
+    "TM": "Toyota Motor Corporation",
+    "SONY": "Sony Group Corporation",
+    "BABA": "Alibaba Group Holding Limited",
+    "NVS": "Novartis AG",
+    "SHEL": "Shell plc",
+    "BP": "BP p.l.c.",
+    "JPM": "JPMorgan Chase & Co.",
+    "V": "Visa Inc.",
+    "MA": "Mastercard Incorporated",
+    "WMT": "Walmart Inc.",
+    "COST": "Costco Wholesale Corporation",
+    "KO": "The Coca-Cola Company",
+    "PEP": "PepsiCo, Inc.",
+    "DIS": "The Walt Disney Company",
+    "AMD": "Advanced Micro Devices, Inc.",
+    "AVGO": "Broadcom Inc.",
+    "ORCL": "Oracle Corporation",
+    "CRM": "Salesforce, Inc.",
+    "ADBE": "Adobe Inc.",
+    "UBER": "Uber Technologies, Inc.",
+    "ABNB": "Airbnb, Inc.",
+    "PYPL": "PayPal Holdings, Inc.",
+    "SHOP": "Shopify Inc.",
+    "PLTR": "Palantir Technologies Inc.",
+    "BA": "The Boeing Company",
+    "IBM": "International Business Machines Corporation",
+    "CSCO": "Cisco Systems, Inc.",
+    "QCOM": "QUALCOMM Incorporated",
+    "TSM": "Taiwan Semiconductor Manufacturing Company Limited",
+    "XOM": "Exxon Mobil Corporation",
+    "CVX": "Chevron Corporation",
+    "JNJ": "Johnson & Johnson",
+    "PG": "The Procter & Gamble Company",
+    "HD": "The Home Depot, Inc.",
+    "MCD": "McDonald's Corporation",
+    "NKE": "NIKE, Inc.",
+    "SBUX": "Starbucks Corporation",
+}
+
+
+def local_company_search(query):
+    """Return name/symbol matches when Yahoo's search endpoint is unavailable."""
+    needle = str(query or "").strip().lower()
+    if not needle:
+        return []
+    directory = dict(LOCAL_SEARCH_NAMES)
+    for alias, symbol in NAME_ALIASES.items():
+        directory.setdefault(symbol, alias.title())
+    hits = []
+    for symbol, name in directory.items():
+        if needle not in name.lower() and needle not in symbol.lower():
+            continue
+        hits.append(
+            {
+                "symbol": symbol,
+                "name": name,
+                "type": "Equity",
+                "exchange": "",
+                "sector": "",
+                "industry": "",
+                "quote_type": "EQUITY",
+            }
+        )
+    hits.sort(key=lambda hit: (not hit["symbol"].lower().startswith(needle), not hit["name"].lower().startswith(needle), hit["name"]))
+    return hits[:16]
+
+
 def lookup_alias(query):
     needle = re.sub(r"[^a-z0-9]+", " ", str(query or "").lower())
     needle = " ".join(needle.split())
@@ -2682,7 +3628,7 @@ def search_companies_v2(query):
     results = _yahoo_search_live(query)
     needle = query.lower()
     ticker_needle = query.strip().upper()
-    type_rank = {"EQUITY": 0, "ETF": 1, "INDEX": 2, "MUTUALFUND": 3}
+    type_rank = {"EQUITY": 0}
 
     def rank(hit):
         name = str(hit["name"] or "").lower()
@@ -2705,7 +3651,10 @@ def search_companies(query):
     results = search_companies_v2(query)
     if results:
         return results
-    return _yahoo_search_live(query)
+    live_results = _yahoo_search_live(query)
+    if live_results:
+        return live_results
+    return local_company_search(query)
 
 
 def resolve_company_query(query):
@@ -2715,21 +3664,30 @@ def resolve_company_query(query):
 
     alias = lookup_alias(raw)
     if alias:
-        return alias, None, []
+        if company_symbol_allowed(alias):
+            return alias, None, []
+        return None, COMPANY_ONLY_MESSAGE, []
 
     as_ticker = normalize_ticker(raw)
     hits = search_companies(raw)
 
     symbol_hits = [hit for hit in hits if hit["symbol"].upper() == as_ticker]
     if symbol_hits:
-        return symbol_hits[0]["symbol"], None, []
+        hit = symbol_hits[0]
+        if not company_symbol_allowed(hit["symbol"], hit.get("quote_type")):
+            return None, COMPANY_ONLY_MESSAGE, []
+        return hit["symbol"], None, []
 
     if not hits:
-        if ticker_format_ok(as_ticker):
+        if ticker_format_ok(as_ticker) and company_symbol_allowed(as_ticker):
             return as_ticker, None, []
+        if non_equity_reason(as_ticker):
+            return None, COMPANY_ONLY_MESSAGE, []
         return None, f"No company found for “{raw}”. Try the company name or ticker.", []
 
     if len(hits) == 1:
+        if not company_symbol_allowed(hits[0]["symbol"], hits[0].get("quote_type")):
+            return None, COMPANY_ONLY_MESSAGE, []
         return hits[0]["symbol"], None, []
 
     return None, None, hits
@@ -2765,42 +3723,146 @@ def remember_ticker(symbol):
 
 
 def evidence_dataframe(analysis, company_name, ticker, sector, industry, reporting_currency, trading_currency, display_currency, display_fx_reporting, display_fx_trading=1.0):
-    return pd.DataFrame(
-        [
-            ["Company", company_name],
-            ["Ticker", ticker],
-            ["Sector", sector],
-            ["Industry", industry],
-            ["Reporting Currency", reporting_currency],
-            ["Trading Currency", trading_currency],
-            ["Display Currency", display_currency],
-            ["Expectation Reality Score", score(analysis["reality_score"])],
-            ["Business Quality", score(analysis["business_quality"])],
-            ["Market Expectations", score(analysis["market_expectations"])],
-            ["Financial Strength", score(analysis["financial_strength"])],
-            ["Enterprise Value", money(analysis["enterprise_value"], reporting_currency, display_currency, display_fx_reporting)],
-            ["Revenue", money(analysis["revenue"], reporting_currency, display_currency, display_fx_reporting)],
-            ["Free Cash Flow", money(analysis["free_cash_flow"], reporting_currency, display_currency, display_fx_reporting)],
-            ["Cash", money(analysis["cash"], reporting_currency, display_currency, display_fx_reporting)],
-            ["Debt", money(analysis["debt"], reporting_currency, display_currency, display_fx_reporting)],
-            ["Gross Margin", percent(analysis["gross_margin"])],
-            ["Operating Margin", percent(analysis["operating_margin"])],
-            ["Profit Margin", percent(analysis["profit_margin"])],
-            ["FCF Margin", percent(analysis["fcf_margin"])],
-            ["FCF margin used in reverse DCF", percent(analysis.get("model_fcf_margin"))],
-            ["Discount rate", percent(analysis.get("discount_rate"))],
-            ["Terminal growth", percent(analysis.get("terminal_growth"))],
-            ["Historical Revenue Growth", percent(analysis["historical_growth"])],
-            ["Historical window (years)", str(analysis.get("historical_growth_years") or "—")],
-            ["Required Revenue Growth", required_growth_label(analysis)],
-            ["Analyst Consensus Growth", percent(analysis.get("consensus_growth"))],
-            ["Analyst Target Price", money(analysis.get("target_mean_price"), trading_currency, display_currency, display_fx_trading)],
-            ["EV/Sales", multiple(analysis["ev_sales"])],
-            ["EV/EBITDA", multiple(analysis["ev_ebitda"])],
-            ["P/E", multiple(analysis["pe"])],
-            ["Data Confidence", analysis.get("confidence", "—")],
+    sec_period = (analysis.get("sec_provenance") or {}).get("period", "N/A")
+    as_of = analysis.get("last_refreshed", "N/A")
+    quality = analysis.get("confidence", "N/A")
+    rows = []
+
+    def add(metric, value, unit="", currency="", period="Latest available", source="", status="Available", notes=""):
+        rows.append([metric, value, unit, currency, period, source or "Unavailable", as_of, status, notes])
+
+    add("Company", company_name, source="Yahoo Finance", notes="Company context")
+    add("Ticker", ticker, source="Yahoo Finance", notes="Search result")
+    add("Sector", sector, source="Yahoo Finance", notes="May be unavailable for some listings")
+    add("Industry", industry, source="Yahoo Finance", notes="May be unavailable for some listings")
+    add("Current price", money(analysis["price"], trading_currency, display_currency, display_fx_trading), "currency", display_currency, "Latest quote", "Yahoo Finance", "Available" if analysis.get("price") is not None else "Missing", "Trading currency: " + trading_currency)
+    add("Market capitalization", money(analysis["market_cap"], trading_currency, display_currency, display_fx_trading), "currency", display_currency, "Latest quote", "Yahoo Finance", "Available" if analysis.get("market_cap") is not None else "Missing", "Trading currency: " + trading_currency)
+    add("Enterprise value", money(analysis["enterprise_value"], reporting_currency, display_currency, display_fx_reporting), "currency", display_currency, "Latest quote", "Yahoo Finance / derived", "Available" if analysis.get("enterprise_value") is not None else "Unavailable", "Requires compatible currency conversion")
+    add("Revenue", money(analysis["revenue"], reporting_currency, display_currency, display_fx_reporting), "currency", display_currency, sec_period if analysis.get("has_sec") else "Latest annual", analysis.get("sources", {}).get("Revenue"), "Available" if analysis.get("revenue") is not None else "Missing", "Reporting currency: " + reporting_currency)
+    add("Free cash flow", money(analysis["free_cash_flow"], reporting_currency, display_currency, display_fx_reporting), "currency", display_currency, "Latest compatible annual / TTM", analysis.get("sources", {}).get("Free Cash Flow"), "Available" if analysis.get("free_cash_flow") is not None else "Unavailable", "OCF minus capex where compatible")
+    add("Cash", money(analysis["cash"], reporting_currency, display_currency, display_fx_reporting), "currency", display_currency, sec_period if analysis.get("has_sec") else "Latest balance sheet", analysis.get("sources", {}).get("Cash"), "Available" if analysis.get("cash") is not None else "Missing", "Reporting currency: " + reporting_currency)
+    add("Debt", money(analysis["debt"], reporting_currency, display_currency, display_fx_reporting), "currency", display_currency, sec_period if analysis.get("has_sec") else "Latest balance sheet", analysis.get("sources", {}).get("Debt"), "Available" if analysis.get("debt") is not None else "Missing", "Reporting currency: " + reporting_currency)
+    add("Historical revenue growth", percent(analysis["historical_growth"]), "% CAGR", "", f"{analysis.get('historical_growth_years') or 0}-year window", "Yahoo Finance / SEC EDGAR", "Available" if analysis.get("historical_growth") is not None else "Missing", "Historical evidence, not a forecast")
+    add("Required revenue growth", required_growth_label(analysis), "% per year", "", "10-year model", "TSRP reverse DCF", "Derived" if analysis.get("required_growth") is not None else "Unavailable", "Not a precise rate when outside solver range")
+    add("Analyst consensus growth", percent(analysis.get("consensus_growth")), "% per year", "", "Next fiscal year", "Yahoo Finance estimates", "Estimated" if analysis.get("consensus_growth") is not None else "Unavailable", "Near-term comparison only")
+    add("FCF margin", percent(analysis.get("fcf_margin")), "%", "", sec_period if analysis.get("has_sec") else "Latest compatible period", analysis.get("sources", {}).get("Free Cash Flow"), "Available" if analysis.get("fcf_margin") is not None else "Missing", "Free cash flow divided by revenue")
+    add("Business Quality", score(analysis["business_quality"]), "0–100 heuristic", "", "Current analysis", "TSRP model", "Derived", "Sector benchmark dashboard")
+    add("Financial Strength", score(analysis["financial_strength"]), "0–100 heuristic", "", "Current analysis", "TSRP model", "Derived", "Balance-sheet and cash-flow dashboard")
+    add("Evidence Quality", score(analysis["reality_score"]), "0–100 heuristic", "", "Current analysis", "TSRP model", quality, "Not a probability or recommendation")
+    add("Discount rate", percent(analysis.get("discount_rate")), "%", reporting_currency, "Model assumption", "TSRP model", "Assumption", "Currency-aware heuristic rate")
+    add("Terminal growth", percent(analysis.get("terminal_growth")), "%", reporting_currency, "Model assumption", "TSRP model", "Assumption", "Long-run model assumption")
+    add("Data confidence", quality, "label", "", "Current analysis", "TSRP coverage", quality, "Based on field coverage and quality flags")
+    add(
+        "SEC EDGAR status",
+        analysis.get("sec_status", "N/A"),
+        "status",
+        "",
+        sec_period,
+        "SEC EDGAR",
+        "Available" if analysis.get("has_sec") else "Status disclosed",
+        "Live annual company facts are used when coverage is available; unavailable facts remain N/A.",
+    )
+    add("Data freshness", analysis.get("freshness", "N/A"), "status", "", "Current analysis", "TSRP", "Available", "Cached snapshot status")
+    add("Educational disclaimer", EDUCATIONAL_DISCLAIMER, "text", "", "Export", "TSRP", "Required", "Include with any shared output")
+    return pd.DataFrame(rows, columns=["Metric", "Value", "Unit", "Currency", "Period", "Data source", "As of", "Status", "Notes"])
+
+
+def export_payload(analysis, company_name, ticker, sector, industry, display_currency):
+    """Build a JSON-safe export with assumptions, provenance, and limitations."""
+    fields = {
+        "company": company_name,
+        "ticker": ticker,
+        "sector": sector,
+        "industry": industry,
+        "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "data_refreshed": analysis.get("last_refreshed"),
+        "freshness": analysis.get("freshness"),
+        "display_currency": display_currency,
+        "reporting_currency": analysis.get("reporting_currency"),
+        "trading_currency": analysis.get("trading_currency"),
+        "confidence": analysis.get("confidence"),
+        "sec_status": analysis.get("sec_status"),
+        "sources": analysis.get("sources", {}),
+        "provenance": analysis.get("sec_provenance", {}),
+        "model_assumptions": {
+            "forecast_years": FORECAST_YEARS,
+            "discount_rate": analysis.get("discount_rate"),
+            "terminal_growth": analysis.get("terminal_growth"),
+            "fcf_margin_used": analysis.get("model_fcf_margin"),
+            "solver_status": analysis.get("solver_status"),
+            "solver_range": [analysis.get("solver_low"), analysis.get("solver_high")],
+        },
+        "results": {
+            key: analysis.get(key)
+            for key in (
+                "price", "market_cap", "enterprise_value", "revenue", "free_cash_flow", "cash", "debt",
+                "fcf_margin", "historical_growth", "historical_growth_years", "consensus_growth",
+                "required_growth", "reality_score", "business_quality", "market_expectations", "financial_strength",
+            )
+        },
+        "quality_flags": analysis.get("quality_flags", []),
+        "limitations": [
+            "Scores are heuristic dashboards, not calibrated probabilities.",
+            "Analyst consensus is a near-term comparison and is not equivalent to the multi-year reverse-DCF path.",
+            "Missing or unavailable data is not treated as positive evidence.",
         ],
-        columns=["Metric", "Value"],
+        "disclaimer": EDUCATIONAL_DISCLAIMER,
+    }
+    return json.dumps(fields, indent=2, ensure_ascii=False, default=str).encode("utf-8")
+
+
+def render_data_quality(analysis):
+    flags = analysis.get("quality_flags") or []
+    flag_text = " · ".join(label for label, _ in flags[:4]) or "No material coverage warnings"
+    provenance = analysis.get("sec_provenance") or {}
+    period = provenance.get("period", "N/A")
+    filed = provenance.get("filed", "N/A")
+    render_html(
+        f'<div class="panel data-quality-panel">'
+        f'<h3>Data quality & provenance</h3>'
+        f'<div class="row"><span>Confidence</span><b>{esc(analysis.get("confidence", "N/A"))}</b></div>'
+        f'<div class="row"><span>Yahoo Finance</span><b>{esc("Available" if not analysis.get("yahoo_errors") else "Partial / endpoint errors")}</b></div>'
+        f'<div class="row"><span>SEC EDGAR</span><b>{esc(analysis.get("sec_status", "N/A"))}</b></div>'
+        f'<div class="row"><span>SEC annual fact</span><b>{esc(f"period {period} · filed {filed}" if provenance else "N/A")}</b></div>'
+        f'<div class="row"><span>SEC source policy</span><b>Live facts only; status always disclosed</b></div>'
+        f'<div class="row"><span>Freshness</span><b>{esc(analysis.get("freshness", "N/A"))}</b></div>'
+        f'<div class="row"><span>Last refresh</span><b>{esc(analysis.get("last_refreshed", "N/A"))}</b></div>'
+        f'<div class="source-line">{esc(flag_text)}</div>'
+        f'</div>'
+    )
+
+
+def render_sec_status_strip(analysis):
+    """Keep SEC provenance visible on every company view without fabricating facts."""
+    has_sec = bool(analysis.get("has_sec"))
+    status = analysis.get("sec_status", "N/A")
+    detail = (
+        "Annual filing facts are live for this company."
+        if has_sec
+        else "Live annual filing facts are unavailable until SEC_USER_AGENT has a monitored contact identity."
+    )
+    dot_class = "status-dot" if has_sec else "status-dot warn"
+    render_html(
+        f'<div class="sec-status-strip">'
+        f'<span class="{dot_class}" aria-hidden="true"></span>'
+        f'<span class="sec-status-title">SEC EDGAR</span>'
+        f'<span class="sec-status-copy">{esc(status)}</span>'
+        f'<span class="sec-status-detail">{esc(detail)}</span>'
+        f'</div>'
+    )
+
+
+def render_methodology():
+    render_html(
+        f'''<div class="panel methodology-panel">
+<h3>Methodology</h3>
+<p><b>What TSRP measures.</b> TSRP compares what the current market price appears to require with historical performance, analyst expectations, operating quality, and balance-sheet evidence.</p>
+<p><b>Reverse DCF.</b> The model projects revenue for {FORECAST_YEARS} years, fades the starting growth assumption toward terminal growth, converts revenue to free cash flow using an evidence-based margin, discounts those cash flows, and solves for the growth rate that matches enterprise value. If inputs are missing, non-positive, or outside the solver range, the result is N/A or a disclosed bound.</p>
+<p><b>Scores.</b> Business quality, financial strength, and market expectations are weighted heuristic dashboards with sector benchmarks. Missing evidence receives a missing-evidence treatment and lowers confidence; it is not positive evidence. The score is not a probability, recommendation, target price, or expected return.</p>
+<p><b>Sources and limits.</b> Yahoo Finance supplies market data, history, estimates, and supplemental fundamentals. SEC EDGAR is always shown as a provenance source: when a monitored <code>SEC_USER_AGENT</code> and company coverage are available, TSRP uses annual company facts; otherwise those facts stay N/A and the live status is disclosed. Reporting and trading currencies are kept separate; unavailable FX blocks affected calculations.</p>
+<p><b>Interpretation.</b> Historical growth and analyst consensus are comparison points, not guarantees. The model cannot determine future returns, business quality beyond the selected evidence, accounting comparability, or whether any security is suitable for a person.</p>
+<div class="source-line">{esc(EDUCATIONAL_DISCLAIMER)}</div>
+</div>'''
     )
 
 
@@ -2808,9 +3870,9 @@ def evidence_dataframe(analysis, company_name, ticker, sector, industry, reporti
 def fetch_compare_analysis(symbol):
     try:
         data = fetch_yahoo_data(symbol)
-        if not yahoo_data_is_valid(data):
+        if not yahoo_data_is_valid(data, symbol):
             return None
-        result = analyze_company(data, None)
+        result = analyze_company(data, fetch_sec_companyfacts(symbol))
         info = data.get("info") or {}
         result["name"] = info.get("longName") or info.get("shortName") or symbol
         return result
@@ -2820,9 +3882,23 @@ def fetch_compare_analysis(symbol):
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_sec_ticker_map():
+    if not SEC_USER_AGENT or "@" not in SEC_USER_AGENT:
+        SEC_STATE.update(kind="not_configured", detail="Live SEC EDGAR facts require a monitored contact identity")
+        return pd.DataFrame(columns=["ticker", "cik", "company"])
     url = "https://www.sec.gov/files/company_tickers.json"
-    response = requests.get(url, headers={"User-Agent": SEC_USER_AGENT}, timeout=15)
-    response.raise_for_status()
+    try:
+        response = requests.get(url, headers={"User-Agent": SEC_USER_AGENT}, timeout=15)
+        response.raise_for_status()
+    except requests.Timeout:
+        SEC_STATE.update(kind="timeout", detail="SEC ticker map request timed out")
+        return pd.DataFrame(columns=["ticker", "cik", "company"])
+    except requests.HTTPError as exc:
+        status = getattr(exc.response, "status_code", None)
+        SEC_STATE.update(kind="rate_limited" if status == 429 else "http_error", detail=f"SEC ticker map returned HTTP {status or 'error'}")
+        return pd.DataFrame(columns=["ticker", "cik", "company"])
+    except requests.RequestException:
+        SEC_STATE.update(kind="network_error", detail="SEC ticker map network request failed")
+        return pd.DataFrame(columns=["ticker", "cik", "company"])
 
     rows = []
     for item in response.json().values():
@@ -2834,16 +3910,21 @@ def fetch_sec_ticker_map():
             }
         )
 
+    SEC_STATE.update(kind="available", detail="SEC ticker map available")
     return pd.DataFrame(rows)
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_sec_companyfacts(ticker):
+    if not SEC_USER_AGENT or "@" not in SEC_USER_AGENT:
+        SEC_STATE.update(kind="not_configured", detail="Live SEC EDGAR facts require a monitored contact identity")
+        return None
     try:
         ticker_map = fetch_sec_ticker_map()
         match = ticker_map[ticker_map["ticker"] == ticker.upper()]
 
         if match.empty:
+            SEC_STATE.update(kind="not_covered", detail="Ticker is not present in the SEC company map")
             return None
 
         cik = match.iloc[0]["cik"]
@@ -2852,9 +3933,78 @@ def fetch_sec_companyfacts(ticker):
         response = requests.get(url, headers={"User-Agent": SEC_USER_AGENT}, timeout=20)
         response.raise_for_status()
 
-        return response.json()
-    except Exception:
+        payload = response.json()
+        if not isinstance(payload, dict) or not payload.get("facts"):
+            SEC_STATE.update(kind="parse_error", detail="SEC response did not contain company facts")
+            return None
+        SEC_STATE.update(kind="available", detail="SEC company facts available")
+        return payload
+    except requests.Timeout:
+        SEC_STATE.update(kind="timeout", detail="SEC company facts request timed out")
         return None
+    except requests.HTTPError as exc:
+        status = getattr(exc.response, "status_code", None)
+        SEC_STATE.update(kind="rate_limited" if status == 429 else "http_error", detail=f"SEC company facts returned HTTP {status or 'error'}")
+        return None
+    except requests.RequestException:
+        SEC_STATE.update(kind="network_error", detail="SEC company facts network request failed")
+        return None
+    except (KeyError, TypeError, ValueError):
+        SEC_STATE.update(kind="parse_error", detail="SEC response could not be parsed")
+        return None
+
+
+def sec_status(sec_facts):
+    """Return a user-facing SEC state without exposing request internals."""
+    if sec_facts:
+        return "Available for this company"
+    if SEC_STATE["kind"] == "not_configured":
+        return "Live facts unavailable — SEC_USER_AGENT not configured"
+    labels = {
+        "not_covered": "Unavailable — ticker is not covered by SEC EDGAR",
+        "rate_limited": "Unavailable — SEC rate limit response",
+        "timeout": "Unavailable — SEC request timed out",
+        "network_error": "Unavailable — SEC network error",
+        "parse_error": "Unavailable — SEC response parsing failed",
+        "http_error": "Unavailable — SEC HTTP error",
+    }
+    return labels.get(SEC_STATE["kind"], "Unavailable — no usable SEC company facts returned")
+
+
+def sec_fact_provenance(companyfacts, tags, preferred_currencies):
+    """Return the latest annual fact's source, unit, period, and filing date."""
+    if not companyfacts:
+        return {}
+    fact_roots = companyfacts.get("facts", {}) or {}
+    candidates = []
+    for taxonomy, facts in fact_roots.items():
+        if not isinstance(facts, dict):
+            continue
+        for tag in tags:
+            item = facts.get(tag) or {}
+            units = item.get("units", {}) or {}
+            ordered_units = preferred_currencies + [unit for unit in units if unit not in preferred_currencies]
+            for unit in ordered_units:
+                annual = [
+                    row for row in units.get(unit, [])
+                    if row.get("form") in {"10-K", "20-F", "40-F"} and row.get("val") is not None
+                ]
+                if annual:
+                    row = max(annual, key=lambda value: (value.get("filed", ""), value.get("end", "")))
+                    candidates.append((row.get("filed", ""), row.get("end", ""), {
+                        "source": "SEC EDGAR",
+                        "taxonomy": taxonomy,
+                        "tag": tag,
+                        "unit": unit,
+                        "currency": unit if unit not in {"USD", "EUR", "GBP", "JPY", "CNY", "KRW", "CAD", "AUD", "CHF", "INR"} else unit,
+                        "period": row.get("end") or "N/A",
+                        "filed": row.get("filed") or "N/A",
+                        "form": row.get("form") or "N/A",
+                    }))
+                    break
+    if not candidates:
+        return {}
+    return max(candidates, key=lambda value: (value[0], value[1]))[2]
 
 
 def sec_currency_candidates(reporting_currency, trading_currency):
@@ -2919,6 +4069,45 @@ def sec_fact_values(companyfacts, tags, preferred_currencies):
     candidates.sort(key=lambda c: (c[0], c[1]), reverse=True)
     _, _, ordered, currency = candidates[0]
     return ordered, currency
+
+
+def sec_latest_record(companyfacts, tags, preferred_currencies):
+    """Return one annual SEC fact with its unit and period metadata."""
+    if not companyfacts:
+        return None
+    fact_roots = companyfacts.get("facts", {}) or {}
+    candidates = []
+    for taxonomy, facts in fact_roots.items():
+        if not isinstance(facts, dict):
+            continue
+        for tag in tags:
+            item = facts.get(tag) or {}
+            units = item.get("units", {}) or {}
+            unit_order = preferred_currencies + [unit for unit in units if unit not in preferred_currencies]
+            for unit in unit_order:
+                annual = [
+                    row for row in units.get(unit, [])
+                    if row.get("form") in {"10-K", "20-F", "40-F"}
+                    and row.get("val") is not None
+                    and row.get("end")
+                ]
+                if not annual:
+                    continue
+                row = max(annual, key=lambda value: (value.get("end", ""), value.get("filed", "")))
+                candidates.append({
+                    "value": safe_float(row.get("val")),
+                    "unit": unit,
+                    "period": row.get("end"),
+                    "filed": row.get("filed") or "N/A",
+                    "fy": row.get("fy"),
+                    "form": row.get("form") or "N/A",
+                    "taxonomy": taxonomy,
+                    "tag": tag,
+                })
+                break
+    if not candidates:
+        return None
+    return max(candidates, key=lambda row: (row.get("period", ""), row.get("filed", "")))
 
 
 def pick_fcf_from_sources(sec_fcf, yahoo_annual_fcf, yahoo_ttm_fcf, yahoo_info_fcf, revenue_from_sec):
@@ -3008,7 +4197,11 @@ def pick_value(primary, fallback, primary_name, fallback_name, primary_currency=
             converted = convert_amount(primary, primary_currency, reporting_currency)
             if converted is not None:
                 return converted, f"{primary_name} ({primary_currency}→{reporting_currency})"
-        return primary, primary_name
+            # Never relabel an unconverted SEC value as the reporting currency.
+            if fallback is None:
+                return None, None
+        else:
+            return primary, primary_name
     return fallback, fallback_name
 
 
@@ -3040,6 +4233,7 @@ def analyze_company(yahoo_data, sec_facts):
     quarterly_cashflow = yahoo_data.get("quarterly_cashflow")
     if quarterly_cashflow is None:
         quarterly_cashflow = pd.DataFrame()
+    yahoo_errors = list(yahoo_data.get("errors") or [])
 
     reporting_currency, trading_currency = detect_currencies(info, fast_info)
     sec_currencies = sec_currency_candidates(reporting_currency, trading_currency)
@@ -3052,13 +4246,13 @@ def analyze_company(yahoo_data, sec_facts):
     price = get_quote_price(info, fast_info)
     market_cap = get_market_cap(info, fast_info)
 
-    yahoo_revenue = latest_value(financials, ["Total Revenue", "Operating Revenue"])
-    yahoo_gross_profit = latest_value(financials, ["Gross Profit"])
-    yahoo_operating_income = latest_value(financials, ["Operating Income"])
-    yahoo_net_income = latest_value(financials, ["Net Income", "Net Income Common Stockholders"])
-    yahoo_ebitda = latest_value(financials, ["EBITDA", "Normalized EBITDA"])
+    yahoo_revenue = latest_value(financials, ["Total Revenue", "Operating Revenue"]) or safe_float(info.get("totalRevenue"))
+    yahoo_gross_profit = latest_value(financials, ["Gross Profit"]) or safe_float(info.get("grossProfit"))
+    yahoo_operating_income = latest_value(financials, ["Operating Income"]) or safe_float(info.get("operatingIncome"))
+    yahoo_net_income = latest_value(financials, ["Net Income", "Net Income Common Stockholders"]) or safe_float(info.get("netIncomeToCommon"))
+    yahoo_ebitda = latest_value(financials, ["EBITDA", "Normalized EBITDA"]) or safe_float(info.get("ebitda"))
 
-    yahoo_operating_cash_flow = latest_value(cashflow, ["Operating Cash Flow", "Total Cash From Operating Activities"])
+    yahoo_operating_cash_flow = latest_value(cashflow, ["Operating Cash Flow", "Total Cash From Operating Activities"]) or safe_float(info.get("operatingCashflow"))
     yahoo_capex = latest_value(cashflow, ["Capital Expenditure", "Capital Expenditures"])
     yahoo_reported_fcf = latest_value(cashflow, ["Free Cash Flow"])
     yahoo_annual_fcf = compute_fcf(yahoo_operating_cash_flow, yahoo_capex, yahoo_reported_fcf)
@@ -3069,13 +4263,18 @@ def analyze_company(yahoo_data, sec_facts):
         ttm_sum(quarterly_cashflow, ["Free Cash Flow"]),
     )
 
-    yahoo_cash = latest_value(balance, ["Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"])
-    yahoo_debt = latest_value(balance, ["Total Debt", "Long Term Debt And Capital Lease Obligation"])
-    yahoo_assets = latest_value(balance, ["Total Assets"])
-    yahoo_equity = latest_value(balance, ["Stockholders Equity", "Total Equity Gross Minority Interest"])
+    yahoo_cash = latest_value(balance, ["Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"]) or safe_float(info.get("totalCash"))
+    yahoo_debt = latest_value(balance, ["Total Debt", "Long Term Debt And Capital Lease Obligation"]) or safe_float(info.get("totalDebt"))
+    yahoo_assets = latest_value(balance, ["Total Assets"]) or safe_float(info.get("totalAssets"))
+    yahoo_equity = latest_value(balance, ["Stockholders Equity", "Total Equity Gross Minority Interest"]) or safe_float(info.get("totalStockholderEquity"))
 
     sec_revenue, sec_revenue_currency = sec_fact_values(sec_facts, SEC_TAGS["revenue"], sec_currencies)
-    sec_revenue_latest = safe_float(sec_revenue.iloc[0]) if not sec_revenue.empty else None
+    sec_revenue_record = sec_latest_record(sec_facts, SEC_TAGS["revenue"], sec_currencies)
+    if sec_revenue_record:
+        sec_revenue_latest = sec_revenue_record["value"]
+        sec_revenue_currency = sec_revenue_record["unit"]
+    else:
+        sec_revenue_latest = safe_float(sec_revenue.iloc[0]) if not sec_revenue.empty else None
 
     sec_net_income = sec_latest(sec_facts, SEC_TAGS["net_income"], sec_currencies)
     sec_assets = sec_latest(sec_facts, SEC_TAGS["assets"], sec_currencies)
@@ -3083,9 +4282,15 @@ def analyze_company(yahoo_data, sec_facts):
     sec_cash = sec_latest(sec_facts, SEC_TAGS["cash"], sec_currencies)
     sec_debt_value = sec_debt(sec_facts, sec_currencies)
 
-    sec_ocf = sec_latest(sec_facts, SEC_TAGS["operating_cash_flow"], sec_currencies)
-    sec_capex_value = sec_latest(sec_facts, SEC_TAGS["capex"], sec_currencies)
-    sec_fcf_raw = compute_fcf(sec_ocf, sec_capex_value)
+    sec_ocf_record = sec_latest_record(sec_facts, SEC_TAGS["operating_cash_flow"], sec_currencies)
+    sec_capex_record = sec_latest_record(sec_facts, SEC_TAGS["capex"], sec_currencies)
+    sec_ocf = sec_ocf_record["value"] if sec_ocf_record else None
+    sec_capex_value = sec_capex_record["value"] if sec_capex_record else None
+    sec_fcf_period_matched = bool(
+        sec_ocf_record and sec_capex_record
+        and sec_ocf_record.get("period") == sec_capex_record.get("period")
+    )
+    sec_fcf_raw = compute_fcf(sec_ocf, sec_capex_value) if sec_fcf_period_matched else None
     if sec_fcf_raw is not None and sec_revenue_currency and reporting_currency and sec_revenue_currency != reporting_currency:
         sec_fcf = convert_amount(sec_fcf_raw, sec_revenue_currency, reporting_currency)
     else:
@@ -3112,14 +4317,15 @@ def analyze_company(yahoo_data, sec_facts):
 
     market_cap_reporting = convert_amount(market_cap, trading_currency, reporting_currency)
     enterprise_value_trading = safe_float(info.get("enterpriseValue"))
-    if enterprise_value_trading is None and market_cap is not None:
-        debt_reporting = debt or 0
-        cash_reporting = cash or 0
-        enterprise_value_trading = market_cap + convert_amount(debt_reporting, reporting_currency, trading_currency) - convert_amount(cash_reporting, reporting_currency, trading_currency)
+    if enterprise_value_trading is None and market_cap is not None and debt is not None and cash is not None:
+        debt_trading = convert_amount(debt, reporting_currency, trading_currency)
+        cash_trading = convert_amount(cash, reporting_currency, trading_currency)
+        if debt_trading is not None and cash_trading is not None:
+            enterprise_value_trading = market_cap + debt_trading - cash_trading
 
     enterprise_value = convert_amount(enterprise_value_trading, trading_currency, reporting_currency)
-    if enterprise_value is None and market_cap_reporting is not None:
-        enterprise_value = market_cap_reporting + (debt or 0) - (cash or 0)
+    if enterprise_value is None and market_cap_reporting is not None and debt is not None and cash is not None:
+        enterprise_value = market_cap_reporting + debt - cash
 
     revenue_history_sec, _ = sec_fact_values(sec_facts, SEC_TAGS["revenue"], sec_currencies)
     revenue_history_yahoo = historical_series(financials, ["Total Revenue", "Operating Revenue"])
@@ -3178,8 +4384,11 @@ def analyze_company(yahoo_data, sec_facts):
         pe = market_cap_reporting / net_income
 
     required_growth, growth_clamped = (None, False)
+    solver_status = "unavailable"
+    solver_low = None
+    solver_high = None
     if model_fcf_margin is not None:
-        required_growth, growth_clamped = solve_required_growth(
+        solver = solve_required_growth_detail(
             enterprise_value,
             revenue,
             model_fcf_margin,
@@ -3187,6 +4396,11 @@ def analyze_company(yahoo_data, sec_facts):
             terminal_growth,
             start_margin=fcf_margin if fcf_margin is not None and fcf_margin > 0 else model_fcf_margin,
         )
+        required_growth = solver["growth"]
+        solver_status = solver["status"]
+        solver_low = solver["low"]
+        solver_high = solver["high"]
+        growth_clamped = solver_status in {"below_range", "above_range"}
 
     consensus_growth = None
     revenue_estimate = yahoo_data.get("revenue_estimate")
@@ -3213,14 +4427,24 @@ def analyze_company(yahoo_data, sec_facts):
         quality_flags.append((f"Actual FCF margin {fcf_margin:.0%} — reverse DCF not run on negative cash", "warn"))
     if historical_growth is None:
         quality_flags.append(("No revenue growth history — growth scored as incomplete (not assumed 5%)", "warn"))
+    if (sec_ocf_record or sec_capex_record) and not sec_fcf_period_matched:
+        quality_flags.append(("SEC cash-flow facts were not period-matched — SEC FCF excluded", "warn"))
     if cash is None or debt is None:
         quality_flags.append(("Balance sheet incomplete — leverage scored as missing evidence", "warn"))
     if growth_clamped:
-        quality_flags.append(("Required growth hit solver bound — shown as a range, not an exact rate", "warn"))
+        quality_flags.append(("Required growth is outside the model range — shown as a bound, not an exact rate", "warn"))
     if sector == "Real Estate":
         quality_flags.append(("REIT caveat: model uses FCF/P-E, not FFO/AFFO — scores are approximate", "warn"))
     if rates["used_fallback_currency"]:
-        quality_flags.append(("Unknown reporting currency — used USD rate world as fallback", "warn"))
+        quality_flags.append(("Unknown reporting currency — USD rate world used as a disclosed fallback", "warn"))
+    if not SEC_USER_AGENT or "@" not in SEC_USER_AGENT:
+        quality_flags.append(("SEC EDGAR live facts unavailable — add a monitored SEC_USER_AGENT", "warn"))
+    elif not sec_facts:
+        quality_flags.append(("SEC EDGAR did not return usable company facts", "warn"))
+    if yahoo_errors:
+        quality_flags.append(("Some Yahoo Finance endpoints were unavailable", "warn"))
+    if market_cap is not None and market_cap_reporting is None:
+        quality_flags.append((f"FX unavailable for {trading_currency}→{reporting_currency} — valuation blocked", "bad"))
 
     coverage_fields = {
         "revenue": revenue is not None,
@@ -3233,6 +4457,8 @@ def analyze_company(yahoo_data, sec_facts):
     confidence, _ = data_coverage_confidence(coverage_fields, quality_flags)
     if model_fcf_refused or growth_clamped:
         confidence = "Low"
+    elif not sec_facts and confidence == "High":
+        confidence = "Medium"
     elif confidence == "High" and historical_growth is None:
         confidence = "Medium"
 
@@ -3259,13 +4485,6 @@ def analyze_company(yahoo_data, sec_facts):
 
     gap = business_quality - market_expectations
 
-    probability = probability_score(
-        None if growth_clamped else required_growth,
-        historical_growth,
-        business_quality,
-        consensus_growth,
-    )
-
     final_score = reality_score(
         business_quality,
         financial_strength,
@@ -3275,8 +4494,17 @@ def analyze_company(yahoo_data, sec_facts):
         growth_clamped=growth_clamped or model_fcf_refused,
     )
 
+    revenue_provenance = sec_fact_provenance(sec_facts, SEC_TAGS["revenue"], sec_currencies)
+    revenue_source_label = revenue_source
+    if revenue_source and str(revenue_source).startswith("SEC") and revenue_provenance:
+        revenue_source_label = (
+            f"SEC EDGAR · {revenue_provenance.get('form', 'annual')} · "
+            f"period {revenue_provenance.get('period', 'N/A')} · filed {revenue_provenance.get('filed', 'N/A')} · "
+            f"unit {revenue_provenance.get('unit', 'N/A')}"
+        )
+
     sources = {
-        "Revenue": revenue_source,
+        "Revenue": revenue_source_label,
         "Net Income": net_income_source,
         "Assets": assets_source,
         "Equity": equity_source,
@@ -3286,6 +4514,8 @@ def analyze_company(yahoo_data, sec_facts):
         "Price / Market Data": "Yahoo Finance",
         "Reporting Currency": f"Yahoo Finance ({reporting_currency})",
         "Trading Currency": f"Yahoo Finance ({trading_currency})",
+        "SEC EDGAR status": sec_status(sec_facts),
+        "Yahoo Finance status": "Available" if not yahoo_errors else "; ".join(yahoo_errors),
     }
 
     return {
@@ -3299,6 +4529,9 @@ def analyze_company(yahoo_data, sec_facts):
         "enterprise_value": enterprise_value,
         "enterprise_value_trading": enterprise_value_trading,
         "revenue": revenue,
+        "net_income": net_income,
+        "assets": total_assets,
+        "equity": equity,
         "free_cash_flow": free_cash_flow,
         "cash": cash,
         "debt": debt,
@@ -3321,11 +4554,13 @@ def analyze_company(yahoo_data, sec_facts):
         "historical_growth_3y": historical_growth_3y,
         "required_growth": required_growth,
         "growth_clamped": growth_clamped,
+        "solver_status": solver_status,
+        "solver_low": solver_low,
+        "solver_high": solver_high,
         "business_quality": business_quality,
         "market_expectations": market_expectations,
         "financial_strength": financial_strength,
         "gap": gap,
-        "probability": probability,
         "reality_score": final_score,
         "ev_sales": ev_sales,
         "ev_ebitda": ev_ebitda,
@@ -3336,7 +4571,12 @@ def analyze_company(yahoo_data, sec_facts):
         "quality_flags": quality_flags,
         "confidence": confidence,
         "sources": sources,
-        "has_sec": sec_facts is not None,
+        "has_sec": bool(sec_facts),
+        "sec_status": sec_status(sec_facts),
+        "sec_provenance": revenue_provenance,
+        "yahoo_errors": yahoo_errors,
+        "last_refreshed": yahoo_data.get("last_refreshed"),
+        "freshness": "Yahoo Finance snapshot; cached for up to 15 minutes",
     }
 
 
@@ -3473,7 +4713,7 @@ def metric_card(title, value, meta, accent="blue"):
 
 def score_bars_html(analysis):
     items = [
-        ("Expectation Reality Score", analysis["reality_score"]),
+        ("Evidence Quality", analysis["reality_score"]),
         ("Business Quality", analysis["business_quality"]),
         ("Market Expectations", analysis["market_expectations"]),
         ("Financial Strength", analysis["financial_strength"]),
@@ -3496,6 +4736,26 @@ def make_rows(items):
     for label, value in items:
         html_rows += f"<div class='row'><span>{esc(label)}</span><b>{esc(value)}</b></div>"
     return html_rows
+
+
+def provenance_values(analysis, display_currency, display_fx_reporting, display_fx_trading):
+    """Return the displayed value for each provenance row."""
+    reporting_currency = analysis.get("reporting_currency") or "USD"
+    trading_currency = analysis.get("trading_currency") or reporting_currency
+    return {
+        "Revenue": money(analysis.get("revenue"), reporting_currency, display_currency, display_fx_reporting),
+        "Net Income": money(analysis.get("net_income"), reporting_currency, display_currency, display_fx_reporting),
+        "Assets": money(analysis.get("assets"), reporting_currency, display_currency, display_fx_reporting),
+        "Equity": money(analysis.get("equity"), reporting_currency, display_currency, display_fx_reporting),
+        "Cash": money(analysis.get("cash"), reporting_currency, display_currency, display_fx_reporting),
+        "Debt": money(analysis.get("debt"), reporting_currency, display_currency, display_fx_reporting),
+        "Free Cash Flow": money(analysis.get("free_cash_flow"), reporting_currency, display_currency, display_fx_reporting),
+        "Price / Market Data": money(analysis.get("price"), trading_currency, display_currency, display_fx_trading),
+        "Reporting Currency": reporting_currency,
+        "Trading Currency": trading_currency,
+        "SEC EDGAR status": analysis.get("sec_status", "N/A"),
+        "Yahoo Finance status": "Available" if not analysis.get("yahoo_errors") else "Partial / endpoint errors",
+    }
 
 
 def conclusion_text(analysis):
@@ -3584,18 +4844,18 @@ def render_compare_chart(results):
             y=1.02,
             xanchor="left",
             x=0,
-            font=dict(color="#e8eaed", size=12),
-            bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#5f6d7a", size=12),
+            bgcolor="rgba(255,255,255,0)",
         ),
-        xaxis=dict(tickfont=dict(color="#e8eaed", size=12), linecolor="rgba(255,255,255,0.06)"),
+        xaxis=dict(tickfont=dict(color="#5f6d7a", size=12), linecolor="#d9e0e7"),
         yaxis=dict(
             range=[0, 100],
             showgrid=True,
-            gridcolor="rgba(255,255,255,0.04)",
+            gridcolor="#e7ebf0",
             zeroline=False,
-            tickfont=dict(color="#6a6d78", size=11),
+            tickfont=dict(color="#7a8793", size=11),
         ),
-        hoverlabel=dict(bgcolor="#12161e", bordercolor="rgba(255,255,255,0.1)", font_color="#e8eaed"),
+        hoverlabel=dict(bgcolor="#ffffff", bordercolor="#d9e0e7", font_color="#14202b"),
     )
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
@@ -3666,6 +4926,15 @@ if "search_hits" not in st.session_state:
 if "company_search" not in st.session_state:
     st.session_state.company_search = ""
 
+if "compare_search" not in st.session_state:
+    st.session_state.compare_search = ""
+
+if "suppress_company_suggestions" not in st.session_state:
+    st.session_state.suppress_company_suggestions = False
+
+if "detail_section" not in st.session_state:
+    st.session_state.detail_section = "Overview"
+
 if st.session_state.get("pending_search") is not None:
     st.session_state.company_search = st.session_state.pending_search
     del st.session_state.pending_search
@@ -3679,10 +4948,13 @@ if (
     and not st.session_state.ticker_error
 ):
     incoming = query_ticker()
-    if incoming and ticker_format_ok(incoming):
+    if incoming and ticker_format_ok(incoming) and company_symbol_allowed(incoming):
         st.session_state.ticker = incoming
         if not st.session_state.company_search:
             st.session_state.company_search = incoming
+    elif incoming:
+        st.session_state.invalid_ticker = incoming
+        st.session_state.ticker_error = COMPANY_ONLY_MESSAGE
 
 
 def render_watch_row(items, key_prefix):
@@ -3696,7 +4968,7 @@ def render_watch_row(items, key_prefix):
         else:
             label, symbol = item, item
         with col:
-            if st.button(label, key=f"{key_prefix}_{symbol}", use_container_width=True, type="secondary"):
+            if st.button(label, key=f"{key_prefix}_{symbol}", width="stretch", type="secondary"):
                 st.session_state.ticker = symbol
                 st.session_state.pending_search = label
                 st.session_state.search_hits = []
@@ -3705,29 +4977,50 @@ def render_watch_row(items, key_prefix):
                 st.rerun()
 
 
+def search_hit_label(hit):
+    bits = [hit.get("name") or hit.get("symbol"), hit.get("symbol")]
+    if hit.get("exchange"):
+        bits.append(hit["exchange"])
+    return "  ·  ".join(str(bit) for bit in bits if bit)
+
+
+def render_company_suggestions(hits, key_prefix):
+    """Render live, equity-only search matches and return the selected hit."""
+    hits = [hit for hit in hits if hit]
+    if not hits:
+        return None
+    render_html('<div class="watch-heading">Company matches <small>Choose a listed stock</small></div>')
+    selected = None
+    for hit in hits[:8]:
+        if st.button(
+            search_hit_label(hit),
+            key=f"{key_prefix}_{hit['symbol']}",
+            width="stretch",
+            type="secondary",
+        ):
+            selected = hit
+            break
+    st.caption("Select a company to continue. Indexes, commodities, currencies, and funds are excluded.")
+    return selected
+
+
 st.markdown('<div class="app-wrap">', unsafe_allow_html=True)
 
 render_app_header()
 
 try:
-    search_form = st.form("search_form", border=False)
+    col_a, col_c = st.columns([5.2, 1], gap="small", vertical_alignment="center")
 except TypeError:
-    search_form = st.form("search_form")
-
-with search_form:
-    try:
-        col_a, col_c = st.columns([5.2, 1], gap="small", vertical_alignment="center")
-    except TypeError:
-        col_a, col_c = st.columns([5.2, 1])
-    with col_a:
-        typed = st.text_input(
-            "Search",
-            placeholder="Company name or ticker — Apple, Microsoft, NVIDIA",
-            label_visibility="collapsed",
-            key="company_search",
-        )
-    with col_c:
-        submitted = st.form_submit_button("Analyze", use_container_width=True)
+    col_a, col_c = st.columns([5.2, 1])
+with col_a:
+    typed = st.text_input(
+        "Search",
+        placeholder="Search a company stock or ticker",
+        label_visibility="collapsed",
+        key="company_search",
+    )
+with col_c:
+    submitted = st.button("Analyze company", key="analyze_company", width="stretch", type="primary")
 
 if submitted:
     typed = str(typed or "").strip()
@@ -3750,26 +5043,26 @@ if submitted:
             st.session_state.invalid_ticker = typed
             st.session_state.ticker_error = error
 
+if not submitted:
+    st.session_state.search_hits = []
+
+typed_query = str(typed or "").strip()
+live_hits = []
+show_live_company_search = not st.session_state.pop("suppress_company_suggestions", False)
+if show_live_company_search and len(typed_query) >= 2 and typed_query.upper() != st.session_state.get("ticker", "").upper():
+    live_hits = search_companies(typed_query)
+
+selected_hit = render_company_suggestions(st.session_state.search_hits or live_hits, "pick_company")
+if selected_hit:
+    st.session_state.ticker = selected_hit["symbol"]
+    st.session_state.pending_search = selected_hit.get("name") or selected_hit["symbol"]
+    st.session_state.search_hits = []
+    st.session_state.suppress_company_suggestions = True
+    st.session_state.ticker_error = None
+    st.session_state.invalid_ticker = ""
+    st.rerun()
+
 if st.session_state.search_hits:
-    render_html('<div class="watch-heading">Pick a listing</div>')
-    for hit in st.session_state.search_hits:
-        bits = [hit["name"], hit["symbol"]]
-        if hit.get("exchange"):
-            bits.append(hit["exchange"])
-        if hit.get("sector"):
-            bits.append(hit["sector"])
-        elif hit.get("type"):
-            bits.append(hit["type"])
-        label = "  ·  ".join(bits)
-        if st.button(label, key=f"pick_{hit['symbol']}", use_container_width=True, type="secondary"):
-            st.session_state.ticker = hit["symbol"]
-            st.session_state.pending_search = hit["name"]
-            st.session_state.search_hits = []
-            st.session_state.ticker_error = None
-            st.session_state.invalid_ticker = ""
-            st.rerun()
-    st.caption("Tap a row. Company name or ticker both work.")
-    st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
 if st.session_state.ticker_error:
@@ -3785,15 +5078,15 @@ if not st.session_state.ticker:
     <div class="home-lead">
       <div class="eyebrow">{esc(APP_NAME)}</div>
       <div class="hero-title">What growth is the price asking for?</div>
-      <div class="hero-copy">Search a name or ticker. The model reverse-solves the sales growth today’s price needs, then sets it next to history and consensus. Missing cash stays N/A.</div>
+      <div class="hero-copy">Search a company name or stock ticker. Indexes, commodities, currencies, and funds are excluded. The model reverse-solves the sales growth today’s price needs, then sets it next to history and consensus.</div>
     </div>
     <div class="home-steps">
-      <div><div class="n">1 · Price</div><p>Start from the live quote. No fair-value guess first.</p></div>
+      <div><div class="n">1 · Price</div><p>Start from the latest Yahoo Finance quote available. No fair-value guess first.</p></div>
       <div><div class="n">2 · Required growth</div><p>Solve for the sales path that justifies that price in the reporting currency.</p></div>
       <div><div class="n">3 · Check</div><p>Compare with the company’s history and analyst consensus.</p></div>
     </div>
   </div>
-  <div class="source-line">Yahoo Finance · {esc(EDUCATIONAL_DISCLAIMER)}</div>
+  <div class="source-line">{esc(EDUCATIONAL_DISCLAIMER)}</div>
 </div>
 """
     )
@@ -3808,14 +5101,26 @@ if not st.session_state.ticker:
 
 ticker = st.session_state.ticker
 
+if not ticker_format_ok(ticker) or not company_symbol_allowed(ticker):
+    st.session_state.ticker = ""
+    st.session_state.invalid_ticker = ticker
+    st.session_state.ticker_error = COMPANY_ONLY_MESSAGE
+    render_ticker_error(ticker, st.session_state.ticker_error)
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.stop()
+
 with st.spinner(f"Loading {ticker}..."):
     yahoo_data = fetch_yahoo_data(ticker)
     info = yahoo_data["info"]
 
-if not yahoo_data_is_valid(yahoo_data):
+if not yahoo_data_is_valid(yahoo_data, ticker):
     st.session_state.ticker = ""
     st.session_state.invalid_ticker = ticker
-    st.session_state.ticker_error = f"“{ticker}” was not found on Yahoo Finance."
+    st.session_state.ticker_error = (
+        COMPANY_ONLY_MESSAGE
+        if non_equity_reason(ticker, (yahoo_data.get("info") or {}).get("quoteType"))
+        else f"“{ticker}” was not found on Yahoo Finance."
+    )
     render_ticker_error(ticker, st.session_state.ticker_error)
     st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
@@ -3823,11 +5128,13 @@ if not yahoo_data_is_valid(yahoo_data):
 remember_ticker(ticker)
 sync_ticker_query(ticker)
 
-analysis = analyze_company(yahoo_data, None)
+with st.spinner("Checking SEC filing coverage..."):
+    sec_facts = fetch_sec_companyfacts(ticker)
+analysis = analyze_company(yahoo_data, sec_facts)
 reporting_currency = analysis["reporting_currency"]
 trading_currency = analysis["trading_currency"]
 
-cur_col, _ = st.columns([1.4, 3.6])
+_, cur_col, _ = st.columns([1.0, 1.8, 1.0])
 with cur_col:
     display_currency = st.selectbox(
         "Show amounts in",
@@ -3838,8 +5145,12 @@ with cur_col:
 
 raw_fx_reporting = fx_rate(reporting_currency, display_currency)
 raw_fx_trading = fx_rate(trading_currency, display_currency)
-display_fx_reporting = raw_fx_reporting or 1.0
-display_fx_trading = raw_fx_trading or 1.0
+display_fx_reporting = raw_fx_reporting
+display_fx_trading = raw_fx_trading
+if reporting_currency == display_currency:
+    display_fx_reporting = 1.0
+if trading_currency == display_currency:
+    display_fx_trading = 1.0
 
 company_name = info.get("longName") or info.get("shortName") or KNOWN_NAMES.get(ticker) or ticker
 if str(company_name).upper() == ticker and KNOWN_NAMES.get(ticker):
@@ -3853,7 +5164,7 @@ if reporting_currency != display_currency:
         currency_note = f"{reporting_currency} → {display_currency} (FX unavailable)"
         st.warning(
             f"Could not fetch FX rate for {reporting_currency}/{display_currency}. "
-            "Amounts are shown without conversion."
+            "Amounts requiring conversion are shown as N/A; no relabeling is applied."
         )
     else:
         currency_note = f"{reporting_currency} → {display_currency} @ {display_fx_reporting:.4f}"
@@ -3861,37 +5172,55 @@ if reporting_currency != display_currency:
 if trading_currency != display_currency and raw_fx_trading is None:
     st.warning(
         f"Could not fetch FX rate for {trading_currency}/{display_currency}. "
-        "        Quote prices may be unconverted."
+        "Quote prices requiring conversion are shown as N/A."
     )
 
 tone = score_tone(analysis["reality_score"])
+active_detail = st.session_state.get("detail_section", "Overview")
+previous_price = first_value(info, "previousClose", "regularMarketPreviousClose")
+price_change = None
+if analysis.get("price") is not None and previous_price not in (None, 0):
+    price_change = analysis["price"] / previous_price - 1
+price_change_label = percent(price_change) if price_change is not None else "N/A"
+exchange = info.get("exchange") or "Exchange unavailable"
+as_of = analysis.get("last_refreshed") or "N/A"
 
 render_html(
     f'<div class="result-head">'
     f'<div><div class="hero-title">{esc(company_name)}</div>'
-    f'<div class="result-meta">{esc(ticker)}'
+    f'<div class="result-meta">{esc(ticker)} · {esc(exchange)}'
     f'{f" · {esc(sector)}" if sector and sector != "Unknown sector" else ""}'
-    f' · {esc(reporting_currency)}'
-    f' · {esc(percent(analysis.get("discount_rate")))} discount</div>'
+    f' · {esc(trading_currency)} · {esc(money(analysis.get("price"), trading_currency))}'
+    f' · {esc(price_change_label)} vs prior close · As of {esc(as_of)}</div>'
+    f'<div class="badge-row">'
+    f'<span class="source-chip"><span class="status-dot"></span>Yahoo Finance</span>'
+    f'<span class="source-chip">SEC EDGAR · {esc("live facts" if analysis.get("has_sec") else "status disclosed")}</span>'
+    f'<span class="source-chip">Reporting currency: {esc(reporting_currency)}</span>'
+    f'</div>'
     f'<div class="hero-copy" style="margin-top:10px">{esc(conclusion_text(analysis))}</div></div>'
-    f'<div class="result-score {esc(tone)}"><em>Score</em><b>{esc(score(analysis["reality_score"]))}</b></div>'
+    f'<div class="result-score {esc(tone)}"><em>Evidence quality</em><b>{esc(score(analysis["reality_score"]))}</b><div class="result-meta">0–100 heuristic signal · {esc(analysis.get("confidence", "N/A"))} confidence</div></div>'
     f"</div>"
 )
 
+render_sec_status_strip(analysis)
+
 bad_flags = [label for label, level in analysis["quality_flags"] if level in ("warn", "bad")]
 if bad_flags:
-    render_html(f'<div class="source-line">{esc(" · ".join(bad_flags[:3]))}</div>')
+    render_html(f'<div class="quality-flags">{esc(" · ".join(bad_flags[:3]))}</div>')
 
 render_html(implied_line_html(analysis))
 
 render_html(
+    f'<div class="section-label">Market Snapshot <small>Latest available market and operating data</small></div>'
     f'<div class="metric-grid">'
-    f'{metric_card("Price", money(analysis["price"], trading_currency, display_currency, display_fx_trading), f"{trading_currency} quote", "blue")}'
-    f'{metric_card("Market cap", money(analysis["market_cap"], trading_currency, display_currency, display_fx_trading), trading_currency, "purple")}'
-    f'{metric_card("Revenue", money(analysis["revenue"], reporting_currency, display_currency, display_fx_reporting), analysis["sources"]["Revenue"], "green")}'
-    f'{metric_card("Free cash flow", money(analysis["free_cash_flow"], reporting_currency, display_currency, display_fx_reporting), analysis["sources"]["Free Cash Flow"], "cyan")}'
+    f'{metric_card("Current price", money(analysis["price"], trading_currency, display_currency, display_fx_trading), f"{trading_currency} quote · As of {as_of}", "blue")}'
+    f'{metric_card("Market capitalization", money(analysis["market_cap"], trading_currency, display_currency, display_fx_trading), f"Equity value · {trading_currency}", "purple")}'
+    f'{metric_card("Revenue", money(analysis["revenue"], reporting_currency, display_currency, display_fx_reporting), f"Latest available annual · {reporting_currency}", "green")}'
+    f'{metric_card("Free cash flow", money(analysis["free_cash_flow"], reporting_currency, display_currency, display_fx_reporting), f"Period-aligned cash conversion · {reporting_currency}", "cyan")}'
     f"</div>"
 )
+
+render_data_quality(analysis)
 
 
 def growth_bar(label, value, css_class):
@@ -3936,7 +5265,81 @@ def growth_verdict(analysis):
     return f'<div class="gbar-verdict">{text}</div>'
 
 
-if any(analysis[k] is not None for k in ("required_growth", "consensus_growth", "historical_growth")):
+def render_overview_sections(analysis, company_name, ticker, sector, industry, display_currency, display_fx_reporting, display_fx_trading):
+    render_html('<div class="section-label">Core research signal <small>Evidence first · heuristic, not a recommendation</small></div>')
+    left, right = st.columns([1, 1], gap="large")
+    with left:
+        render_html(
+            f'<div class="panel"><div class="panel-kicker">Price reality</div>'
+            f'<div class="signal-copy">{esc(conclusion_text(analysis))}</div>'
+            f'{implied_line_html(analysis)}'
+            f'<div class="signal-limitations">The signal compares a multi-year price-implied path with historical and near-term analyst evidence. It does not forecast returns.</div></div>'
+        )
+        render_html(
+            f'<div class="panel"><div class="panel-kicker">Market expectations</div>'
+            f'{make_rows(pricing_points(analysis, display_currency, display_fx_reporting))}'
+            f'</div>'
+        )
+    with right:
+        render_html(
+            f'<div class="panel"><div class="panel-kicker">Evidence quality</div>'
+            f'{score_bars_html(analysis)}'
+            f'<div class="signal-limitations">0–100 heuristic coverage signal. Missing evidence is disclosed and lowers confidence; it is not treated as positive evidence.</div></div>'
+        )
+        render_html(
+            f'<div class="panel"><div class="panel-kicker">Model assumptions</div>'
+            f'{make_rows([("Forecast horizon", f"{FORECAST_YEARS} years"), ("Discount rate", percent(analysis.get("discount_rate"))), ("Terminal growth", percent(analysis.get("terminal_growth"))), ("FCF margin used", percent(analysis.get("model_fcf_margin"))), ("Solver status", analysis.get("solver_status", "N/A"))])}'
+            f'</div>'
+        )
+
+    risks = risk_rows(analysis)
+    render_html(
+        f'<div class="section-label">Key risks <small>Readable warnings tied to the current evidence</small></div>'
+        f'<div class="panel"><div class="panel-kicker">Key risks</div>'
+    )
+    for risk_index, (title, detail, why) in enumerate(risks):
+        risk_cols = st.columns([0.75, 1.8, 0.45], gap="small")
+        with risk_cols[0]:
+            first_class = " risk-first" if risk_index == 0 else ""
+            render_html(f'<div class="risk-cell{first_class}"><strong>{esc(title)}</strong></div>')
+        with risk_cols[1]:
+            render_html(f'<div class="risk-cell{first_class}"><span>{esc(detail)}<br>{esc(why)}</span></div>')
+        with risk_cols[2]:
+            review_target = "Expectations" if title in {"Growth burden", "Expectation burden", "Cash conversion"} else "Data"
+            if st.button(
+                "Review",
+                key=f"review_risk_{ticker}_{risk_index}",
+                width="stretch",
+                type="secondary",
+                help=f"Open {review_target} for {title.lower()} evidence",
+            ):
+                st.session_state.detail_section = review_target
+                st.session_state.pending_review = title
+                st.rerun()
+    render_html('</div></div>')
+
+    source_values = provenance_values(analysis, display_currency, display_fx_reporting, display_fx_trading)
+    source_rows = []
+    for label, source in analysis.get("sources", {}).items():
+        source_label = source or "Unavailable"
+        if label == "SEC EDGAR status":
+            source_label = "SEC EDGAR"
+        elif label == "Yahoo Finance status":
+            source_label = "Yahoo Finance"
+        value = source_values.get(label, "N/A")
+        source_rows.append((label, value if value == source_label else f"{value} · {source_label}"))
+    sources_markup = make_rows(source_rows)
+    render_html(
+        f'<div class="overview-grid">'
+        f'<div class="panel"><div class="panel-kicker">Data sources</div>{sources_markup}</div>'
+        f'<div class="panel"><div class="panel-kicker">Research notes</div>'
+        f'<div class="note-box">{esc(" · ".join(label for label, _ in analysis.get("quality_flags", [])[:4]) or "No material coverage warnings.")}</div>'
+        f'<div class="signal-limitations">{esc(company_name)} · {esc(ticker)} · {esc(sector)} · {esc(industry)}</div></div>'
+        f'</div>'
+    )
+
+
+if active_detail in {"Overview", "Expectations"} and any(analysis[k] is not None for k in ("required_growth", "consensus_growth", "historical_growth")):
     years = analysis.get("historical_growth_years") or 0
     hist_caption = f"Historical ({years}y CAGR)" if years else "Historical CAGR"
     render_html(
@@ -3948,14 +5351,31 @@ if any(analysis[k] is not None for k in ("required_growth", "consensus_growth", 
         f"</div>"
     )
 
+if active_detail == "Overview":
+    render_overview_sections(analysis, company_name, ticker, sector, industry, display_currency, display_fx_reporting, display_fx_trading)
+
 def pick_detail_section():
-    options = [("Chart", "nav_chart"), ("What-If", "nav_whatif"), ("Compare", "nav_compare"), ("Data", "nav_data")]
+    options = ["Overview", "Price", "Expectations", "Scenarios", "Compare", "Data", "Methodology"]
     current = st.session_state.get("detail_section")
-    cols = st.columns(len(options), gap="small")
-    for col, (name, key) in zip(cols, options):
+    if hasattr(st, "segmented_control"):
+        selected = st.segmented_control(
+            "Research section",
+            options,
+            default=current if current in options else "Overview",
+            key="detail_nav",
+            label_visibility="collapsed",
+        ) or current or "Overview"
+        if selected != current:
+            st.session_state.detail_section = selected
+            st.rerun()
+        return selected
+
+    keyed_options = [(name, f"nav_{name.lower()}") for name in options]
+    cols = st.columns(len(keyed_options), gap="small")
+    for col, (name, key) in zip(cols, keyed_options):
         with col:
-            if st.button(name, key=key, use_container_width=True, type="primary" if current == name else "secondary"):
-                st.session_state.detail_section = None if current == name else name
+            if st.button(name, key=key, width="stretch", type="primary" if current == name else "secondary"):
+                st.session_state.detail_section = name
                 st.rerun()
     return st.session_state.get("detail_section")
 
@@ -3973,9 +5393,90 @@ def chart_control_multi(label, options, default, key):
     return st.multiselect(label, options, default=default, key=key, label_visibility="collapsed")
 
 
+def cashflow_trend_dataframe(yahoo_data):
+    """Build a period-aligned annual cash-flow trend without manufacturing values."""
+    financials = yahoo_data.get("financials")
+    cashflow = yahoo_data.get("cashflow")
+    revenue = get_row(financials, ["Total Revenue", "Operating Revenue"])
+    ocf = get_row(cashflow, ["Operating Cash Flow", "Total Cash From Operating Activities"])
+    capex = get_row(cashflow, ["Capital Expenditure", "Capital Expenditures"])
+    reported = get_row(cashflow, ["Free Cash Flow"])
+    if revenue is None or (ocf is None and reported is None):
+        return pd.DataFrame()
+
+    rows = []
+    for period in sorted(set(revenue.index), reverse=True):
+        revenue_value = safe_float(revenue.get(period))
+        ocf_value = safe_float(ocf.get(period)) if ocf is not None else None
+        capex_value = normalize_capex(capex.get(period)) if capex is not None else None
+        reported_value = safe_float(reported.get(period)) if reported is not None else None
+        fcf_value = compute_fcf(ocf_value, capex_value, reported_value)
+        if revenue_value is None or fcf_value is None:
+            continue
+        rows.append({
+            "Period": str(period)[:10],
+            "Revenue": revenue_value,
+            "Free cash flow": fcf_value,
+            "FCF margin": fcf_value / revenue_value if revenue_value > 0 else None,
+        })
+    return pd.DataFrame(rows)
+
+
+def render_expectations_view(analysis, yahoo_data, display_currency, display_fx_reporting):
+    historical_years = analysis.get("historical_growth_years") or 0
+    render_html(
+        '<div class="section-label">Expectations <small>What the current price appears to require versus operating evidence</small></div>'
+    )
+    render_html(
+        f'<div class="metric-grid">'
+        f'{metric_card("Implied growth", required_growth_label(analysis), "Multi-year price-implied revenue path", "blue")}'
+        f'{metric_card("Historical growth", percent(analysis.get("historical_growth")), f"{historical_years}-year revenue CAGR", "green")}'
+        f'{metric_card("Analyst consensus", percent(analysis.get("consensus_growth")), "Near-term next-FY estimate", "purple")}'
+        f'{metric_card("Current FCF margin", percent(analysis.get("fcf_margin")), "Latest compatible period", "cyan")}'
+        f'</div>'
+    )
+    left, right = st.columns([1, 1], gap="large")
+    with left:
+        render_html('<div class="panel"><div class="panel-kicker">Growth reality</div><div class="signal-copy">The price is a claim about future operating performance.</div>')
+        render_html(implied_line_html(analysis))
+        hist_years = analysis.get("historical_growth_years") or 0
+        render_html(
+            f'{growth_bar("Price-implied", analysis["required_growth"] if not analysis.get("growth_clamped") else None, "req")}'
+            f'{growth_bar("Analyst consensus", analysis.get("consensus_growth"), "con")}'
+            f'{growth_bar(f"Historical ({hist_years}y)", analysis.get("historical_growth"), "his")}'
+            f'{growth_verdict(analysis)}'
+        )
+        render_html('</div>')
+    with right:
+        render_html(
+            f'<div class="panel"><div class="panel-kicker">Model assumptions</div>'
+            f'{make_rows(pricing_points(analysis, display_currency, display_fx_reporting))}'
+            f'<div class="note-box">Analyst consensus is a near-term comparison. It is not the same horizon as the multi-year reverse-DCF path.</div></div>'
+        )
+
+    trend = cashflow_trend_dataframe(yahoo_data)
+    render_html('<div class="section-label">Cash-flow quality <small>Annual operating cash flow and capex are period-aligned where available</small></div>')
+    if trend.empty:
+        st.info("Cash-flow trend is unavailable for the periods returned by Yahoo Finance.")
+    else:
+        display = trend.copy()
+        display["Revenue"] = display["Revenue"].map(lambda value: money(value, analysis["reporting_currency"], display_currency, display_fx_reporting))
+        display["Free cash flow"] = display["Free cash flow"].map(lambda value: money(value, analysis["reporting_currency"], display_currency, display_fx_reporting))
+        display["FCF margin"] = display["FCF margin"].map(percent)
+        st.dataframe(display, width="stretch", hide_index=True)
+    render_html(
+        '<div class="panel"><div class="panel-kicker">How to read this page</div>'
+        '<p class="hero-copy">A demanding implied growth rate is not a prediction. It is a description of the operating path embedded in the current enterprise value. TSRP places that path beside history and consensus, then shows which evidence is missing.</p></div>'
+    )
+
+
 detail = pick_detail_section()
 
-if detail == "Chart":
+pending_review = st.session_state.pop("pending_review", None)
+if pending_review:
+    st.info(f"Reviewing {pending_review}: supporting evidence is shown below.")
+
+if detail == "Price":
     ctrl_kind, ctrl_tf, ctrl_ma = st.columns([1, 1.7, 1.5])
     with ctrl_kind:
         chart_kind = chart_control("Chart type", ["Candles", "Line"], "Candles", "chart_kind")
@@ -3987,23 +5488,29 @@ if detail == "Chart":
 
     refresh_col, _ = st.columns([1, 5])
     with refresh_col:
-            if st.button("↻ Refresh chart data", key="refresh_chart"):
+            if st.button("↻", key="refresh_chart", help="Refresh price history"):
                 fetch_yahoo_data.clear()
                 fetch_price_history.clear()
                 st.rerun()
 
-    period = "5y" if chart_tf == "5Y" else "1y"
+    period = "max" if chart_tf == "Max" else ("5y" if chart_tf in {"3Y", "5Y"} else "1y")
     history = fetch_price_history(ticker, period)
     if history is None or history.empty:
         st.info("No price history available for this ticker.")
     else:
+        render_html(
+            f'<div class="section-label">Price history <small>{esc(ticker)} · {esc(display_currency)} · Yahoo Finance · As of {esc(analysis.get("last_refreshed", "N/A"))}</small></div>'
+        )
         st.markdown('<div class="chart-wrap">', unsafe_allow_html=True)
         fx = display_fx_trading if trading_currency != display_currency else 1.0
         render_price_chart(history, fx, chart_kind, chart_tf, smas)
         st.markdown("</div>", unsafe_allow_html=True)
-        st.caption(f"{ticker} · {chart_tf} · prices in {display_currency} · Yahoo Finance")
+        st.caption(f"{ticker} · {chart_tf} · prices in {display_currency} · Yahoo Finance · values may be delayed")
 
-elif detail == "What-If":
+elif detail == "Expectations":
+    render_expectations_view(analysis, yahoo_data, display_currency, display_fx_reporting)
+
+elif detail == "Scenarios":
     market_cap_reporting = safe_float(analysis["market_cap_reporting"])
     if not analysis["revenue"] or not market_cap_reporting or market_cap_reporting <= 0:
         st.info("Revenue or market cap is unavailable, so the what-if model cannot run for this ticker.")
@@ -4024,19 +5531,42 @@ elif detail == "What-If":
         base_terminal = safe_float(analysis.get("terminal_growth"), TERMINAL_GROWTH)
 
         render_html(
-            '<div class="whatif-note">Set your own assumptions and see the price they justify. '
-            "The sliders start at this company’s currency-aware rates and the growth the main model implied, "
-            "so the first result should sit near today’s price. Change growth or margin to what <b>you</b> believe."
+            '<div class="whatif-note"><b>Hypothetical scenario inputs.</b> Set your own assumptions and see the enterprise value and share-price equivalent they produce. '
+            "These outputs are derived from the model, not targets, recommendations, or expected returns. "
             f"{margin_note}</div>"
         )
 
+        preset_col, reset_col = st.columns([3, 1])
+        with preset_col:
+            preset = st.selectbox("Assumption set", ["User-defined", "Base", "Cautious", "Optimistic"], key="scenario_preset")
+        with reset_col:
+            st.write("")
+            if st.button("Reset assumptions", key="reset_scenarios", width="stretch"):
+                st.session_state.pop("scenario_preset", None)
+                for preset_key in ("user-defined", "base", "cautious", "optimistic"):
+                    for field in ("growth", "margin", "discount", "terminal"):
+                        st.session_state.pop(f"wi_{field}_{preset_key}", None)
+                st.rerun()
+
+        preset_delta = {"User-defined": 0.0, "Base": 0.0, "Cautious": -0.05, "Optimistic": 0.05}[preset]
+        margin_delta = {"User-defined": 0.0, "Base": 0.0, "Cautious": -0.03, "Optimistic": 0.03}[preset]
+        discount_delta = {"User-defined": 0.0, "Base": 0.0, "Cautious": 0.02, "Optimistic": -0.01}[preset]
+        terminal_delta = {"User-defined": 0.0, "Base": 0.0, "Cautious": -0.005, "Optimistic": 0.005}[preset]
+        preset_note = "User-defined inputs" if preset == "User-defined" else f"{preset} sensitivity around the available evidence; adjust or reset the inputs below."
+        render_html(f'<div class="note-box">{esc(preset_note)}</div>')
+        widget_suffix = preset.lower().replace(" ", "-")
+        growth_key = f"wi_growth_{widget_suffix}"
+        margin_key = f"wi_margin_{widget_suffix}"
+        discount_key = f"wi_discount_{widget_suffix}"
+        terminal_key = f"wi_terminal_{widget_suffix}"
+
         sl_left, sl_right = st.columns(2)
         with sl_left:
-            wi_growth = st.slider("Starting revenue growth (fades to terminal)", -10.0, 40.0, round(base_growth_pct, 1), 0.5, format="%.1f%%") / 100
-            wi_margin = st.slider("FCF margin at maturity", 1.0, 50.0, round(base_margin_pct, 1), 0.5, format="%.1f%%") / 100
+            wi_growth = st.slider("User assumption · starting revenue growth", -10.0, 40.0, round(min(max(base_growth_pct + preset_delta * 100, -10.0), 40.0), 1), 0.5, format="%.1f%%", key=growth_key) / 100
+            wi_margin = st.slider("User assumption · FCF margin at maturity", 1.0, 50.0, round(min(max(base_margin_pct + margin_delta * 100, 1.0), 50.0), 1), 0.5, format="%.1f%%", key=margin_key) / 100
         with sl_right:
-            wi_discount = st.slider("Discount rate", 3.0, 20.0, round(base_discount * 100, 2), 0.25, format="%.2f%%") / 100
-            wi_terminal = st.slider("Terminal growth", 0.0, 6.0, round(min(max(base_terminal * 100, 0.0), 6.0), 2), 0.25, format="%.2f%%") / 100
+            wi_discount = st.slider("User assumption · discount rate", 3.0, 20.0, round(min(max((base_discount + discount_delta) * 100, 3.0), 20.0), 2), 0.25, format="%.2f%%", key=discount_key) / 100
+            wi_terminal = st.slider("User assumption · terminal growth", 0.0, 6.0, round(min(max((base_terminal + terminal_delta) * 100, 0.0), 6.0), 2), 0.25, format="%.2f%%", key=terminal_key) / 100
 
         if wi_discount <= wi_terminal:
             st.warning("Discount rate must be above terminal growth for the model to converge.")
@@ -4052,24 +5582,27 @@ elif detail == "What-If":
             if implied_ev is None:
                 st.info("These inputs do not produce a valid valuation.")
             else:
-                implied_equity = implied_ev - (analysis["debt"] or 0) + (analysis["cash"] or 0)
-                ratio = implied_equity / market_cap_reporting
-                upside = ratio - 1
+                implied_equity = None
+                ratio = None
+                if analysis.get("debt") is not None and analysis.get("cash") is not None and market_cap_reporting:
+                    implied_equity = implied_ev - analysis["debt"] + analysis["cash"]
+                    ratio = implied_equity / market_cap_reporting
+                upside = ratio - 1 if ratio is not None else None
                 price = safe_float(analysis["price"])
-                implied_price = price * ratio if price is not None else None
-                delta_cls = "up" if upside >= 0 else "down"
-                delta_txt = f"{upside:+.1%}"
+                implied_price = price * ratio if price is not None and ratio is not None else None
+                delta_cls = "up" if upside is not None and upside >= 0 else "down"
+                delta_txt = f"{upside:+.1%}" if upside is not None else "N/A"
                 price_txt = money(implied_price, trading_currency, display_currency, display_fx_trading) if implied_price is not None else "N/A"
                 current_txt = money(price, trading_currency, display_currency, display_fx_trading)
 
                 render_html(
                     f'<div class="metric-grid" style="margin-top:14px">'
-                    f'{metric_card("Implied fair price", price_txt, "At your assumptions", "blue")}'
+                    f'{metric_card("Scenario-implied price", price_txt, "At your assumptions", "blue")}'
                     f'{metric_card("Current price", current_txt, f"{trading_currency} quote", "purple")}'
                     f'{metric_card("Implied enterprise value", money(implied_ev, reporting_currency, display_currency, display_fx_reporting), "DCF at your inputs", "green")}'
-                    f'<div class="metric-card accent-cyan"><div class="metric-label">Upside / downside</div>'
+                    f'<div class="metric-card accent-cyan"><div class="metric-label">Difference vs current</div>'
                     f'<div class="metric-value"><span class="delta-chip {delta_cls}">{delta_txt}</span></div>'
-                    f'<div class="metric-meta">vs current market cap</div></div>'
+                    f'<div class="metric-meta">scenario value relative to current quote</div></div>'
                     f"</div>"
                 )
 
@@ -4080,20 +5613,54 @@ elif detail == "What-If":
                         f"<b>{required_growth_label(analysis)}</b> starting growth at a {percent(analysis['model_fcf_margin'])} FCF margin, "
                         f"{percent(analysis.get('discount_rate'))} discount rate, and {percent(analysis.get('terminal_growth'))} terminal growth "
                         f"(faded path, {analysis.get('rate_currency', reporting_currency)} money world).</div>"
-                    )
+                        )
+                if implied_equity is None:
+                    st.warning("Scenario enterprise value is available, but a share-price equivalent is unavailable because cash or debt is missing.")
+
+                render_html('<div class="section-label">Scenario sensitivity <small>Derived enterprise value at nearby user-defined assumptions</small></div>')
+                sensitivity_growth = [wi_growth - 0.05, wi_growth, wi_growth + 0.05]
+                sensitivity_margin = [max(wi_margin - 0.03, 0.01), wi_margin, min(wi_margin + 0.03, 0.50)]
+                sensitivity_rows = []
+                for growth_value in sensitivity_growth:
+                    row = {"Starting growth": percent(growth_value)}
+                    for margin_value in sensitivity_margin:
+                        value = dcf_enterprise_value(
+                            analysis["revenue"], growth_value, margin_value, wi_discount, wi_terminal,
+                            start_margin=analysis["fcf_margin"] if analysis.get("fcf_margin") and analysis["fcf_margin"] > 0 else margin_value,
+                        )
+                        row[f"FCF margin {percent(margin_value)}"] = money(value, reporting_currency, display_currency, display_fx_reporting)
+                    sensitivity_rows.append(row)
+                st.dataframe(pd.DataFrame(sensitivity_rows), width="stretch", hide_index=True)
+                st.caption("Sensitivity outputs are hypothetical model results. They are not target prices, recommendations, or expected returns.")
 
 elif detail == "Compare":
-    with st.form("compare_form"):
-        cmp_col, btn_col = st.columns([3, 1])
-        with cmp_col:
-            cmp_input = st.text_input(
-                "Peers to compare",
-                placeholder="Microsoft, Google, Samsung",
-                help="Up to 3 companies, comma separated. Names or tickers both work. The current company is always included.",
-            )
-        with btn_col:
-            st.write("")
-            cmp_submit = st.form_submit_button("Compare", use_container_width=True)
+    if st.session_state.pop("clear_compare_search", False):
+        st.session_state.compare_search = ""
+    cmp_col, btn_col = st.columns([3, 1])
+    with cmp_col:
+        cmp_input = st.text_input(
+            "Peers to compare",
+            placeholder="Search a company to add as a peer",
+            key="compare_search",
+            help="Type a company name or ticker and choose a result. You can also enter comma-separated names.",
+        )
+    with btn_col:
+        st.write("")
+        cmp_submit = st.button("Compare", key="compare_submit", width="stretch", type="primary")
+
+    compare_query = str(cmp_input or "").strip()
+    compare_hits = []
+    if compare_query and "," not in compare_query and ";" not in compare_query and len(compare_query) >= 2:
+        compare_hits = search_companies(compare_query)
+
+    selected_peer = render_company_suggestions(compare_hits, "pick_compare")
+    if selected_peer:
+        selected_symbol = selected_peer["symbol"]
+        existing = [symbol for symbol in st.session_state.get("compare_symbols", []) if symbol != ticker]
+        if selected_symbol != ticker and selected_symbol not in existing:
+            st.session_state.compare_symbols = (existing + [selected_symbol])[:3]
+        st.session_state.clear_compare_search = True
+        st.rerun()
 
     if cmp_submit:
         tokens = [part.strip() for part in cmp_input.replace(";", ",").split(",") if part.strip()]
@@ -4139,7 +5706,8 @@ elif detail == "Compare":
             )
 
 elif detail == "Data":
-    st.caption("Numbers behind the reverse DCF, plus which source was used.")
+    render_html('<div class="section-label">Data <small>Metric-level provenance, periods, units, and quality status</small></div>')
+    st.caption("Unavailable values remain N/A. Converted values identify the display currency; source currency remains in the notes.")
     table = evidence_dataframe(
         analysis,
         company_name,
@@ -4152,27 +5720,45 @@ elif detail == "Data":
         display_fx_reporting,
         display_fx_trading,
     )
-    st.dataframe(table, use_container_width=True, hide_index=True)
+    st.dataframe(table, width="stretch", hide_index=True)
     st.download_button(
         "Download CSV",
         data=table.to_csv(index=False).encode("utf-8"),
         file_name=f"tsrp_{ticker}_{display_currency}.csv",
         mime="text/csv",
-        use_container_width=False,
+        width="content",
     )
+    st.download_button(
+        "Download JSON",
+        data=export_payload(analysis, company_name, ticker, sector, industry, display_currency),
+        file_name=f"tsrp_{ticker}_{display_currency}.json",
+        mime="application/json",
+        width="content",
+    )
+    source_values = provenance_values(analysis, display_currency, display_fx_reporting, display_fx_trading)
+    source_labels = dict(analysis["sources"])
+    source_labels["SEC EDGAR status"] = "SEC EDGAR"
+    source_labels["Yahoo Finance status"] = "Yahoo Finance"
     source_table = pd.DataFrame(
-        [[k, v] for k, v in analysis["sources"].items()],
-        columns=["Data item", "Source"],
+        [
+            [label, source_values.get(label, "N/A"), source_labels.get(label) or "Unavailable"]
+            for label in analysis["sources"]
+        ],
+        columns=["Data item", "Value", "Source"],
     )
-    st.dataframe(source_table, use_container_width=True, hide_index=True)
-    st.caption("Yahoo Finance was the source for this load.")
+    render_html('<div class="section-label">Data sources <small>Source coverage for this analysis</small></div>')
+    st.dataframe(source_table, width="stretch", hide_index=True)
+    st.caption(f"Market data: Yahoo Finance. Annual filing facts: {analysis.get('sec_status', 'N/A')}.")
     if reporting_currency != trading_currency:
         st.caption(
             f"Statements are in {reporting_currency}. Price and market cap are in {trading_currency}."
         )
 
+elif detail == "Methodology":
+    render_methodology()
+
 render_html(
-    f'<div class="app-footer">{esc(APP_SHORT)} · Yahoo Finance · {esc(EDUCATIONAL_DISCLAIMER)}</div>'
+    f'<div class="app-footer">{esc(APP_SHORT)} · Yahoo Finance · SEC EDGAR status disclosed · {esc(EDUCATIONAL_DISCLAIMER)}</div>'
 )
 
 st.markdown("</div>", unsafe_allow_html=True)
