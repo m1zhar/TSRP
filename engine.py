@@ -285,6 +285,8 @@ def choose_model_fcf_margin(latest_margin, trailing_margins, mature_margin=None)
 
 
 def growth_reality_score(benchmark_growth, required_growth):
+    benchmark_growth = _f(benchmark_growth)
+    required_growth = _f(required_growth)
     if required_growth is None or benchmark_growth is None:
         return MISSING_EVIDENCE_SCORE
     gap = required_growth - benchmark_growth
@@ -362,6 +364,32 @@ def reality_score(
     Composite is a heuristic dashboard, not a calibrated probability.
     Market expectations enter once, via required vs history / consensus.
     """
+    return score_breakdown(
+        business_quality,
+        financial_strength,
+        historical_growth,
+        required_growth,
+        consensus_growth,
+        growth_clamped,
+    )["score"]
+
+
+def score_breakdown(
+    business_quality,
+    financial_strength,
+    historical_growth,
+    required_growth,
+    consensus_growth=None,
+    growth_clamped=False,
+):
+    """Return the deterministic score components used by :func:`reality_score`.
+
+    The UI uses this trace to explain the score; keeping it here prevents a
+    second presentation-layer formula from drifting away from the engine.
+    """
+    required_growth = _f(required_growth)
+    historical_growth = _f(historical_growth)
+    consensus_growth = _f(consensus_growth)
     if growth_clamped or required_growth is None:
         history_leg = MISSING_EVIDENCE_SCORE
         street_leg = MISSING_EVIDENCE_SCORE
@@ -369,12 +397,21 @@ def reality_score(
         history_leg = growth_reality_score(historical_growth, required_growth)
         street_leg = growth_reality_score(consensus_growth, required_growth)
 
-    return clamp(
-        business_quality * 0.35
-        + financial_strength * 0.30
-        + history_leg * 0.20
-        + street_leg * 0.15
-    )
+    components = [
+        {"key": "business_quality", "label": "Business quality", "value": clamp(business_quality), "weight": 0.35},
+        {"key": "financial_strength", "label": "Financial strength", "value": clamp(financial_strength), "weight": 0.30},
+        {"key": "historical_fit", "label": "Historical growth fit", "value": clamp(history_leg), "weight": 0.20},
+        {"key": "consensus_fit", "label": "Consensus growth fit", "value": clamp(street_leg), "weight": 0.15},
+    ]
+    for component in components:
+        component["contribution"] = component["value"] * component["weight"]
+
+    return {
+        "score": clamp(sum(component["contribution"] for component in components)),
+        "components": components,
+        "missing_evidence_score": MISSING_EVIDENCE_SCORE,
+        "growth_comparison_available": not growth_clamped and required_growth is not None,
+    }
 
 
 def score_label(value):
@@ -388,3 +425,39 @@ def score_label(value):
     if value >= 40:
         return "Demanding expectations"
     return "Very demanding expectations"
+
+
+def snapshot_diff(previous, current):
+    """Compare two saved analysis payloads without inventing causal explanations."""
+    if not isinstance(previous, dict) or not isinstance(current, dict):
+        return {"comparable": False, "reason": "snapshot_missing", "changes": []}
+    if previous.get("methodology_version") != current.get("methodology_version"):
+        return {"comparable": False, "reason": "methodology_mismatch", "changes": []}
+
+    fields = (
+        "score",
+        "business_quality",
+        "financial_strength",
+        "market_expectations",
+        "historical_growth",
+        "consensus_growth",
+        "required_growth",
+        "revenue",
+        "free_cash_flow",
+        "enterprise_value",
+        "solver_status",
+        "user_assumptions",
+    )
+    changes = []
+    for field in fields:
+        before = previous.get(field)
+        after = current.get(field)
+        before_number = _f(before)
+        after_number = _f(after)
+        if before_number is not None and after_number is not None:
+            delta = after_number - before_number
+            if not math.isclose(delta, 0.0, abs_tol=1e-12):
+                changes.append({"field": field, "before": before_number, "after": after_number, "delta": delta})
+        elif before != after:
+            changes.append({"field": field, "before": before, "after": after, "delta": None})
+    return {"comparable": True, "reason": "compatible", "changes": changes}
