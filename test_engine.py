@@ -6,6 +6,8 @@ from engine import (
     history_cagr,
     model_rates,
     reality_score,
+    score_breakdown,
+    snapshot_diff,
     solve_required_growth,
     solve_required_growth_detail,
     year_growth,
@@ -95,6 +97,45 @@ class ScoreTests(unittest.TestCase):
         self.assertGreater(clamped, 40)
         self.assertLess(abs(clamped - 70 * 0.35 - 70 * 0.30 - 40 * 0.35), 1.5)
         self.assertIsInstance(open_score, float)
+
+    def test_breakdown_weights_and_contributions_reconcile(self):
+        trace = score_breakdown(80, 60, 0.08, 0.10, 0.09)
+        self.assertEqual([item["weight"] for item in trace["components"]], [0.35, 0.30, 0.20, 0.15])
+        self.assertAlmostEqual(sum(item["contribution"] for item in trace["components"]), trace["score"])
+        self.assertAlmostEqual(trace["score"], reality_score(80, 60, 0.08, 0.10, 0.09))
+
+    def test_score_is_bounded_and_nonfinite_inputs_are_unavailable(self):
+        bounded = score_breakdown(10_000, -10_000, 0.10, 0.10, 0.10)["score"]
+        self.assertTrue(0 <= bounded <= 100)
+        trace = score_breakdown(float("nan"), 70, float("inf"), float("nan"), float("-inf"))
+        self.assertTrue(0 <= trace["score"] <= 100)
+        self.assertFalse(trace["growth_comparison_available"])
+        self.assertEqual(trace["components"][2]["value"], 40)
+        self.assertEqual(trace["components"][3]["value"], 40)
+
+
+class SnapshotTests(unittest.TestCase):
+    def test_comparable_snapshot_difference(self):
+        previous = {"methodology_version": "score-v1", "score": 60, "revenue": 100, "solver_status": "exact"}
+        current = {"methodology_version": "score-v1", "score": 65, "revenue": 110, "solver_status": "exact"}
+        diff = snapshot_diff(previous, current)
+        self.assertTrue(diff["comparable"])
+        self.assertEqual(diff["reason"], "compatible")
+        self.assertEqual({change["field"] for change in diff["changes"]}, {"score", "revenue"})
+        self.assertAlmostEqual(next(change["delta"] for change in diff["changes"] if change["field"] == "score"), 5)
+
+    def test_incompatible_snapshot_methodology_is_not_compared(self):
+        diff = snapshot_diff({"methodology_version": "score-v1"}, {"methodology_version": "score-v2"})
+        self.assertFalse(diff["comparable"])
+        self.assertEqual(diff["reason"], "methodology_mismatch")
+        self.assertEqual(diff["changes"], [])
+
+    def test_user_assumption_change_is_tracked(self):
+        previous = {"methodology_version": "score-v1", "user_assumptions": {"discount_rate": 0.10}}
+        current = {"methodology_version": "score-v1", "user_assumptions": {"discount_rate": 0.12}}
+        diff = snapshot_diff(previous, current)
+        self.assertTrue(diff["comparable"])
+        self.assertEqual(diff["changes"][0]["field"], "user_assumptions")
 
 
 if __name__ == "__main__":
