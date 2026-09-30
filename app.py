@@ -5032,21 +5032,21 @@ def render_product_system():
         """
 <style>
 :root {
-  --tsrp-bg: #090e13;
-  --tsrp-surface: #101820;
-  --tsrp-surface-2: #151f29;
-  --tsrp-surface-3: #1a2631;
-  --tsrp-border: #263541;
-  --tsrp-border-strong: #354756;
-  --tsrp-text: #f2f6f8;
-  --tsrp-muted: #9caab6;
-  --tsrp-faint: #687987;
-  --tsrp-accent: #62d5c5;
-  --tsrp-accent-soft: rgba(98, 213, 197, .12);
-  --tsrp-blue: #82aaff;
-  --tsrp-green: #58d391;
-  --tsrp-yellow: #e7b766;
-  --tsrp-red: #f07a84;
+  --tsrp-bg: #f4f6f8;
+  --tsrp-surface: #ffffff;
+  --tsrp-surface-2: #f8fafc;
+  --tsrp-surface-3: #edf1f5;
+  --tsrp-border: #d9e0e7;
+  --tsrp-border-strong: #bbc6d1;
+  --tsrp-text: #14202b;
+  --tsrp-muted: #5f6d7a;
+  --tsrp-faint: #8a97a5;
+  --tsrp-accent: #187f78;
+  --tsrp-accent-soft: rgba(24, 127, 120, .10);
+  --tsrp-blue: #2359c7;
+  --tsrp-green: #18794e;
+  --tsrp-yellow: #9b6500;
+  --tsrp-red: #b53b49;
   --tsrp-mono: "SFMono-Regular", "Roboto Mono", Consolas, monospace;
 }
 
