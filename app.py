@@ -23,7 +23,9 @@ from engine import (
     history_cagr,
     model_rates,
     reality_score,
+    score_breakdown,
     score_label,
+    snapshot_diff,
     solve_required_growth_detail,
 )
 
@@ -5014,6 +5016,987 @@ def render_company_suggestions(hits, key_prefix):
     st.caption("Select a company to continue. Indexes, commodities, currencies, and funds are excluded.")
     return selected
 
+
+PRIMARY_SECTIONS = [
+    "TSRP Score",
+    "Expectations vs Reality",
+    "Valuation",
+    "Catalysts & Risks",
+    "What Changed?",
+]
+SNAPSHOT_METHODOLOGY_VERSION = "score-v1"
+
+
+def render_product_system():
+    render_html(
+        """
+<style>
+:root {
+  --tsrp-bg: #090e13;
+  --tsrp-surface: #101820;
+  --tsrp-surface-2: #151f29;
+  --tsrp-surface-3: #1a2631;
+  --tsrp-border: #263541;
+  --tsrp-border-strong: #354756;
+  --tsrp-text: #f2f6f8;
+  --tsrp-muted: #9caab6;
+  --tsrp-faint: #687987;
+  --tsrp-accent: #62d5c5;
+  --tsrp-accent-soft: rgba(98, 213, 197, .12);
+  --tsrp-blue: #82aaff;
+  --tsrp-green: #58d391;
+  --tsrp-yellow: #e7b766;
+  --tsrp-red: #f07a84;
+  --tsrp-mono: "SFMono-Regular", "Roboto Mono", Consolas, monospace;
+}
+
+html, body, [class*="css"], .stApp {
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  color: var(--tsrp-text) !important;
+}
+.stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], header[data-testid="stHeader"] {
+  background: var(--tsrp-bg) !important;
+}
+[data-testid="stMainBlockContainer"] {
+  max-width: 1320px !important;
+  padding: 34px 42px 56px !important;
+}
+[data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"], #MainMenu, footer {
+  display: none !important;
+}
+.app-wrap { max-width: 1240px; margin: 0 auto; color:var(--tsrp-text) !important; }
+.app-wrap h1, .app-wrap h2, .app-wrap h3, .app-wrap h4, .app-wrap h5, .app-wrap h6 {
+  color:var(--tsrp-text) !important;
+}
+.stMarkdown, .stMarkdown p, .stMarkdown span, .stMarkdown div { color:var(--tsrp-text); }
+.stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4, .stMarkdown h5, .stMarkdown h6,
+.section-intro h2, .score-hero-copy h2, .panel-new h3, .empty-new h3, .evidence-card h4 {
+  color:var(--tsrp-text) !important;
+}
+.stTextInput input {
+  background:var(--tsrp-surface-2) !important; color:var(--tsrp-text) !important;
+  border-color:var(--tsrp-border-strong) !important;
+}
+.app-wrap input[type="text"], .app-wrap textarea, .app-wrap [data-baseweb="select"] > div {
+  background:var(--tsrp-surface-2) !important; color:var(--tsrp-text) !important;
+  border-color:var(--tsrp-border-strong) !important;
+}
+.product-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 22px;
+  padding: 4px 0 24px; border-bottom: 1px solid var(--tsrp-border);
+}
+.brand-lockup-new { display:flex; align-items:center; gap:12px; min-width:190px; }
+.brand-mark-new {
+  width:34px; height:34px; display:grid; place-items:center; border-radius:10px;
+  background:var(--tsrp-accent); color:#081311; font-weight:850; letter-spacing:-.08em;
+}
+.brand-copy-new { display:flex; flex-direction:column; gap:2px; }
+.brand-copy-new strong { font-size:15px; letter-spacing:.08em; }
+.brand-copy-new span { color:var(--tsrp-muted); font-size:11px; }
+.header-status-new { color:var(--tsrp-muted); font-size:11px; text-align:right; line-height:1.5; }
+.search-zone {
+  display:flex; align-items:flex-end; gap:10px; margin:24px 0 18px;
+  padding:14px; background:var(--tsrp-surface); border:1px solid var(--tsrp-border);
+  border-radius:14px;
+}
+.search-zone > div:first-child { flex:1 1 auto; }
+.search-zone [data-testid="stWidgetLabel"] { margin-bottom:5px !important; }
+.search-zone [data-testid="stWidgetLabel"] p { color:var(--tsrp-muted) !important; font-size:11px !important; }
+.search-zone input, .search-zone [data-baseweb="select"] > div {
+  background:var(--tsrp-surface-2) !important; border-color:var(--tsrp-border-strong) !important;
+  color:var(--tsrp-text) !important; min-height:42px !important; border-radius:9px !important;
+}
+.search-zone button, .tsrp-primary button {
+  min-height:42px !important; border-radius:9px !important; font-weight:750 !important;
+}
+.search-zone button[kind="primary"], .tsrp-primary button {
+  background:var(--tsrp-accent) !important; color:#071311 !important; border:0 !important;
+}
+.search-zone button[kind="primary"]:hover, .tsrp-primary button:hover {
+  background:#86e8d9 !important; color:#071311 !important;
+}
+.section-nav-label { color:var(--tsrp-faint); font-size:10px; text-transform:uppercase; letter-spacing:.16em; margin:20px 0 8px; }
+.section-nav [data-testid="stSegmentedControl"] { background:var(--tsrp-surface) !important; border:1px solid var(--tsrp-border) !important; border-radius:10px !important; padding:4px !important; }
+.section-nav [data-testid="stSegmentedControl"] button {
+  color:var(--tsrp-muted) !important; background:transparent !important; border-radius:7px !important;
+  font-size:12px !important; font-weight:700 !important; min-height:38px !important;
+}
+.section-nav [data-testid="stSegmentedControl"] button[aria-checked="true"],
+.section-nav [data-testid="stSegmentedControl"] button[aria-pressed="true"] {
+  background:var(--tsrp-surface-3) !important; color:var(--tsrp-text) !important;
+  box-shadow:inset 0 0 0 1px var(--tsrp-border-strong) !important;
+}
+.section-nav [data-testid="stButtonGroup"] {
+  background:var(--tsrp-surface) !important; border:1px solid var(--tsrp-border) !important;
+  border-radius:10px !important; padding:4px !important;
+}
+.section-nav [data-testid="stButtonGroup"] button {
+  color:var(--tsrp-muted) !important; background:transparent !important; border-radius:7px !important;
+  font-size:12px !important; font-weight:700 !important; min-height:38px !important;
+}
+.section-nav [data-testid="stButtonGroup"] button[data-testid="stBaseButton-segmented_controlActive"] {
+  background:var(--tsrp-surface-3) !important; color:var(--tsrp-text) !important;
+  box-shadow:inset 0 0 0 1px var(--tsrp-border-strong) !important;
+}
+.section-nav-label + div [data-testid="stButtonGroup"] {
+  background:var(--tsrp-surface) !important; border:1px solid var(--tsrp-border) !important;
+  border-radius:10px !important; padding:4px !important;
+}
+.section-nav-label + div [data-testid="stButtonGroup"] button {
+  color:var(--tsrp-muted) !important; background:transparent !important; border-radius:7px !important;
+  font-size:12px !important; font-weight:700 !important; min-height:38px !important;
+}
+.section-nav-label + div [data-testid="stButtonGroup"] button[data-testid="stBaseButton-segmented_controlActive"] {
+  background:var(--tsrp-surface-3) !important; color:var(--tsrp-text) !important;
+}
+[data-testid="stButtonGroup"] {
+  background:var(--tsrp-surface) !important; border:1px solid var(--tsrp-border) !important;
+  border-radius:10px !important; padding:4px !important;
+}
+[data-testid="stButtonGroup"] button {
+  color:var(--tsrp-muted) !important; background:transparent !important; border-radius:7px !important;
+  font-size:12px !important; font-weight:700 !important; min-height:38px !important;
+}
+[data-testid="stButtonGroup"] button[data-testid="stBaseButton-segmented_controlActive"] {
+  background:var(--tsrp-surface-3) !important; color:var(--tsrp-text) !important;
+  box-shadow:inset 0 0 0 1px var(--tsrp-border-strong) !important;
+}
+[data-testid="stButtonGroup"] button[data-testid="stBaseButton-segmented_control"] {
+  background:transparent !important; color:var(--tsrp-muted) !important;
+}
+[data-testid="stButtonGroup"] > div {
+  background:transparent !important; color:var(--tsrp-text) !important;
+}
+.section-nav-fallback button { min-height:38px !important; font-size:11px !important; }
+.company-strip {
+  display:flex; align-items:center; justify-content:space-between; gap:18px; padding:24px 0 18px;
+}
+.company-strip h1 { margin:0; font-size:clamp(24px, 3vw, 38px); letter-spacing:-.045em; line-height:1.05; }
+.company-strip p { margin:7px 0 0; color:var(--tsrp-muted); font-size:12px; line-height:1.55; }
+.company-tags { display:flex; gap:6px; flex-wrap:wrap; margin-top:12px; }
+.company-tag, .source-tag, .state-tag {
+  display:inline-flex; align-items:center; gap:6px; border:1px solid var(--tsrp-border);
+  border-radius:999px; padding:5px 9px; color:var(--tsrp-muted); font-size:10px; line-height:1;
+  background:var(--tsrp-surface);
+}
+.company-tag strong, .source-tag strong { color:var(--tsrp-text); }
+.compact-score {
+  min-width:112px; padding:11px 13px; border:1px solid var(--tsrp-border-strong);
+  border-radius:12px; background:var(--tsrp-surface); text-align:right;
+}
+.compact-score span { display:block; color:var(--tsrp-faint); font-size:9px; text-transform:uppercase; letter-spacing:.13em; }
+.compact-score b { display:block; color:var(--tsrp-accent); font:700 25px/1.1 var(--tsrp-mono); margin-top:3px; }
+.section-intro { display:flex; align-items:flex-end; justify-content:space-between; gap:18px; margin:30px 0 16px; }
+.section-intro h2 { margin:0; font-size:24px; letter-spacing:-.035em; }
+.section-intro p { max-width:560px; margin:5px 0 0; color:var(--tsrp-muted); font-size:12px; line-height:1.55; }
+.section-kicker-new { color:var(--tsrp-accent); font-size:10px; text-transform:uppercase; letter-spacing:.16em; font-weight:800; margin-bottom:8px; }
+.panel-new, .score-hero, .metric-card-new, .empty-new, .comparison-card, .evidence-card {
+  background:var(--tsrp-surface) !important; border:1px solid var(--tsrp-border) !important;
+  border-radius:14px !important; box-shadow:0 12px 32px rgba(0,0,0,.12) !important;
+}
+.panel-new { padding:20px; }
+.panel-new h3 { margin:0 0 10px; font-size:15px; letter-spacing:-.015em; }
+.panel-new p { color:var(--tsrp-muted); font-size:12px; line-height:1.65; }
+.score-hero { padding:28px; display:grid; grid-template-columns:minmax(0,1fr) 250px; gap:24px; }
+.score-hero-copy h2 { margin:0; font-size:clamp(21px, 3vw, 31px); letter-spacing:-.04em; }
+.score-hero-copy p { max-width:640px; color:var(--tsrp-muted); font-size:13px; line-height:1.65; }
+.score-emblem { display:flex; flex-direction:column; justify-content:center; align-items:center; border-left:1px solid var(--tsrp-border); padding-left:24px; text-align:center; }
+.score-emblem small { color:var(--tsrp-faint); text-transform:uppercase; letter-spacing:.16em; font-size:10px; }
+.score-emblem b { color:var(--tsrp-accent); font:700 clamp(52px, 8vw, 76px)/1 var(--tsrp-mono); letter-spacing:-.08em; margin:8px 0; }
+.score-emblem span { color:var(--tsrp-text); font-size:12px; font-weight:750; }
+.score-note { margin-top:16px; padding:11px 13px; border-left:2px solid var(--tsrp-accent); background:var(--tsrp-accent-soft); color:var(--tsrp-muted); font-size:11px; line-height:1.55; border-radius:0 8px 8px 0; }
+.metric-grid-new { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:14px 0; }
+.metric-card-new { padding:15px; min-height:94px; }
+.metric-card-new .label { color:var(--tsrp-faint); font-size:10px; text-transform:uppercase; letter-spacing:.1em; }
+.metric-card-new .value { color:var(--tsrp-text); font:700 20px/1.2 var(--tsrp-mono); margin:9px 0 5px; overflow-wrap:anywhere; }
+.metric-card-new .meta { color:var(--tsrp-muted); font-size:10px; line-height:1.45; }
+.metric-card-new.accent { border-top:2px solid var(--tsrp-accent) !important; }
+.metric-card-new.warn { border-top:2px solid var(--tsrp-yellow) !important; }
+.metric-card-new.negative { border-top:2px solid var(--tsrp-red) !important; }
+.two-col-new { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:14px; }
+.three-col-new { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.panel-title-row { display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin-bottom:14px; }
+.panel-title-row h3 { margin:0; }
+.panel-title-row span { color:var(--tsrp-faint); font-size:10px; }
+.score-table, .compare-table-new, .change-table {
+  width:100%; border-collapse:collapse; font-size:11px;
+}
+.score-table th, .score-table td, .compare-table-new th, .compare-table-new td, .change-table th, .change-table td {
+  padding:10px 8px; border-bottom:1px solid var(--tsrp-border); text-align:left; vertical-align:top;
+}
+.score-table th, .compare-table-new th, .change-table th {
+  color:var(--tsrp-faint); text-transform:uppercase; letter-spacing:.08em; font-size:9px; font-weight:750;
+}
+.score-table td, .compare-table-new td, .change-table td { color:var(--tsrp-muted); }
+.score-table td strong, .compare-table-new td strong, .change-table td strong { color:var(--tsrp-text); }
+.score-table tr:last-child td, .compare-table-new tr:last-child td, .change-table tr:last-child td { border-bottom:0; }
+.bar-line { margin:10px 0 14px; }
+.bar-head { display:flex; justify-content:space-between; gap:10px; color:var(--tsrp-muted); font-size:11px; }
+.bar-head b { color:var(--tsrp-text); font-family:var(--tsrp-mono); }
+.bar-track-new { height:7px; border-radius:999px; background:var(--tsrp-surface-3); overflow:hidden; margin-top:7px; }
+.bar-fill-new { height:100%; border-radius:999px; background:var(--tsrp-accent); }
+.bar-fill-new.warn { background:var(--tsrp-yellow); }
+.bar-fill-new.negative { background:var(--tsrp-red); }
+.driver-list { display:grid; gap:8px; margin-top:12px; }
+.driver-item { display:flex; gap:9px; padding:10px 11px; border:1px solid var(--tsrp-border); background:var(--tsrp-surface-2); border-radius:9px; }
+.driver-item i { font-style:normal; font-size:12px; line-height:1.2; }
+.driver-item strong { display:block; color:var(--tsrp-text); font-size:11px; }
+.driver-item span { display:block; color:var(--tsrp-muted); font-size:10px; line-height:1.45; margin-top:2px; }
+.data-line { display:flex; justify-content:space-between; gap:14px; padding:9px 0; border-bottom:1px solid var(--tsrp-border); font-size:11px; }
+.data-line:last-child { border-bottom:0; }
+.data-line span { color:var(--tsrp-muted); }
+.data-line b { color:var(--tsrp-text); text-align:right; overflow-wrap:anywhere; }
+.source-foot { color:var(--tsrp-faint); font-size:10px; line-height:1.5; margin-top:12px; }
+.source-foot a, .evidence-card a { color:var(--tsrp-accent); text-decoration:none; }
+.source-foot a:hover, .evidence-card a:hover { text-decoration:underline; }
+.state-strip-new { display:flex; gap:9px; align-items:flex-start; padding:11px 13px; border:1px solid var(--tsrp-border); background:var(--tsrp-surface); border-radius:10px; margin-top:12px; color:var(--tsrp-muted); font-size:11px; line-height:1.5; }
+.state-strip-new b { color:var(--tsrp-text); }
+.state-dot-new { width:7px; height:7px; border-radius:50%; background:var(--tsrp-accent); margin-top:5px; flex:0 0 auto; }
+.state-dot-new.warn { background:var(--tsrp-yellow); }
+.empty-new { padding:31px 22px; text-align:center; }
+.empty-new h3 { margin:0; font-size:16px; }
+.empty-new p { max-width:520px; margin:9px auto 0; color:var(--tsrp-muted); font-size:12px; line-height:1.6; }
+.evidence-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.evidence-card { padding:17px; }
+.evidence-card.catalyst { border-top:2px solid var(--tsrp-green) !important; }
+.evidence-card.risk { border-top:2px solid var(--tsrp-red) !important; }
+.evidence-card h4 { margin:0 0 7px; font-size:14px; }
+.evidence-card p { color:var(--tsrp-muted); font-size:11px; line-height:1.55; margin:6px 0; }
+.evidence-card .eyebrow-new { color:var(--tsrp-faint); font-size:9px; text-transform:uppercase; letter-spacing:.12em; }
+.evidence-card .evidence-meta { margin-top:12px; padding-top:10px; border-top:1px solid var(--tsrp-border); color:var(--tsrp-faint); font-size:10px; line-height:1.5; }
+.research-tools { margin-top:18px; }
+.research-tools [data-testid="stExpander"] { background:var(--tsrp-surface) !important; border:1px solid var(--tsrp-border) !important; border-radius:12px !important; }
+.research-tools [data-testid="stExpander"] summary { color:var(--tsrp-text) !important; font-size:12px !important; }
+.research-tools [data-testid="stExpander"] > div { border-top:1px solid var(--tsrp-border) !important; }
+.stCaption, [data-testid="stCaptionContainer"] { color:var(--tsrp-faint) !important; font-size:10px !important; }
+.stAlert { background:var(--tsrp-surface) !important; border:1px solid var(--tsrp-border) !important; color:var(--tsrp-muted) !important; }
+.stDownloadButton button, [data-testid="stFormSubmitButton"] button, .stButton button {
+  border-radius:8px !important; border-color:var(--tsrp-border-strong) !important; color:var(--tsrp-text) !important;
+  background:var(--tsrp-surface-2) !important; min-height:38px !important; font-size:11px !important;
+}
+.stDownloadButton button:hover, .stButton button:hover { border-color:var(--tsrp-accent) !important; background:var(--tsrp-surface-3) !important; }
+.stButton button[kind="primary"], [data-testid="stFormSubmitButton"] button[kind="primary"] {
+  background:var(--tsrp-accent) !important; color:#071311 !important; border-color:var(--tsrp-accent) !important;
+}
+input, textarea, [data-baseweb="select"] > div {
+  background:var(--tsrp-surface-2) !important; color:var(--tsrp-text) !important; border-color:var(--tsrp-border-strong) !important;
+}
+input::placeholder, textarea::placeholder { color:var(--tsrp-faint) !important; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, [role="button"]:focus-visible {
+  outline:2px solid var(--tsrp-accent) !important; outline-offset:2px !important;
+}
+.app-footer-new { border-top:1px solid var(--tsrp-border); margin-top:34px; padding-top:15px; color:var(--tsrp-faint); font-size:10px; line-height:1.6; }
+@media (max-width: 900px) {
+  [data-testid="stMainBlockContainer"] { padding:26px 22px 46px !important; }
+  .metric-grid-new { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .score-hero { grid-template-columns:1fr; }
+  .score-emblem { border-left:0; border-top:1px solid var(--tsrp-border); padding:20px 0 0; }
+}
+@media (max-width: 640px) {
+  [data-testid="stMainBlockContainer"] { padding:18px 14px 38px !important; }
+  .product-header, .company-strip, .section-intro { align-items:flex-start; flex-direction:column; }
+  .header-status-new { text-align:left; }
+  .search-zone { flex-direction:column; align-items:stretch; }
+  .search-zone > div { width:100% !important; }
+  .section-nav [data-testid="stSegmentedControl"] { overflow-x:auto; }
+  .section-nav [data-testid="stSegmentedControl"] button { white-space:nowrap; font-size:10px !important; }
+  .metric-grid-new, .two-col-new, .three-col-new, .evidence-grid { grid-template-columns:1fr; }
+  .score-hero { padding:20px 16px; }
+  .panel-new { padding:16px; }
+  .score-table, .compare-table-new, .change-table { font-size:10px; }
+  .score-table th, .score-table td, .compare-table-new th, .compare-table-new td, .change-table th, .change-table td { padding:8px 5px; }
+}
+</style>
+"""
+    )
+
+
+def new_metric_card(label, value, meta="", tone=""):
+    return (
+        f'<div class="metric-card-new {esc(tone)}">'
+        f'<div class="label">{esc(label)}</div><div class="value">{esc(value)}</div>'
+        f'<div class="meta">{esc(meta)}</div></div>'
+    )
+
+
+def new_data_line(label, value):
+    return f'<div class="data-line"><span>{esc(label)}</span><b>{esc(value)}</b></div>'
+
+
+def new_source_link(ticker, source):
+    if source == "SEC EDGAR":
+        return '<a href="https://www.sec.gov/edgar/search/" target="_blank" rel="noopener">SEC EDGAR</a>'
+    return f'<a href="https://finance.yahoo.com/quote/{esc(ticker)}" target="_blank" rel="noopener">Yahoo Finance</a>'
+
+
+def new_status_strip(analysis):
+    has_sec = bool(analysis.get("has_sec"))
+    detail = (
+        "Annual filing facts are live for this company."
+        if has_sec
+        else {
+            "not_configured": "Live annual facts require a monitored SEC_USER_AGENT contact identity.",
+            "not_covered": "SEC EDGAR does not publish company facts for this ticker.",
+            "rate_limited": "SEC EDGAR temporarily rate-limited the request.",
+            "timeout": "SEC EDGAR did not respond before the timeout.",
+            "network_error": "SEC EDGAR could not be reached.",
+            "parse_error": "SEC EDGAR returned data TSRP could not parse.",
+            "http_error": "SEC EDGAR returned an HTTP error.",
+        }.get(SEC_STATE.get("kind"), "No usable SEC EDGAR company facts were returned."))
+    dot = "" if has_sec else " warn"
+    render_html(
+        f'<div class="state-strip-new"><span class="state-dot-new{dot}" aria-hidden="true"></span>'
+        f'<span><b>SEC EDGAR · {esc(analysis.get("sec_status", "N/A"))}</b><br>{esc(detail)}</span></div>'
+    )
+
+
+def snapshot_payload(analysis, company_name, ticker):
+    return {
+        "methodology_version": SNAPSHOT_METHODOLOGY_VERSION,
+        "ticker": ticker,
+        "company": company_name,
+        "timestamp": analysis.get("last_refreshed") or datetime.now().astimezone().isoformat(timespec="seconds"),
+        "score": safe_float(analysis.get("reality_score")),
+        "business_quality": safe_float(analysis.get("business_quality")),
+        "financial_strength": safe_float(analysis.get("financial_strength")),
+        "market_expectations": safe_float(analysis.get("market_expectations")),
+        "historical_growth": safe_float(analysis.get("historical_growth")),
+        "consensus_growth": safe_float(analysis.get("consensus_growth")),
+        "required_growth": safe_float(analysis.get("required_growth")),
+        "revenue": safe_float(analysis.get("revenue")),
+        "free_cash_flow": safe_float(analysis.get("free_cash_flow")),
+        "fcf_margin": safe_float(analysis.get("fcf_margin")),
+        "enterprise_value": safe_float(analysis.get("enterprise_value")),
+        "model_fcf_margin": safe_float(analysis.get("model_fcf_margin")),
+        "solver_status": analysis.get("solver_status"),
+        "sec_status": analysis.get("sec_status"),
+        "user_assumptions": {
+            "starting_growth": safe_float(st.session_state.get("new_value_growth")),
+            "fcf_margin": safe_float(st.session_state.get("new_value_margin")),
+            "discount_rate": safe_float(st.session_state.get("new_value_discount")),
+            "terminal_growth": safe_float(st.session_state.get("new_value_terminal")),
+        },
+    }
+
+
+def snapshot_signature(snapshot):
+    return json.dumps(snapshot, sort_keys=True, default=str)
+
+
+def score_change_text(current, previous, digits=1):
+    current = safe_float(current)
+    previous = safe_float(previous)
+    if current is None or previous is None:
+        return "N/A"
+    return f"{current - previous:+.{digits}f}"
+
+
+def pct_change_text(current, previous):
+    current = safe_float(current)
+    previous = safe_float(previous)
+    if current is None or previous is None:
+        return "N/A"
+    return f"{(current - previous) * 100:+.1f} pts"
+
+
+def track_snapshot_state(ticker, snapshot):
+    saved = st.session_state.setdefault("saved_snapshots", {})
+    current = st.session_state.setdefault("current_snapshot", {})
+    existing = current.get(ticker)
+    if existing and snapshot_signature(existing) == snapshot_signature(snapshot):
+        return
+    current[ticker] = snapshot
+    saved.setdefault(ticker, [])
+
+
+def save_current_snapshot(ticker, snapshot):
+    saved = st.session_state.setdefault("saved_snapshots", {})
+    history = saved.setdefault(ticker, [])
+    if history and snapshot_signature(history[-1]) == snapshot_signature(snapshot):
+        return False
+    history.append(snapshot)
+    saved[ticker] = history[-6:]
+    return True
+
+
+def build_new_cashflow_trend(yahoo_data):
+    financials = yahoo_data.get("financials")
+    cashflow = yahoo_data.get("cashflow")
+    revenue = get_row(financials, ["Total Revenue", "Operating Revenue"])
+    ocf = get_row(cashflow, ["Operating Cash Flow", "Total Cash From Operating Activities"])
+    capex = get_row(cashflow, ["Capital Expenditure", "Capital Expenditures"])
+    reported = get_row(cashflow, ["Free Cash Flow"])
+    if revenue is None or (ocf is None and reported is None):
+        return pd.DataFrame()
+    periods = list(revenue.index)
+    rows = []
+    for period in periods:
+        revenue_value = safe_float(revenue.get(period))
+        ocf_value = safe_float(ocf.get(period)) if ocf is not None else None
+        capex_value = safe_float(capex.get(period)) if capex is not None else None
+        reported_value = safe_float(reported.get(period)) if reported is not None else None
+        fcf_value = compute_fcf(ocf_value, capex_value, reported_value)
+        if revenue_value is None or fcf_value is None:
+            continue
+        rows.append(
+            {
+                "Period": str(period)[:10],
+                "Revenue": revenue_value,
+                "Free cash flow": fcf_value,
+                "FCF margin": fcf_value / revenue_value if revenue_value > 0 else None,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def score_breakdown_html(analysis):
+    trace = score_breakdown(
+        analysis.get("business_quality"),
+        analysis.get("financial_strength"),
+        analysis.get("historical_growth"),
+        analysis.get("required_growth"),
+        analysis.get("consensus_growth"),
+        analysis.get("growth_clamped") or analysis.get("model_fcf_refused"),
+    )
+    rows = []
+    for component in trace["components"]:
+        rows.append(
+            f'<tr><td><strong>{esc(component["label"])}</strong></td>'
+            f'<td>{component["value"]:.1f}</td><td>{component["weight"]:.0%}</td>'
+            f'<td><strong>{component["contribution"]:.1f}</strong></td></tr>'
+        )
+    return (
+        '<table class="score-table"><thead><tr><th>Driver</th><th>Sub-score</th>'
+        '<th>Weight</th><th>Contribution</th></tr></thead><tbody>'
+        + "".join(rows)
+        + f'<tr><td><strong>TSRP Score</strong></td><td></td><td></td><td><strong>{trace["score"]:.1f} / 100</strong></td></tr>'
+        + "</tbody></table>"
+    ), trace
+
+
+def render_score_section(analysis, company_name, ticker, display_currency, display_fx_reporting, display_fx_trading, as_of):
+    tone = score_tone(analysis.get("reality_score"))
+    score_value = score(analysis.get("reality_score"))
+    breakdown_markup, trace = score_breakdown_html(analysis)
+    render_html(
+        f'<div class="section-intro"><div><div class="section-kicker-new">Primary research signal</div>'
+        f'<h2>TSRP Score</h2><p>A deterministic evidence-weighted signal that starts the research process. It is not a probability, price target, or recommendation.</p></div>'
+        f'<div class="state-tag">Scale · 0–100 heuristic</div></div>'
+    )
+    render_html(
+        f'<div class="score-hero">'
+        f'<div class="score-hero-copy"><div class="section-kicker-new">{esc(score_label(analysis.get("reality_score")))}</div>'
+        f'<h2>{esc(company_name)} <span style="color:var(--tsrp-muted);font-size:.55em;font-family:var(--tsrp-mono)">{esc(ticker)}</span></h2>'
+        f'<p>{esc(conclusion_text(analysis))}</p>'
+        f'<div class="company-tags"><span class="company-tag"><strong>{esc(money(analysis.get("price"), analysis.get("trading_currency"), display_currency, display_fx_trading))}</strong> current price</span>'
+        f'<span class="company-tag">{esc(analysis.get("trading_currency", "N/A"))} · {esc(analysis.get("sector", "Unknown sector"))}</span>'
+        f'<span class="company-tag">As of {esc(as_of)}</span></div>'
+        f'<div class="score-note">Data confidence is separate from the score: <b>{esc(analysis.get("confidence", "N/A"))}</b>. Missing or incompatible evidence is shown explicitly and is never silently turned into positive evidence.</div></div>'
+        f'<div class="score-emblem" aria-label="TSRP Score {esc(score_value)} out of 100"><small>TSRP Score</small><b>{esc(score_value)}</b><span>{esc(score_label(analysis.get("reality_score")))}</span></div></div>'
+    )
+    render_html(
+        '<div class="metric-grid-new">'
+        + new_metric_card("Market cap", money(analysis.get("market_cap"), analysis.get("trading_currency"), display_currency, display_fx_trading), f'{analysis.get("trading_currency", "N/A")} · Yahoo Finance')
+        + new_metric_card("Revenue", money(analysis.get("revenue"), analysis.get("reporting_currency"), display_currency, display_fx_reporting), f'Latest annual · {analysis.get("reporting_currency", "N/A")}', "accent")
+        + new_metric_card("Free cash flow", money(analysis.get("free_cash_flow"), analysis.get("reporting_currency"), display_currency, display_fx_reporting), f'Period-aligned · {analysis.get("reporting_currency", "N/A")}', "accent" if analysis.get("free_cash_flow") is not None else "warn")
+        + new_metric_card("Data confidence", analysis.get("confidence", "N/A"), "Coverage, freshness, and quality flags", "warn" if analysis.get("confidence") != "High" else "")
+        + '</div>'
+    )
+    new_status_strip(analysis)
+    render_html(
+        f'<div class="two-col-new"><div class="panel-new"><div class="panel-title-row"><h3>Why this score?</h3><span>Engine trace</span></div>'
+        f'{breakdown_markup}<div class="source-foot">Weights and sub-scores are returned by the analytical engine. Contributions sum to the displayed TSRP Score.<br>Sources: {new_source_link(ticker, "Yahoo Finance")} · {new_source_link(ticker, "SEC EDGAR")}</div></div>'
+        f'<div class="panel-new"><div class="panel-title-row"><h3>Drivers and gaps</h3><span>Traceable evidence</span></div>'
+        f'<div class="driver-list">'
+        f'<div class="driver-item"><i>↗</i><div><strong>Strongest positive drivers</strong><span>{esc(", ".join(c["label"] for c in sorted(trace["components"], key=lambda item: item["value"], reverse=True)[:2]))}</span></div></div>'
+        f'<div class="driver-item"><i>↘</i><div><strong>Strongest negative drivers</strong><span>{esc(", ".join(c["label"] for c in sorted(trace["components"], key=lambda item: item["value"])[:2]))}</span></div></div>'
+        f'<div class="driver-item"><i>!</i><div><strong>Missing inputs</strong><span>{esc(" · ".join(label for label, _ in analysis.get("quality_flags", [])[:4]) or "No material missing-input flags.")}</span></div></div>'
+        f'</div></div></div>'
+    )
+    with st.expander("Methodology, sources, and limitations", expanded=False):
+        render_methodology()
+        render_data_quality(analysis)
+
+
+def comparison_row(metric, expected, actual, difference, period, unit, source, status):
+    return (
+        f'<tr><td><strong>{esc(metric)}</strong></td><td>{esc(expected)}</td><td>{esc(actual)}</td>'
+        f'<td>{esc(difference)}</td><td>{esc(period)}</td><td>{esc(unit)}</td>'
+        f'<td>{esc(source)}</td><td>{esc(status)}</td></tr>'
+    )
+
+
+def new_growth_verdict(analysis):
+    if analysis.get("model_fcf_refused") or analysis.get("required_growth") is None:
+        return "The market-implied growth comparison is unavailable because the cash-flow and valuation inputs do not support a valid reverse DCF."
+    if analysis.get("growth_clamped"):
+        return "The implied growth result is outside the supported model range, so TSRP keeps the comparison unavailable rather than showing a false precision."
+    required = analysis.get("required_growth")
+    historical = analysis.get("historical_growth")
+    consensus = analysis.get("consensus_growth")
+    if required is None:
+        return "A market-implied growth path could not be calculated from the available inputs."
+    comparisons = []
+    if historical is not None:
+        comparisons.append((required - historical, "historical growth"))
+    if consensus is not None:
+        comparisons.append((required - consensus, "analyst consensus"))
+    if not comparisons:
+        return "The market-implied path is available, but no comparable growth benchmark was returned."
+    gap, benchmark = max(comparisons, key=lambda item: abs(item[0]))
+    if abs(gap) < 0.01:
+        return f"The market-implied path is broadly aligned with {benchmark}."
+    direction = "above" if gap > 0 else "below"
+    return f"The market-implied path is {abs(gap) * 100:.1f} percentage points {direction} {benchmark}; treat this as a comparison, not a forecast."
+
+
+def render_expectations_section(analysis, yahoo_data, display_currency, display_fx_reporting):
+    historical_years = analysis.get("historical_growth_years") or 0
+    required = required_growth_label(analysis)
+    consensus = percent(analysis.get("consensus_growth"))
+    historical = percent(analysis.get("historical_growth"))
+    growth_gap = (
+        f"{(analysis['required_growth'] - analysis['consensus_growth']) * 100:+.1f} pts"
+        if analysis.get("required_growth") is not None and analysis.get("consensus_growth") is not None
+        else "N/A"
+    )
+    render_html(
+        '<div class="section-intro"><div><div class="section-kicker-new">Expectation check</div>'
+        '<h2>Expectations vs Reality</h2><p>Separate reported facts, analyst estimates, and market-implied assumptions. Different horizons are labeled instead of being blended.</p></div></div>'
+    )
+    render_html(
+        '<div class="metric-grid-new">'
+        + new_metric_card("Price-implied growth", required, "10-year reverse DCF path", "accent" if analysis.get("required_growth") is not None else "warn")
+        + new_metric_card("Analyst consensus", consensus, "Next fiscal year estimate", "accent" if analysis.get("consensus_growth") is not None else "warn")
+        + new_metric_card("Historical growth", historical, f"{historical_years}-year revenue CAGR" if historical_years else "No comparable history", "accent" if analysis.get("historical_growth") is not None else "warn")
+        + new_metric_card("Implied vs consensus", growth_gap, "Comparison only; not a forecast", "warn" if growth_gap != "N/A" and growth_gap.startswith("+") else "")
+        + '</div>'
+    )
+    render_html(
+        '<div class="panel-new"><div class="panel-title-row"><h3>What was expected versus what happened?</h3><span>All values retain their source and period</span></div>'
+        '<table class="compare-table-new"><thead><tr><th>Metric</th><th>Expected</th><th>Actual / observed</th><th>Difference</th><th>Period</th><th>Units</th><th>Source</th><th>Status</th></tr></thead><tbody>'
+        + comparison_row("Revenue", "N/A · consensus revenue not returned", money(analysis.get("revenue"), analysis.get("reporting_currency"), display_currency, display_fx_reporting), "N/A", "Latest annual", analysis.get("reporting_currency", "N/A"), "Yahoo Finance / SEC EDGAR", "Reported actual only")
+        + comparison_row("Revenue growth", consensus, historical, growth_gap if analysis.get("required_growth") is not None else "N/A", f"Next FY estimate vs {historical_years}-year history", "% per year", "Yahoo Finance estimates / reported history", "Different horizons")
+        + comparison_row("EPS", "N/A · EPS estimate feed unavailable", "N/A · EPS actual feed unavailable", "N/A", "N/A", "per share", "Not returned by current data feed", "Unavailable")
+        + comparison_row("Company guidance", "N/A · guidance feed unavailable", "N/A", "N/A", "N/A", "N/A", "Not returned by current data feed", "Unavailable")
+        + comparison_row("Market-implied revenue path", required, historical, growth_gap, "10-year model vs historical", "% per year", "TSRP reverse DCF / Yahoo Finance / SEC EDGAR", "Calculated comparison")
+        + '</tbody></table></div>'
+    )
+    bars = [
+        ("Price-implied", analysis.get("required_growth"), "accent"),
+        ("Analyst consensus", analysis.get("consensus_growth"), "warn"),
+        (f"Historical ({historical_years}y)", analysis.get("historical_growth"), ""),
+    ]
+    bar_markup = ""
+    for label, value, bar_class in bars:
+        if value is None:
+            width, value_label = 2, "N/A"
+        else:
+            width, value_label = min(max(abs(value) * 300, 2), 100), percent(value)
+        bar_markup += f'<div class="bar-line"><div class="bar-head"><span>{esc(label)}</span><b>{esc(value_label)}</b></div><div class="bar-track-new"><div class="bar-fill-new {bar_class}" style="width:{width:.1f}%"></div></div></div>'
+    render_html(
+        f'<div class="two-col-new"><div class="panel-new"><div class="panel-title-row"><h3>Growth path comparison</h3><span>Visual context only</span></div>{bar_markup}'
+        f'<div class="source-foot">{esc(new_growth_verdict(analysis))}</div></div>'
+        f'<div class="panel-new"><div class="panel-title-row"><h3>Cash-flow reality</h3><span>Annual compatible periods</span></div>'
+    )
+    trend = build_new_cashflow_trend(yahoo_data)
+    if trend.empty:
+        st.info("Cash-flow trend is unavailable for the periods returned by Yahoo Finance.")
+    else:
+        display = trend.copy()
+        display["Revenue"] = display["Revenue"].map(lambda value: money(value, analysis["reporting_currency"], display_currency, display_fx_reporting))
+        display["Free cash flow"] = display["Free cash flow"].map(lambda value: money(value, analysis["reporting_currency"], display_currency, display_fx_reporting))
+        display["FCF margin"] = display["FCF margin"].map(percent)
+        st.dataframe(display, width="stretch", hide_index=True)
+    render_html('</div></div>')
+
+
+def render_valuation_section(analysis, display_currency, display_fx_reporting, display_fx_trading):
+    reporting = analysis.get("reporting_currency", "N/A")
+    trading = analysis.get("trading_currency", "N/A")
+    render_html(
+        '<div class="section-intro"><div><div class="section-kicker-new">Price discipline</div>'
+        '<h2>Valuation</h2><p>Show what is sourced, what is assumed, and what is calculated. Missing FX or cash-flow evidence blocks dependent outputs.</p></div></div>'
+    )
+    render_html(
+        '<div class="metric-grid-new">'
+        + new_metric_card("Share price", money(analysis.get("price"), trading, display_currency, display_fx_trading), f"{trading} · Yahoo Finance")
+        + new_metric_card("Market capitalization", money(analysis.get("market_cap"), trading, display_currency, display_fx_trading), f"{trading} · Yahoo Finance")
+        + new_metric_card("Enterprise value", money(analysis.get("enterprise_value"), reporting, display_currency, display_fx_reporting), f"{reporting} · sourced / reconciled", "accent" if analysis.get("enterprise_value") is not None else "warn")
+        + new_metric_card("EV / Sales", multiple(analysis.get("ev_sales")), "Current market multiple", "accent" if analysis.get("ev_sales") is not None else "warn")
+        + '</div>'
+    )
+    solver_status = analysis.get("solver_status", "unavailable")
+    required = required_growth_label(analysis)
+    status_label = {
+        "exact": "Exact within supported range",
+        "below_range": "Below supported range",
+        "above_range": "Above supported range",
+        "unavailable": "Unavailable",
+    }.get(solver_status, solver_status)
+    solver_range = f"{percent(analysis.get('solver_low'))} to {percent(analysis.get('solver_high'))}"
+    render_html(
+        f'<div class="two-col-new"><div class="panel-new"><div class="panel-title-row"><h3>Reverse DCF</h3><span>{esc(status_label)}</span></div>'
+        f'{new_data_line("Required starting growth", required)}'
+        f'{new_data_line("FCF margin used", percent(analysis.get("model_fcf_margin")))}'
+        f'{new_data_line("Discount rate", percent(analysis.get("discount_rate")))}'
+        f'{new_data_line("Terminal growth", percent(analysis.get("terminal_growth")))}'
+        f'{new_data_line("Rate currency", reporting)}'
+        f'{new_data_line("Solver range", solver_range)}'
+        f'<div class="source-foot">The current price is treated as the target enterprise value. The model does not produce a target price or expected return.</div></div>'
+        f'<div class="panel-new"><div class="panel-title-row"><h3>Enterprise-value bridge</h3><span>Reporting currency · {esc(reporting)}</span></div>'
+        f'{new_data_line("Market cap", money(analysis.get("market_cap_reporting"), reporting, display_currency, display_fx_reporting))}'
+        f'{new_data_line("Add: debt", money(analysis.get("debt"), reporting, display_currency, display_fx_reporting))}'
+        f'{new_data_line("Less: cash", money(analysis.get("cash"), reporting, display_currency, display_fx_reporting))}'
+        f'{new_data_line("Enterprise value", money(analysis.get("enterprise_value"), reporting, display_currency, display_fx_reporting))}'
+        f'{new_data_line("EV / EBITDA", multiple(analysis.get("ev_ebitda")))}'
+        f'{new_data_line("P / E", multiple(analysis.get("pe")))}'
+        f'</div></div>'
+    )
+    with st.expander("User-defined valuation sensitivity", expanded=False):
+        st.caption("These are explicit hypothetical inputs. They are not part of TSRP Score and are not forecasts, target prices, or recommendations.")
+        if analysis.get("revenue") is None or analysis.get("revenue") <= 0:
+            st.info("Revenue is unavailable, so the user-defined DCF cannot run.")
+            return
+        base_growth = analysis.get("required_growth") if analysis.get("solver_status") == "exact" else 0.0
+        base_margin = analysis.get("model_fcf_margin") if analysis.get("model_fcf_margin") and analysis.get("model_fcf_margin") > 0 else 0.10
+        left, right = st.columns(2)
+        with left:
+            growth_default = round(min(max(base_growth * 100, -10), 40) * 2) / 2
+            margin_default = round(min(max(base_margin * 100, 1), 50) * 2) / 2
+            user_growth = st.slider("User assumption · starting revenue growth", -10.0, 40.0, growth_default, 0.5, format="%.1f%%", key="new_value_growth") / 100
+            user_margin = st.slider("User assumption · FCF margin", 1.0, 50.0, margin_default, 0.5, format="%.1f%%", key="new_value_margin") / 100
+        with right:
+            discount_default = round(min(max(analysis.get("discount_rate", 0.10) * 100, 3), 20) * 4) / 4
+            terminal_default = round(min(max(analysis.get("terminal_growth", 0.02) * 100, 0), 6) * 4) / 4
+            user_discount = st.slider("User assumption · discount rate", 3.0, 20.0, discount_default, 0.25, format="%.2f%%", key="new_value_discount") / 100
+            user_terminal = st.slider("User assumption · terminal growth", 0.0, 6.0, terminal_default, 0.25, format="%.2f%%", key="new_value_terminal") / 100
+        if user_discount <= user_terminal:
+            st.warning("Discount rate must be above terminal growth for the model to converge.")
+        else:
+            hypothetical_ev = dcf_enterprise_value(analysis["revenue"], user_growth, user_margin, user_discount, user_terminal, start_margin=user_margin)
+            if hypothetical_ev is None:
+                st.info("These assumptions do not produce a valid DCF output.")
+            else:
+                implied_equity = None
+                if analysis.get("cash") is not None and analysis.get("debt") is not None:
+                    implied_equity = hypothetical_ev - analysis["debt"] + analysis["cash"]
+                render_html(
+                    '<div class="metric-grid-new">'
+                    + new_metric_card("Hypothetical enterprise value", money(hypothetical_ev, reporting, display_currency, display_fx_reporting), "Calculated from user inputs", "accent")
+                    + new_metric_card("Hypothetical equity value", money(implied_equity, reporting, display_currency, display_fx_reporting), "Only if cash and debt are available")
+                    + new_metric_card("Current enterprise value", money(analysis.get("enterprise_value"), reporting, display_currency, display_fx_reporting), "Sourced / reconciled market value")
+                    + '</div>'
+                )
+
+
+def evidence_card(kind, title, explanation, why, horizon, confirm, invalidate, ticker):
+    source = new_source_link(ticker, "Yahoo Finance")
+    return (
+        f'<div class="evidence-card {esc(kind)}"><div class="eyebrow-new">{esc(kind)}</div>'
+        f'<h4>{esc(title)}</h4><p>{esc(explanation)}</p><p><b>Why it matters:</b> {esc(why)}</p>'
+        f'<div class="evidence-meta"><b>Monitor:</b> {esc(confirm)}<br><b>Time horizon:</b> {esc(horizon)}<br>'
+        f'<b>Invalidated if:</b> {esc(invalidate)}<br><b>Source:</b> {source} · current analysis</div></div>'
+    )
+
+
+def build_evidence_lists(analysis, ticker):
+    catalysts = []
+    risks = []
+    if analysis.get("historical_growth") is not None and analysis["historical_growth"] > 0:
+        catalysts.append(
+            evidence_card("catalyst", "Established revenue growth", f"Reported revenue has grown at {percent(analysis['historical_growth'])} over the comparable {analysis.get('historical_growth_years') or 0}-year history.", "A positive operating record gives the current thesis evidence to test.", "Next reported periods", "Revenue growth and margin trajectory", "Reported growth turns negative or coverage becomes non-comparable.", ticker)
+        )
+    if analysis.get("fcf_margin") is not None and analysis["fcf_margin"] > 0:
+        catalysts.append(
+            evidence_card("catalyst", "Positive cash conversion", f"Latest compatible free-cash-flow margin is {percent(analysis['fcf_margin'])}.", "Cash conversion can support reinvestment, balance-sheet resilience, or capital returns.", "Next annual or quarterly cash-flow update", "Operating cash flow, capex, and free cash flow", "Free cash flow turns negative or cannot be period-matched.", ticker)
+        )
+    if analysis.get("cash") is not None and analysis.get("debt") is not None and analysis["cash"] > analysis["debt"]:
+        catalysts.append(
+            evidence_card("catalyst", "Net cash position", "Reported cash is greater than reported debt in the selected reporting currency.", "A stronger balance sheet can give the company more room to absorb execution volatility.", "Ongoing", "Cash, debt, and interest-bearing obligations", "Debt rises above cash or balance-sheet coverage becomes incomplete.", ticker)
+        )
+    if analysis.get("required_growth") is not None and analysis["required_growth"] > 0.18:
+        risks.append(
+            evidence_card("risk", "High growth burden", f"The current enterprise value requires about {required_growth_label(analysis)} starting revenue growth within the supported model range.", "A demanding operating path leaves less room for execution misses.", "Multi-year", "Reported revenue growth versus the implied path", "Required growth falls materially because market value or inputs change.", ticker)
+        )
+    if analysis.get("market_expectations") is not None and analysis["market_expectations"] > 70:
+        risks.append(
+            evidence_card("risk", "Expectation pressure", f"The engine's market-expectations sub-score is {score(analysis['market_expectations'])}/100.", "Strong results may still disappoint if the price already embeds aggressive assumptions.", "Ongoing", "Valuation multiples and required growth", "Valuation pressure normalizes or operating evidence improves.", ticker)
+        )
+    if analysis.get("fcf_margin") is not None and analysis["fcf_margin"] < 0.05:
+        risks.append(
+            evidence_card("risk", "Weak cash conversion", f"Latest compatible free-cash-flow margin is {percent(analysis['fcf_margin'])}.", "Revenue quality is less durable when operating cash does not convert into free cash flow.", "Next cash-flow update", "Operating cash flow minus capex", "Cash conversion improves and remains period-aligned.", ticker)
+        )
+    if analysis.get("debt") is not None and analysis.get("cash") is not None and analysis["debt"] > analysis["cash"] * 2:
+        risks.append(
+            evidence_card("risk", "Balance-sheet leverage", "Reported debt is more than twice reported cash.", "Less balance-sheet flexibility can amplify an operating or valuation reset.", "Ongoing", "Debt, cash, and enterprise-value bridge", "Debt declines or cash coverage improves.", ticker)
+        )
+    return catalysts, risks
+
+
+def render_catalysts_risks_section(analysis, ticker):
+    render_html(
+        '<div class="section-intro"><div><div class="section-kicker-new">Evidence to monitor</div>'
+        '<h2>Catalysts & Risks</h2><p>These are research prompts derived from available evidence—not predictions, probabilities, or fabricated news.</p></div></div>'
+    )
+    catalysts, risks = build_evidence_lists(analysis, ticker)
+    if not catalysts and not risks:
+        render_html('<div class="empty-new"><h3>No evidence-backed catalysts or risks yet</h3><p>The current analysis does not contain enough specific, traceable evidence to populate this section. TSRP leaves it empty rather than generating generic narratives.</p></div>')
+        return
+    left = "".join(catalysts) or '<div class="empty-new"><h3>No catalyst evidence</h3><p>Available data does not support a specific catalyst.</p></div>'
+    right = "".join(risks) or '<div class="empty-new"><h3>No specific risk evidence</h3><p>Available data does not support a specific risk beyond the general limitations shown elsewhere.</p></div>'
+    render_html(f'<div class="evidence-grid"><div><div class="panel-title-row"><h3> Catalysts</h3><span>Confirming evidence</span></div>{left}</div><div><div class="panel-title-row"><h3>Risks</h3><span>Invalidation signals</span></div>{right}</div></div>')
+
+
+def render_changed_section(analysis, company_name, ticker):
+    render_html(
+        '<div class="section-intro"><div><div class="section-kicker-new">Change detection</div>'
+        '<h2>What Changed?</h2><p>Compare saved, compatible TSRP analyses. New market data, filings, assumptions, and methodology changes are kept distinct.</p></div></div>'
+    )
+    current = snapshot_payload(analysis, company_name, ticker)
+    history = st.session_state.setdefault("saved_snapshots", {}).setdefault(ticker, [])
+    if st.button("Save current analysis snapshot", key=f"save_snapshot_{ticker}", type="primary"):
+        if save_current_snapshot(ticker, current):
+            st.success("Snapshot saved for this session.")
+        else:
+            st.info("This analysis is already the latest saved snapshot.")
+        history = st.session_state.setdefault("saved_snapshots", {}).setdefault(ticker, [])
+    if not history:
+        render_html('<div class="empty-new"><h3>Your first saved snapshot will appear here</h3><p>Save this analysis now. After a later refresh or changed assumption set, save again to see score, financial, expectation, and valuation changes.</p></div>')
+        return
+    render_html(f'<div class="state-strip-new"><span class="state-dot-new" aria-hidden="true"></span><span><b>{len(history)} saved snapshot{"s" if len(history) != 1 else ""}</b><br>Latest saved: {esc(history[-1].get("timestamp", "N/A"))}</span></div>')
+    if len(history) < 2:
+        render_html('<div class="empty-new"><h3>One snapshot saved</h3><p>A second compatible snapshot is required before TSRP can claim that something changed.</p></div>')
+        return
+    previous, latest = history[-2], history[-1]
+    comparison = snapshot_diff(previous, latest)
+    if not comparison["comparable"]:
+        st.warning("These snapshots were produced by different score methodologies and should not be compared directly.")
+        return
+    rows = [
+        ("TSRP Score", score(latest.get("score")), score(previous.get("score")), score_change_text(latest.get("score"), previous.get("score"))),
+        ("Business quality", score(latest.get("business_quality")), score(previous.get("business_quality")), score_change_text(latest.get("business_quality"), previous.get("business_quality"))),
+        ("Financial strength", score(latest.get("financial_strength")), score(previous.get("financial_strength")), score_change_text(latest.get("financial_strength"), previous.get("financial_strength"))),
+        ("Market expectations", score(latest.get("market_expectations")), score(previous.get("market_expectations")), score_change_text(latest.get("market_expectations"), previous.get("market_expectations"))),
+        ("Historical growth", percent(latest.get("historical_growth")), percent(previous.get("historical_growth")), pct_change_text(latest.get("historical_growth"), previous.get("historical_growth"))),
+        ("Consensus growth", percent(latest.get("consensus_growth")), percent(previous.get("consensus_growth")), pct_change_text(latest.get("consensus_growth"), previous.get("consensus_growth"))),
+        ("Required growth", required_growth_label(latest), required_growth_label(previous), pct_change_text(latest.get("required_growth"), previous.get("required_growth"))),
+        ("Free cash flow", str(latest.get("free_cash_flow") or "N/A"), str(previous.get("free_cash_flow") or "N/A"), "See source currency"),
+        ("Solver status", latest.get("solver_status", "N/A"), previous.get("solver_status", "N/A"), "State change" if latest.get("solver_status") != previous.get("solver_status") else "No change"),
+        (
+            "User assumptions",
+            json.dumps(latest.get("user_assumptions", {}), sort_keys=True),
+            json.dumps(previous.get("user_assumptions", {}), sort_keys=True),
+            "Changed" if latest.get("user_assumptions") != previous.get("user_assumptions") else "No change",
+        ),
+    ]
+    table = '<table class="change-table"><thead><tr><th>Metric</th><th>Latest</th><th>Previous</th><th>Change</th></tr></thead><tbody>'
+    table += "".join(f'<tr><td><strong>{esc(metric)}</strong></td><td>{esc(latest_value)}</td><td>{esc(previous_value)}</td><td>{esc(change)}</td></tr>' for metric, latest_value, previous_value, change in rows)
+    table += "</tbody></table>"
+    render_html(
+        f'<div class="panel-new"><div class="panel-title-row"><h3>Latest versus previous</h3><span>{esc(latest.get("timestamp", "N/A"))} vs {esc(previous.get("timestamp", "N/A"))}</span></div>{table}'
+        f'<div class="source-foot">A saved snapshot can reflect new reported data, new market data, analyst-estimate changes, or user assumptions. TSRP does not infer a causal explanation that the saved inputs do not support.</div></div>'
+    )
+
+
+def select_primary_section():
+    current = st.session_state.get("primary_section", PRIMARY_SECTIONS[0])
+    if hasattr(st, "segmented_control"):
+        selected = st.segmented_control(
+            "Primary research section",
+            PRIMARY_SECTIONS,
+            default=current if current in PRIMARY_SECTIONS else PRIMARY_SECTIONS[0],
+            key="primary_section_nav",
+            label_visibility="collapsed",
+        ) or current
+        if selected != current:
+            st.session_state.primary_section = selected
+            st.rerun()
+        return selected
+    cols = st.columns(len(PRIMARY_SECTIONS), gap="small")
+    for col, name in zip(cols, PRIMARY_SECTIONS):
+        with col:
+            if st.button(name, key=f"primary_{name}", width="stretch", type="primary" if current == name else "secondary"):
+                st.session_state.primary_section = name
+                st.rerun()
+    return current
+
+
+st.markdown('<div class="app-wrap">', unsafe_allow_html=True)
+render_product_system()
+render_html(
+    '<div class="product-header"><div class="brand-lockup-new"><div class="brand-mark-new">TS</div>'
+    '<div class="brand-copy-new"><strong>TSRP</strong><span>The Saleh Research Project · evidence before opinion</span></div></div>'
+    '<div class="header-status-new">Company equity research only<br>Yahoo Finance · SEC EDGAR status always disclosed</div></div>'
+)
+
+try:
+    search_col, action_col = st.columns([5, 1.15], gap="small", vertical_alignment="bottom")
+except TypeError:
+    search_col, action_col = st.columns([5, 1.15])
+with search_col:
+    typed = st.text_input("Company or ticker", placeholder="Search Apple, Microsoft, Samsung, or AAPL", key="company_search")
+with action_col:
+    submitted = st.button("Analyze company", key="new_analyze_company", width="stretch", type="primary")
+
+if submitted:
+    typed = str(typed or "").strip()
+    if not typed:
+        st.session_state.ticker = ""
+        st.session_state.search_hits = []
+        st.session_state.ticker_error = None
+        st.session_state.invalid_ticker = ""
+        sync_ticker_query("")
+    else:
+        symbol, error, hits = resolve_company_query(typed)
+        st.session_state.search_hits = hits
+        if symbol:
+            st.session_state.ticker = symbol
+            st.session_state.invalid_ticker = ""
+            st.session_state.ticker_error = None
+            st.session_state.search_hits = []
+            st.session_state.primary_section = PRIMARY_SECTIONS[0]
+        else:
+            st.session_state.ticker = ""
+            st.session_state.invalid_ticker = typed
+            st.session_state.ticker_error = error
+
+if not submitted:
+    st.session_state.search_hits = []
+
+typed_query = str(typed or "").strip()
+live_hits = []
+if len(typed_query) >= 2 and typed_query.upper() != st.session_state.get("ticker", "").upper():
+    live_hits = search_companies(typed_query)
+selected_hit = render_company_suggestions(st.session_state.search_hits or live_hits, "new_pick_company")
+if selected_hit:
+    st.session_state.ticker = selected_hit["symbol"]
+    st.session_state.pending_search = selected_hit["symbol"]
+    st.session_state.search_hits = []
+    st.session_state.ticker_error = None
+    st.session_state.invalid_ticker = ""
+    st.session_state.primary_section = PRIMARY_SECTIONS[0]
+    st.rerun()
+if st.session_state.search_hits:
+    st.stop()
+
+if st.session_state.ticker_error:
+    render_ticker_error(st.session_state.invalid_ticker or "input", st.session_state.ticker_error)
+    render_html(f'<div class="app-footer-new">{esc(EDUCATIONAL_DISCLAIMER)}</div></div>')
+    st.stop()
+
+if not st.session_state.ticker:
+    render_html(
+        '<div class="empty-new" style="margin-top:30px"><div class="section-kicker-new">Focused equity research</div>'
+        '<h3>Start with the question behind the price</h3>'
+        '<p>Enter a company stock to see the TSRP Score first, then trace the expectations, valuation, risks, and changes behind it. Indexes, commodities, currencies, funds, and other non-company instruments are excluded.</p>'
+        '<div class="three-col-new" style="text-align:left;margin-top:24px">'
+        '<div class="panel-new"><div class="section-kicker-new">01</div><h3>Analyze</h3><p>Search a listed company by name or ticker.</p></div>'
+        '<div class="panel-new"><div class="section-kicker-new">02</div><h3>Score</h3><p>See the deterministic score and its traceable drivers.</p></div>'
+        '<div class="panel-new"><div class="section-kicker-new">03</div><h3>Challenge</h3><p>Test expectations, valuation, catalysts, risks, and change.</p></div>'
+        '</div></div>'
+    )
+    recent = [symbol for symbol in st.session_state.get("recent", []) if symbol]
+    if recent:
+        render_html('<div class="source-foot" style="margin-top:18px">Recent companies</div>')
+        render_watch_row(recent[:5], "new_recent")
+    render_html(f'<div class="app-footer-new">{esc(EDUCATIONAL_DISCLAIMER)}</div></div>')
+    st.stop()
+
+ticker = st.session_state.ticker
+if not ticker_format_ok(ticker) or not company_symbol_allowed(ticker):
+    st.session_state.ticker = ""
+    st.session_state.invalid_ticker = ticker
+    st.session_state.ticker_error = COMPANY_ONLY_MESSAGE
+    render_ticker_error(ticker, st.session_state.ticker_error)
+    render_html(f'<div class="app-footer-new">{esc(EDUCATIONAL_DISCLAIMER)}</div></div>')
+    st.stop()
+
+with st.spinner(f"Loading {ticker}..."):
+    yahoo_data = fetch_yahoo_data(ticker)
+    info = yahoo_data["info"]
+if not yahoo_data_is_valid(yahoo_data, ticker):
+    st.session_state.ticker = ""
+    st.session_state.invalid_ticker = ticker
+    st.session_state.ticker_error = COMPANY_ONLY_MESSAGE if non_equity_reason(ticker, (yahoo_data.get("info") or {}).get("quoteType")) else f"“{ticker}” was not found on Yahoo Finance."
+    render_ticker_error(ticker, st.session_state.ticker_error)
+    render_html(f'<div class="app-footer-new">{esc(EDUCATIONAL_DISCLAIMER)}</div></div>')
+    st.stop()
+
+remember_ticker(ticker)
+sync_ticker_query(ticker)
+with st.spinner("Checking SEC filing coverage..."):
+    sec_facts = fetch_sec_companyfacts(ticker)
+analysis = analyze_company(yahoo_data, sec_facts)
+reporting_currency = analysis["reporting_currency"]
+trading_currency = analysis["trading_currency"]
+company_name = info.get("longName") or info.get("shortName") or KNOWN_NAMES.get(ticker) or ticker
+if str(company_name).upper() == ticker and KNOWN_NAMES.get(ticker):
+    company_name = KNOWN_NAMES[ticker]
+sector = analysis["sector"]
+industry = info.get("industry") or "Unknown industry"
+
+with st.expander("Display, refresh, export & methodology", expanded=False):
+    display_currency = st.selectbox("Display currency", DISPLAY_CURRENCIES, key="display_currency", help="Display only. The reverse DCF uses the company reporting currency.")
+    controls_left, controls_right = st.columns(2)
+    with controls_left:
+        if st.button("↻", key="new_refresh_data", help="Refresh market, FX, and SEC data"):
+            fetch_yahoo_data.clear()
+            fetch_price_history.clear()
+            fetch_sec_companyfacts.clear()
+            fetch_sec_ticker_map.clear()
+            fx_rate.clear()
+            rate_to_usd.clear()
+            st.rerun()
+    with controls_right:
+        export_table = evidence_dataframe(analysis, company_name, ticker, sector, industry, reporting_currency, trading_currency, display_currency, 1.0, 1.0)
+        st.download_button("Export CSV", export_table.to_csv(index=False).encode("utf-8"), f"tsrp_{ticker}.csv", "text/csv", key="new_export_csv")
+        st.download_button("Export JSON", export_payload(analysis, company_name, ticker, sector, industry, display_currency), f"tsrp_{ticker}.json", "application/json", key="new_export_json")
+    render_methodology()
+
+raw_fx_reporting = fx_rate(reporting_currency, display_currency)
+raw_fx_trading = fx_rate(trading_currency, display_currency)
+display_fx_reporting = 1.0 if reporting_currency == display_currency else raw_fx_reporting
+display_fx_trading = 1.0 if trading_currency == display_currency else raw_fx_trading
+if reporting_currency != display_currency and raw_fx_reporting is None:
+    st.warning(f"FX conversion {reporting_currency} → {display_currency} is unavailable. Dependent outputs remain N/A.")
+if trading_currency != display_currency and raw_fx_trading is None:
+    st.warning(f"FX conversion {trading_currency} → {display_currency} is unavailable. Quote conversion remains N/A.")
+
+as_of = analysis.get("last_refreshed") or "N/A"
+previous_price = first_value(info, "previousClose", "regularMarketPreviousClose")
+price_change = analysis.get("price") / previous_price - 1 if analysis.get("price") is not None and previous_price not in (None, 0) else None
+render_html(
+    f'<div class="company-strip"><div><h1>{esc(company_name)} <span style="color:var(--tsrp-muted);font:600 .46em var(--tsrp-mono)">{esc(ticker)}</span></h1>'
+    f'<p>{esc(info.get("exchange") or "Exchange unavailable")} · {esc(trading_currency)} · {esc(money(analysis.get("price"), trading_currency, display_currency, display_fx_trading))} · '
+    f'{esc(percent(price_change) if price_change is not None else "N/A")} vs prior close · As of {esc(as_of)}</p>'
+    f'<div class="company-tags"><span class="company-tag"><strong>{esc(sector)}</strong></span><span class="company-tag">{esc(industry)}</span>'
+    f'<span class="source-tag"><strong>Yahoo Finance</strong> market data</span><span class="source-tag"><strong>SEC EDGAR</strong> {esc("live facts" if analysis.get("has_sec") else "status disclosed")}</span></div></div>'
+    f'<div class="compact-score"><span>TSRP Score</span><b>{esc(score(analysis.get("reality_score")))}</b><span>{esc(analysis.get("confidence", "N/A"))} confidence</span></div></div>'
+)
+
+st.session_state.setdefault("primary_section", PRIMARY_SECTIONS[0])
+render_html('<div class="section-nav-label">Research workflow</div><div class="section-nav">')
+active_section = select_primary_section()
+render_html("</div>")
+
+current_snapshot = snapshot_payload(analysis, company_name, ticker)
+track_snapshot_state(ticker, current_snapshot)
+if active_section == "TSRP Score":
+    render_score_section(analysis, company_name, ticker, display_currency, display_fx_reporting, display_fx_trading, as_of)
+elif active_section == "Expectations vs Reality":
+    render_expectations_section(analysis, yahoo_data, display_currency, display_fx_reporting)
+elif active_section == "Valuation":
+    render_valuation_section(analysis, display_currency, display_fx_reporting, display_fx_trading)
+elif active_section == "Catalysts & Risks":
+    render_catalysts_risks_section(analysis, ticker)
+elif active_section == "What Changed?":
+    render_changed_section(analysis, company_name, ticker)
+
+render_html(
+    f'<div class="app-footer-new">TSRP · Yahoo Finance · SEC EDGAR status disclosed · Data as of {esc(as_of)}<br>{esc(EDUCATIONAL_DISCLAIMER)}</div></div>'
+)
+st.stop()
 
 st.markdown('<div class="app-wrap">', unsafe_allow_html=True)
 
