@@ -3,3 +3,9 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+*.pem
+*.key
