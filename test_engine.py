@@ -3,6 +3,7 @@ import unittest
 from engine import (
     choose_model_fcf_margin,
     dcf_enterprise_value,
+    expectation_score,
     history_cagr,
     model_rates,
     reality_score,
@@ -59,6 +60,13 @@ class DcfTests(unittest.TestCase):
     def test_invalid_discount_terminal_pair_is_unavailable(self):
         self.assertIsNone(dcf_enterprise_value(100, 0.08, 0.15, 0.03, 0.03))
 
+    def test_missing_or_nonfinite_growth_is_unavailable(self):
+        self.assertIsNone(dcf_enterprise_value(100, None, 0.15, 0.08, 0.02))
+        self.assertIsNone(dcf_enterprise_value(100, float("nan"), 0.15, 0.08, 0.02))
+
+    def test_invalid_projection_inputs_do_not_produce_numbers(self):
+        self.assertIsNone(year_growth(0.10, 0.03, float("inf")))
+
     def test_round_trip_solver(self):
         target = dcf_enterprise_value(200, 0.12, 0.18, 0.09, 0.02)
         implied, hit = solve_required_growth(target, 200, 0.18, 0.09, 0.02)
@@ -91,6 +99,15 @@ class HistoryAndMarginTests(unittest.TestCase):
 
 
 class ScoreTests(unittest.TestCase):
+    def test_negative_sales_multiple_is_missing_evidence(self):
+        model = {
+            "expectation_benchmarks": {"ev_sales": 4.0, "pe": 20.0, "ev_ebitda": 12.0},
+            "expectation_weights": {"required_growth": 0.40, "ev_sales": 0.20, "pe": 0.20, "ev_ebitda": 0.20},
+        }
+        negative = expectation_score(0.10, -1.0, 20.0, 12.0, model)
+        missing = expectation_score(0.10, None, 20.0, 12.0, model)
+        self.assertEqual(negative, missing)
+
     def test_clamped_growth_does_not_dominate_score(self):
         open_score = reality_score(70, 70, 0.08, 0.10, 0.09, growth_clamped=False)
         clamped = reality_score(70, 70, 0.08, 1.19, 0.09, growth_clamped=True)
