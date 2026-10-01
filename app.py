@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 import base64
@@ -7,6 +8,7 @@ import json
 import math
 import os
 import re
+from typing import Optional
 
 import pandas as pd
 import requests
@@ -38,6 +40,12 @@ EDUCATIONAL_DISCLAIMER = (
     "Educational research only. Not financial, investment, tax, accounting, or legal advice. "
     "TSRP does not make recommendations, predict returns, or guarantee data accuracy. "
     "Market data may be delayed, incomplete, or incorrect. Do your own research and consult a qualified professional before making financial decisions."
+)
+PRIVACY_NOTICE = (
+    "TSRP does not create accounts, collect personal names, store personal profiles, add analytics, or send telemetry. "
+    "The company name or ticker and selected display currency are used in the current Streamlit session; the ticker may also appear in the page URL. "
+    "Searches and ticker-derived requests are sent to Yahoo Finance, and SEC requests use the configured SEC contact identity and ticker-derived CIK. "
+    "TSRP does not send personal research notes or exported files to those providers. Session state and provider infrastructure logs are controlled by the deployment environment, not by TSRP."
 )
 
 st.set_page_config(
@@ -75,7 +83,43 @@ def current_scheme():
 
 
 SEC_USER_AGENT = os.getenv("SEC_USER_AGENT", "").strip()
-SEC_STATE = {"kind": "not_configured", "detail": "Live SEC EDGAR facts require a monitored contact identity"}
+
+
+@dataclass(frozen=True)
+class ProviderStatus:
+    kind: str
+    detail: str
+
+
+@dataclass(frozen=True)
+class SecTickerMapResult:
+    rows: pd.DataFrame
+    status: ProviderStatus
+
+
+@dataclass(frozen=True)
+class SecFactsResult:
+    facts: Optional[dict]
+    status: ProviderStatus
+
+
+SEC_NOT_CONFIGURED = ProviderStatus(
+    "not_configured",
+    "Live SEC EDGAR facts require a monitored contact identity",
+)
+SEC_STATUS_LABELS = {
+    "not_covered": "Unavailable — no filing data for this company",
+    "rate_limited": "Temporarily unavailable — filing source limit reached",
+    "timeout": "Temporarily unavailable — filing source did not respond",
+    "network_error": "Temporarily unavailable — filing source could not be reached",
+    "parse_error": "Unavailable — filing data could not be read",
+    "http_error": "Unavailable — filing source returned an error",
+}
+
+
+def sec_user_agent_configured():
+    """Require a contact-like identity without exposing its value in the UI."""
+    return bool(SEC_USER_AGENT and re.search(r"[^\s@]+@[^\s@]+\.[^\s@]+", SEC_USER_AGENT))
 
 DISCOUNT_RATE = 0.10
 TERMINAL_GROWTH = 0.03
@@ -2841,7 +2885,8 @@ def safe_float(value, default=None):
     try:
         if value is None or pd.isna(value):
             return default
-        return float(value)
+        result = float(value)
+        return result if math.isfinite(result) else default
     except Exception:
         return default
 
@@ -2946,17 +2991,19 @@ def detect_currencies(info, fast_info):
 
 
 def get_quote_price(info, fast_info):
-    return first_value(
+    price = first_value(
         fast_info,
         "lastPrice",
         "last_price",
         "regularMarketPrice",
         "currentPrice",
-    ) or first_value(info, "currentPrice", "regularMarketPrice", "previousClose")
+    )
+    return price if price is not None else first_value(info, "currentPrice", "regularMarketPrice", "previousClose")
 
 
 def get_market_cap(info, fast_info):
-    return first_value(fast_info, "marketCap", "market_cap") or first_value(info, "marketCap")
+    market_cap = first_value(fast_info, "marketCap", "market_cap")
+    return market_cap if market_cap is not None else first_value(info, "marketCap")
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -2976,7 +3023,7 @@ def rate_to_usd(currency):
             except Exception:
                 price = None
             if price is None:
-                hist = ticker.history(period="5d")
+                hist = ticker.history(period="5d", timeout=10)
                 if not hist.empty:
                     price = safe_float(hist["Close"].iloc[-1])
             if price and price > 0:
@@ -3082,7 +3129,7 @@ def ttm_sum(df, names, periods=4):
 
 
 YAHOO_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    "User-Agent": "TSRP/1.0 (educational equity research application)"
 }
 
 
@@ -3307,6 +3354,7 @@ def ticker_format_ok(symbol):
 COMPANY_ONLY_MESSAGE = (
     "TSRP covers listed company stocks only. Indexes, commodities, currencies, funds, and other instruments are not supported."
 )
+MAX_SEARCH_QUERY_LENGTH = 80
 NON_EQUITY_QUOTE_TYPES = {
     "INDEX",
     "ETF",
@@ -3624,7 +3672,7 @@ def lookup_alias(query):
 
 @st.cache_data(ttl=180, show_spinner=False)
 def search_companies_v2(query):
-    query = str(query or "").strip()
+    query = " ".join(str(query or "").split())[:MAX_SEARCH_QUERY_LENGTH]
     if not query:
         return []
     results = _yahoo_search_live(query)
@@ -3651,18 +3699,15 @@ def search_companies_v2(query):
 
 def search_companies(query):
     results = search_companies_v2(query)
-    if results:
-        return results
-    live_results = _yahoo_search_live(query)
-    if live_results:
-        return live_results
-    return local_company_search(query)
+    return results or local_company_search(query)
 
 
 def resolve_company_query(query):
-    raw = str(query or "").strip()
+    raw = " ".join(str(query or "").split())
     if not raw:
         return None, "Type a company name or ticker.", []
+    if len(raw) > MAX_SEARCH_QUERY_LENGTH:
+        return None, f"Searches are limited to {MAX_SEARCH_QUERY_LENGTH} characters.", []
 
     alias = lookup_alias(raw)
     if alias:
@@ -3784,6 +3829,8 @@ def export_payload(analysis, company_name, ticker, sector, industry, display_cur
         "trading_currency": analysis.get("trading_currency"),
         "confidence": analysis.get("confidence"),
         "sec_status": analysis.get("sec_status"),
+        "sec_status_kind": analysis.get("sec_status_kind"),
+        "sec_status_detail": analysis.get("sec_status_detail"),
         "sources": analysis.get("sources", {}),
         "provenance": analysis.get("sec_provenance", {}),
         "model_assumptions": {
@@ -3850,7 +3897,7 @@ def render_sec_status_strip(analysis):
             "http_error": "SEC EDGAR returned an HTTP error for this request.",
         }
         detail = detail_by_kind.get(
-            SEC_STATE.get("kind"),
+            analysis.get("sec_status_kind"),
             "No usable SEC EDGAR company facts were returned.",
         )
     dot_class = "status-dot" if has_sec else "status-dot warn"
@@ -3872,6 +3919,7 @@ def render_methodology():
 <p><b>Growth required by the current price.</b> The detailed price model projects revenue for {FORECAST_YEARS} years, converts revenue into free cash flow using an evidence-based margin, and finds the growth path that matches the current company value. If important inputs are missing or outside the supported range, TSRP shows N/A or a disclosed bound.</p>
 <p><b>How to read the score.</b> Business quality, financial strength, and growth comparisons are combined into a 0–100 research signal. Missing evidence lowers confidence; it is never treated as positive evidence. The score is not a probability, recommendation, target price, or expected return.</p>
 <p><b>Sources and limits.</b> Yahoo Finance supplies market data, history, estimates, and supplemental fundamentals. SEC EDGAR is shown as the company-filing source; when filing data is unavailable, affected figures remain N/A and the reason stays visible. Reporting and trading currencies are kept separate; unavailable currency conversion blocks affected calculations.</p>
+<p><b>Automation boundary.</b> TSRP currently uses deterministic calculations and provider data. It does not call an AI text-generation service or turn generated commentary into financial evidence.</p>
 <p><b>Interpretation.</b> Past growth and analyst estimates are comparison points, not guarantees. TSRP cannot determine future returns, business quality beyond the selected evidence, accounting comparability, or whether any security is suitable for a person.</p>
 <div class="source-line">{esc(EDUCATIONAL_DISCLAIMER)}</div>
 </div>'''
@@ -3894,50 +3942,57 @@ def fetch_compare_analysis(symbol):
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_sec_ticker_map():
-    if not SEC_USER_AGENT or "@" not in SEC_USER_AGENT:
-        SEC_STATE.update(kind="not_configured", detail="Live SEC EDGAR facts require a monitored contact identity")
-        return pd.DataFrame(columns=["ticker", "cik", "company"])
+    if not sec_user_agent_configured():
+        return SecTickerMapResult(pd.DataFrame(columns=["ticker", "cik", "company"]), SEC_NOT_CONFIGURED)
     url = "https://www.sec.gov/files/company_tickers.json"
     try:
         response = requests.get(url, headers={"User-Agent": SEC_USER_AGENT}, timeout=15)
         response.raise_for_status()
     except requests.Timeout:
-        SEC_STATE.update(kind="timeout", detail="SEC ticker map request timed out")
-        return pd.DataFrame(columns=["ticker", "cik", "company"])
+        return SecTickerMapResult(pd.DataFrame(columns=["ticker", "cik", "company"]), ProviderStatus("timeout", "SEC ticker map request timed out"))
     except requests.HTTPError as exc:
         status = getattr(exc.response, "status_code", None)
-        SEC_STATE.update(kind="rate_limited" if status == 429 else "http_error", detail=f"SEC ticker map returned HTTP {status or 'error'}")
-        return pd.DataFrame(columns=["ticker", "cik", "company"])
+        kind = "rate_limited" if status == 429 else "http_error"
+        return SecTickerMapResult(pd.DataFrame(columns=["ticker", "cik", "company"]), ProviderStatus(kind, f"SEC ticker map returned HTTP {status or 'error'}"))
     except requests.RequestException:
-        SEC_STATE.update(kind="network_error", detail="SEC ticker map network request failed")
-        return pd.DataFrame(columns=["ticker", "cik", "company"])
+        return SecTickerMapResult(pd.DataFrame(columns=["ticker", "cik", "company"]), ProviderStatus("network_error", "SEC ticker map network request failed"))
 
-    rows = []
-    for item in response.json().values():
-        rows.append(
-            {
-                "ticker": item["ticker"].upper(),
-                "cik": str(item["cik_str"]).zfill(10),
-                "company": item["title"],
-            }
-        )
+    try:
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError("SEC ticker map was not an object")
+        rows = []
+        for item in payload.values():
+            if not isinstance(item, dict) or not item.get("ticker") or item.get("cik_str") is None or not item.get("title"):
+                continue
+            rows.append(
+                {
+                    "ticker": str(item["ticker"]).upper(),
+                    "cik": str(item["cik_str"]).zfill(10),
+                    "company": str(item["title"]),
+                }
+            )
+        if not rows:
+            raise ValueError("SEC ticker map contained no usable rows")
+    except (TypeError, ValueError):
+        return SecTickerMapResult(pd.DataFrame(columns=["ticker", "cik", "company"]), ProviderStatus("parse_error", "SEC ticker map could not be parsed"))
 
-    SEC_STATE.update(kind="available", detail="SEC ticker map available")
-    return pd.DataFrame(rows)
+    return SecTickerMapResult(pd.DataFrame(rows), ProviderStatus("available", "SEC ticker map available"))
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_sec_companyfacts(ticker):
-    if not SEC_USER_AGENT or "@" not in SEC_USER_AGENT:
-        SEC_STATE.update(kind="not_configured", detail="Live SEC EDGAR facts require a monitored contact identity")
-        return None
+    if not sec_user_agent_configured():
+        return SecFactsResult(None, SEC_NOT_CONFIGURED)
     try:
-        ticker_map = fetch_sec_ticker_map()
+        ticker_map_result = fetch_sec_ticker_map()
+        if ticker_map_result.status.kind != "available":
+            return SecFactsResult(None, ticker_map_result.status)
+        ticker_map = ticker_map_result.rows
         match = ticker_map[ticker_map["ticker"] == ticker.upper()]
 
         if match.empty:
-            SEC_STATE.update(kind="not_covered", detail="Ticker is not present in the SEC company map")
-            return None
+            return SecFactsResult(None, ProviderStatus("not_covered", "Ticker is not present in the SEC company map"))
 
         cik = match.iloc[0]["cik"]
         url = f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
@@ -3947,40 +4002,32 @@ def fetch_sec_companyfacts(ticker):
 
         payload = response.json()
         if not isinstance(payload, dict) or not payload.get("facts"):
-            SEC_STATE.update(kind="parse_error", detail="SEC response did not contain company facts")
-            return None
-        SEC_STATE.update(kind="available", detail="SEC company facts available")
-        return payload
+            return SecFactsResult(None, ProviderStatus("parse_error", "SEC response did not contain company facts"))
+        return SecFactsResult(payload, ProviderStatus("available", "SEC company facts available"))
     except requests.Timeout:
-        SEC_STATE.update(kind="timeout", detail="SEC company facts request timed out")
-        return None
+        return SecFactsResult(None, ProviderStatus("timeout", "SEC company facts request timed out"))
     except requests.HTTPError as exc:
         status = getattr(exc.response, "status_code", None)
-        SEC_STATE.update(kind="rate_limited" if status == 429 else "http_error", detail=f"SEC company facts returned HTTP {status or 'error'}")
-        return None
+        kind = "rate_limited" if status == 429 else "http_error"
+        return SecFactsResult(None, ProviderStatus(kind, f"SEC company facts returned HTTP {status or 'error'}"))
     except requests.RequestException:
-        SEC_STATE.update(kind="network_error", detail="SEC company facts network request failed")
-        return None
+        return SecFactsResult(None, ProviderStatus("network_error", "SEC company facts network request failed"))
     except (KeyError, TypeError, ValueError):
-        SEC_STATE.update(kind="parse_error", detail="SEC response could not be parsed")
-        return None
+        return SecFactsResult(None, ProviderStatus("parse_error", "SEC response could not be parsed"))
 
 
-def sec_status(sec_facts):
+def has_sec_facts(sec_facts):
+    return isinstance(sec_facts, dict) and bool(sec_facts.get("facts"))
+
+
+def sec_status(sec_facts, provider_status=None):
     """Return a plain-language filing-data state without exposing request internals."""
-    if sec_facts:
+    if has_sec_facts(sec_facts):
         return "Available for this company"
-    if SEC_STATE["kind"] == "not_configured":
+    status = provider_status or SEC_NOT_CONFIGURED
+    if status.kind == "not_configured":
         return "Unavailable — company filing data is not connected"
-    labels = {
-        "not_covered": "Unavailable — no filing data for this company",
-        "rate_limited": "Temporarily unavailable — filing source limit reached",
-        "timeout": "Temporarily unavailable — filing source did not respond",
-        "network_error": "Temporarily unavailable — filing source could not be reached",
-        "parse_error": "Unavailable — filing data could not be read",
-        "http_error": "Unavailable — filing source returned an error",
-    }
-    return labels.get(SEC_STATE["kind"], "Unavailable — no usable company filing data returned")
+    return SEC_STATUS_LABELS.get(status.kind, "Unavailable — no usable company filing data returned")
 
 
 def sec_fact_provenance(companyfacts, tags, preferred_currencies):
@@ -4109,6 +4156,7 @@ def sec_latest_record(companyfacts, tags, preferred_currencies):
                 candidates.append({
                     "value": safe_float(row.get("val")),
                     "unit": unit,
+                    "start": row.get("start"),
                     "period": row.get("end"),
                     "filed": row.get("filed") or "N/A",
                     "fy": row.get("fy"),
@@ -4120,6 +4168,20 @@ def sec_latest_record(companyfacts, tags, preferred_currencies):
     if not candidates:
         return None
     return max(candidates, key=lambda row: (row.get("period", ""), row.get("filed", "")))
+
+
+def sec_records_period_match(*records):
+    """Require cash-flow facts to describe the same annual reporting period and unit."""
+    if not records or any(not isinstance(record, dict) for record in records):
+        return False
+    ends = {record.get("period") for record in records}
+    units = {record.get("unit") for record in records}
+    starts = {record.get("start") for record in records}
+    if len(ends) != 1 or None in ends or len(units) != 1 or None in units:
+        return False
+    if None in starts:
+        return len(starts) == 1
+    return len(starts) == 1
 
 
 def pick_fcf_from_sources(sec_fcf, yahoo_annual_fcf, yahoo_ttm_fcf, yahoo_info_fcf, revenue_from_sec):
@@ -4237,6 +4299,11 @@ def trailing_fcf_margins(cashflow, financials, years=4):
 
 
 def analyze_company(yahoo_data, sec_facts):
+    if isinstance(sec_facts, SecFactsResult):
+        sec_status_state = sec_facts.status
+        sec_facts = sec_facts.facts
+    else:
+        sec_status_state = SEC_NOT_CONFIGURED if not has_sec_facts(sec_facts) else ProviderStatus("available", "SEC company facts available")
     info = yahoo_data["info"]
     fast_info = yahoo_data["fast_info"]
     financials = yahoo_data["financials"]
@@ -4298,10 +4365,7 @@ def analyze_company(yahoo_data, sec_facts):
     sec_capex_record = sec_latest_record(sec_facts, SEC_TAGS["capex"], sec_currencies)
     sec_ocf = sec_ocf_record["value"] if sec_ocf_record else None
     sec_capex_value = sec_capex_record["value"] if sec_capex_record else None
-    sec_fcf_period_matched = bool(
-        sec_ocf_record and sec_capex_record
-        and sec_ocf_record.get("period") == sec_capex_record.get("period")
-    )
+    sec_fcf_period_matched = sec_records_period_match(sec_ocf_record, sec_capex_record)
     sec_fcf_raw = compute_fcf(sec_ocf, sec_capex_value) if sec_fcf_period_matched else None
     if sec_fcf_raw is not None and sec_revenue_currency and reporting_currency and sec_revenue_currency != reporting_currency:
         sec_fcf = convert_amount(sec_fcf_raw, sec_revenue_currency, reporting_currency)
@@ -4449,9 +4513,9 @@ def analyze_company(yahoo_data, sec_facts):
         quality_flags.append(("Real-estate caveat: this view uses free cash flow and earnings, not property-specific measures", "warn"))
     if rates["used_fallback_currency"]:
         quality_flags.append(("Unknown reporting currency — USD rate world used as a disclosed fallback", "warn"))
-    if not SEC_USER_AGENT or "@" not in SEC_USER_AGENT:
+    if not sec_user_agent_configured():
         quality_flags.append(("Company filing data is unavailable in this session", "warn"))
-    elif not sec_facts:
+    elif not has_sec_facts(sec_facts):
         quality_flags.append(("SEC EDGAR did not return usable company facts", "warn"))
     if yahoo_errors:
         quality_flags.append(("Some Yahoo Finance endpoints were unavailable", "warn"))
@@ -4469,7 +4533,7 @@ def analyze_company(yahoo_data, sec_facts):
     confidence, _ = data_coverage_confidence(coverage_fields, quality_flags)
     if model_fcf_refused or growth_clamped:
         confidence = "Low"
-    elif not sec_facts and confidence == "High":
+    elif not has_sec_facts(sec_facts) and confidence == "High":
         confidence = "Medium"
     elif confidence == "High" and historical_growth is None:
         confidence = "Medium"
@@ -4526,7 +4590,7 @@ def analyze_company(yahoo_data, sec_facts):
         "Price / Market Data": "Yahoo Finance",
         "Reporting Currency": f"Yahoo Finance ({reporting_currency})",
         "Trading Currency": f"Yahoo Finance ({trading_currency})",
-        "SEC EDGAR status": sec_status(sec_facts),
+        "SEC EDGAR status": sec_status(sec_facts, sec_status_state),
         "Yahoo Finance status": "Available" if not yahoo_errors else "; ".join(yahoo_errors),
     }
 
@@ -4583,12 +4647,14 @@ def analyze_company(yahoo_data, sec_facts):
         "quality_flags": quality_flags,
         "confidence": confidence,
         "sources": sources,
-        "has_sec": bool(sec_facts),
-        "sec_status": sec_status(sec_facts),
+        "has_sec": has_sec_facts(sec_facts),
+        "sec_status": sec_status(sec_facts, sec_status_state),
+        "sec_status_kind": sec_status_state.kind,
+        "sec_status_detail": sec_status_state.detail,
         "sec_provenance": revenue_provenance,
         "yahoo_errors": yahoo_errors,
         "last_refreshed": yahoo_data.get("last_refreshed"),
-        "freshness": "Yahoo Finance snapshot; cached for up to 15 minutes",
+        "freshness": "Yahoo market data cached up to 15 minutes; SEC facts up to 24 hours; FX up to 1 hour",
     }
 
 
@@ -5023,7 +5089,7 @@ PRIMARY_SECTIONS = [
     "Catalysts & Risks",
     "What Changed?",
 ]
-SNAPSHOT_METHODOLOGY_VERSION = "score-v1"
+SNAPSHOT_METHODOLOGY_VERSION = "score-v2"
 
 
 def render_product_system():
@@ -5474,7 +5540,7 @@ def new_status_strip(analysis):
             "network_error": "The filing source could not be reached.",
             "parse_error": "The returned filing data could not be read.",
             "http_error": "The filing source returned an error.",
-        }.get(SEC_STATE.get("kind"), "No usable company filing data was returned."))
+        }.get(analysis.get("sec_status_kind"), "No usable company filing data was returned."))
     dot = "" if has_sec else " warn"
     render_html(
         f'<div class="state-strip-new"><span class="state-dot-new{dot}" aria-hidden="true"></span>'
@@ -6016,7 +6082,12 @@ try:
 except TypeError:
     search_col, action_col = st.columns([5, 1.15])
 with search_col:
-    typed = st.text_input("Company or ticker", placeholder="Search Apple, Microsoft, Samsung, or AAPL", key="company_search")
+    typed = st.text_input(
+        "Company or ticker",
+        placeholder="Search Apple, Microsoft, Samsung, or AAPL",
+        max_chars=MAX_SEARCH_QUERY_LENGTH,
+        key="company_search",
+    )
 with action_col:
     submitted = st.button("Analyze company", key="new_analyze_company", width="stretch", type="primary")
 
@@ -6182,768 +6253,11 @@ with st.expander("Sources, currency & more", expanded=False):
         st.download_button("Download full research record", export_payload(analysis, company_name, ticker, sector, industry, display_currency), f"tsrp_{ticker}.json", "application/json", key="new_export_json")
     render_html('<div class="panel-title-row" style="margin-top:18px"><h3>How TSRP works</h3><span>Optional detail</span></div>')
     render_methodology()
+    with st.expander("Data and privacy", expanded=False):
+        st.markdown(PRIVACY_NOTICE)
 render_html('</div>')
 
 render_html(
     f'<div class="app-footer-new">TSRP · Yahoo Finance · SEC EDGAR status disclosed · Data as of {esc(as_of)}<br>{esc(EDUCATIONAL_DISCLAIMER)}</div></div>'
 )
 st.stop()
-
-st.markdown('<div class="app-wrap">', unsafe_allow_html=True)
-
-render_app_header()
-
-try:
-    col_a, col_c = st.columns([5.2, 1], gap="small", vertical_alignment="center")
-except TypeError:
-    col_a, col_c = st.columns([5.2, 1])
-with col_a:
-    typed = st.text_input(
-        "Search",
-        placeholder="Search a company stock or ticker",
-        label_visibility="collapsed",
-        key="company_search",
-    )
-with col_c:
-    submitted = st.button("Analyze company", key="analyze_company", width="stretch", type="primary")
-
-if submitted:
-    typed = str(typed or "").strip()
-    if not typed:
-        st.session_state.ticker = ""
-        st.session_state.search_hits = []
-        st.session_state.ticker_error = None
-        st.session_state.invalid_ticker = ""
-        sync_ticker_query("")
-    else:
-        symbol, error, hits = resolve_company_query(typed)
-        st.session_state.search_hits = hits
-        if symbol:
-            st.session_state.ticker = symbol
-            st.session_state.invalid_ticker = ""
-            st.session_state.ticker_error = None
-            st.session_state.search_hits = []
-        else:
-            st.session_state.ticker = ""
-            st.session_state.invalid_ticker = typed
-            st.session_state.ticker_error = error
-
-if not submitted:
-    st.session_state.search_hits = []
-
-typed_query = str(typed or "").strip()
-live_hits = []
-show_live_company_search = not st.session_state.pop("suppress_company_suggestions", False)
-if show_live_company_search and len(typed_query) >= 2 and typed_query.upper() != st.session_state.get("ticker", "").upper():
-    live_hits = search_companies(typed_query)
-
-selected_hit = render_company_suggestions(st.session_state.search_hits or live_hits, "pick_company")
-if selected_hit:
-    st.session_state.ticker = selected_hit["symbol"]
-    st.session_state.pending_search = selected_hit.get("name") or selected_hit["symbol"]
-    st.session_state.search_hits = []
-    st.session_state.suppress_company_suggestions = True
-    st.session_state.ticker_error = None
-    st.session_state.invalid_ticker = ""
-    st.rerun()
-
-if st.session_state.search_hits:
-    st.stop()
-
-if st.session_state.ticker_error:
-    render_ticker_error(st.session_state.invalid_ticker or "input", st.session_state.ticker_error)
-    st.markdown("</div>", unsafe_allow_html=True)
-    st.stop()
-
-if not st.session_state.ticker:
-    render_html(
-        f"""
-<div class="home">
-  <div>
-    <div class="home-lead">
-      <div class="eyebrow">{esc(APP_NAME)}</div>
-      <div class="hero-title">What growth is the price asking for?</div>
-      <div class="hero-copy">Search a company name or stock ticker. Indexes, commodities, currencies, and funds are excluded. The model reverse-solves the sales growth today’s price needs, then sets it next to history and consensus.</div>
-    </div>
-    <div class="home-steps">
-      <div><div class="n">1 · Price</div><p>Start from the latest Yahoo Finance quote available. No fair-value guess first.</p></div>
-      <div><div class="n">2 · Required growth</div><p>Solve for the sales path that justifies that price in the reporting currency.</p></div>
-      <div><div class="n">3 · Check</div><p>Compare with the company’s history and analyst consensus.</p></div>
-    </div>
-  </div>
-  <div class="source-line">{esc(EDUCATIONAL_DISCLAIMER)}</div>
-</div>
-"""
-    )
-    recent = [s for s in st.session_state.get("recent", []) if s]
-    if recent:
-        render_html('<div class="watch-heading">Recent</div>')
-        render_watch_row(recent[:5], "empty_recent")
-
-    st.markdown("</div>", unsafe_allow_html=True)
-    st.stop()
-
-
-ticker = st.session_state.ticker
-
-if not ticker_format_ok(ticker) or not company_symbol_allowed(ticker):
-    st.session_state.ticker = ""
-    st.session_state.invalid_ticker = ticker
-    st.session_state.ticker_error = COMPANY_ONLY_MESSAGE
-    render_ticker_error(ticker, st.session_state.ticker_error)
-    st.markdown("</div>", unsafe_allow_html=True)
-    st.stop()
-
-with st.spinner(f"Loading {ticker}..."):
-    yahoo_data = fetch_yahoo_data(ticker)
-    info = yahoo_data["info"]
-
-if not yahoo_data_is_valid(yahoo_data, ticker):
-    st.session_state.ticker = ""
-    st.session_state.invalid_ticker = ticker
-    st.session_state.ticker_error = (
-        COMPANY_ONLY_MESSAGE
-        if non_equity_reason(ticker, (yahoo_data.get("info") or {}).get("quoteType"))
-        else f"“{ticker}” was not found on Yahoo Finance."
-    )
-    render_ticker_error(ticker, st.session_state.ticker_error)
-    st.markdown("</div>", unsafe_allow_html=True)
-    st.stop()
-
-remember_ticker(ticker)
-sync_ticker_query(ticker)
-
-with st.spinner("Checking SEC filing coverage..."):
-    sec_facts = fetch_sec_companyfacts(ticker)
-analysis = analyze_company(yahoo_data, sec_facts)
-reporting_currency = analysis["reporting_currency"]
-trading_currency = analysis["trading_currency"]
-
-_, cur_col, _ = st.columns([1.0, 1.8, 1.0])
-with cur_col:
-    display_currency = st.selectbox(
-        "Show amounts in",
-        DISPLAY_CURRENCIES,
-        key="display_currency",
-        help="Display only. The reverse DCF still uses the company’s reporting currency.",
-    )
-
-raw_fx_reporting = fx_rate(reporting_currency, display_currency)
-raw_fx_trading = fx_rate(trading_currency, display_currency)
-display_fx_reporting = raw_fx_reporting
-display_fx_trading = raw_fx_trading
-if reporting_currency == display_currency:
-    display_fx_reporting = 1.0
-if trading_currency == display_currency:
-    display_fx_trading = 1.0
-
-company_name = info.get("longName") or info.get("shortName") or KNOWN_NAMES.get(ticker) or ticker
-if str(company_name).upper() == ticker and KNOWN_NAMES.get(ticker):
-    company_name = KNOWN_NAMES[ticker]
-sector = analysis["sector"]
-industry = info.get("industry") or "Unknown industry"
-
-currency_note = reporting_currency
-if reporting_currency != display_currency:
-    if raw_fx_reporting is None:
-        currency_note = f"{reporting_currency} → {display_currency} (FX unavailable)"
-        st.warning(
-            f"Could not fetch FX rate for {reporting_currency}/{display_currency}. "
-            "Amounts requiring conversion are shown as N/A; no relabeling is applied."
-        )
-    else:
-        currency_note = f"{reporting_currency} → {display_currency} @ {display_fx_reporting:.4f}"
-
-if trading_currency != display_currency and raw_fx_trading is None:
-    st.warning(
-        f"Could not fetch FX rate for {trading_currency}/{display_currency}. "
-        "Quote prices requiring conversion are shown as N/A."
-    )
-
-tone = score_tone(analysis["reality_score"])
-active_detail = st.session_state.get("detail_section", "Overview")
-previous_price = first_value(info, "previousClose", "regularMarketPreviousClose")
-price_change = None
-if analysis.get("price") is not None and previous_price not in (None, 0):
-    price_change = analysis["price"] / previous_price - 1
-price_change_label = percent(price_change) if price_change is not None else "N/A"
-exchange = info.get("exchange") or "Exchange unavailable"
-as_of = analysis.get("last_refreshed") or "N/A"
-
-render_html(
-    f'<div class="result-head">'
-    f'<div><div class="hero-title">{esc(company_name)}</div>'
-    f'<div class="result-meta">{esc(ticker)} · {esc(exchange)}'
-    f'{f" · {esc(sector)}" if sector and sector != "Unknown sector" else ""}'
-    f' · {esc(trading_currency)} · {esc(money(analysis.get("price"), trading_currency))}'
-    f' · {esc(price_change_label)} vs prior close · As of {esc(as_of)}</div>'
-    f'<div class="badge-row">'
-    f'<span class="source-chip"><span class="status-dot"></span>Yahoo Finance</span>'
-    f'<span class="source-chip">SEC EDGAR · {esc("live facts" if analysis.get("has_sec") else "status disclosed")}</span>'
-    f'<span class="source-chip">Reporting currency: {esc(reporting_currency)}</span>'
-    f'</div>'
-    f'<div class="hero-copy" style="margin-top:10px">{esc(conclusion_text(analysis))}</div></div>'
-    f'<div class="result-score {esc(tone)}"><em>Evidence quality</em><b>{esc(score(analysis["reality_score"]))}</b><div class="result-meta">0–100 heuristic signal · {esc(analysis.get("confidence", "N/A"))} confidence</div></div>'
-    f"</div>"
-)
-
-render_sec_status_strip(analysis)
-
-bad_flags = [label for label, level in analysis["quality_flags"] if level in ("warn", "bad")]
-if bad_flags:
-    render_html(f'<div class="quality-flags">{esc(" · ".join(bad_flags[:3]))}</div>')
-
-render_html(implied_line_html(analysis))
-
-render_html(
-    f'<div class="section-label">Market Snapshot <small>Latest available market and operating data</small></div>'
-    f'<div class="metric-grid">'
-    f'{metric_card("Current price", money(analysis["price"], trading_currency, display_currency, display_fx_trading), f"{trading_currency} quote · As of {as_of}", "blue")}'
-    f'{metric_card("Market capitalization", money(analysis["market_cap"], trading_currency, display_currency, display_fx_trading), f"Equity value · {trading_currency}", "purple")}'
-    f'{metric_card("Revenue", money(analysis["revenue"], reporting_currency, display_currency, display_fx_reporting), f"Latest available annual · {reporting_currency}", "green")}'
-    f'{metric_card("Free cash flow", money(analysis["free_cash_flow"], reporting_currency, display_currency, display_fx_reporting), f"Period-aligned cash conversion · {reporting_currency}", "cyan")}'
-    f"</div>"
-)
-
-render_data_quality(analysis)
-
-
-def growth_bar(label, value, css_class):
-    if value is None:
-        return (
-            f'<div class="gbar-row"><div class="gbar-head"><span>{label}</span><strong>n/a</strong></div>'
-            f'<div class="gbar-track"></div></div>'
-        )
-    width = round(min(max(abs(value) * 300, 2), 100), 1)
-    fill_class = "neg" if value < 0 else css_class
-    return (
-        f'<div class="gbar-row"><div class="gbar-head"><span>{label}</span><strong>{percent(value)}</strong></div>'
-        f'<div class="gbar-track"><div class="gbar-fill {fill_class}" style="width:{width}%"></div></div></div>'
-    )
-
-
-def growth_verdict(analysis):
-    if analysis.get("model_fcf_refused"):
-        return '<div class="gbar-verdict">No required growth until free cash is positive. Showing history and consensus only.</div>'
-    if analysis.get("growth_clamped"):
-        return '<div class="gbar-verdict">Implied growth sits outside the solver range, so the bars skip a fake-precise required rate.</div>'
-    required = analysis["required_growth"]
-    consensus = analysis["consensus_growth"]
-    if required is None or consensus is None:
-        return ""
-    gap_pp = (required - consensus) * 100
-    if gap_pp > 3:
-        text = (
-            f"The market appears to require about <b>{gap_pp:.1f} points more annual revenue growth</b> "
-            f"than analysts currently forecast for next year. The price assumes the company beats consensus, sustained for years."
-        )
-    elif gap_pp < -3:
-        text = (
-            f"The market appears to require about <b>{abs(gap_pp):.1f} points less annual growth</b> "
-            f"than analysts forecast for next year. Expectations look conservative relative to consensus."
-        )
-    else:
-        text = "The growth the market requires is <b>roughly in line</b> with analyst consensus for next year."
-    count = analysis["analyst_count"]
-    if count:
-        text += f" Based on {int(count)} analyst estimates."
-    return f'<div class="gbar-verdict">{text}</div>'
-
-
-def render_overview_sections(analysis, company_name, ticker, sector, industry, display_currency, display_fx_reporting, display_fx_trading):
-    render_html('<div class="section-label">Core research signal <small>Evidence first · heuristic, not a recommendation</small></div>')
-    left, right = st.columns([1, 1], gap="large")
-    with left:
-        render_html(
-            f'<div class="panel"><div class="panel-kicker">Price reality</div>'
-            f'<div class="signal-copy">{esc(conclusion_text(analysis))}</div>'
-            f'{implied_line_html(analysis)}'
-            f'<div class="signal-limitations">The signal compares a multi-year price-implied path with historical and near-term analyst evidence. It does not forecast returns.</div></div>'
-        )
-        render_html(
-            f'<div class="panel"><div class="panel-kicker">Market expectations</div>'
-            f'{make_rows(pricing_points(analysis, display_currency, display_fx_reporting))}'
-            f'</div>'
-        )
-    with right:
-        render_html(
-            f'<div class="panel"><div class="panel-kicker">Evidence quality</div>'
-            f'{score_bars_html(analysis)}'
-            f'<div class="signal-limitations">0–100 heuristic coverage signal. Missing evidence is disclosed and lowers confidence; it is not treated as positive evidence.</div></div>'
-        )
-        render_html(
-            f'<div class="panel"><div class="panel-kicker">Model assumptions</div>'
-            f'{make_rows([("Forecast horizon", f"{FORECAST_YEARS} years"), ("Discount rate", percent(analysis.get("discount_rate"))), ("Terminal growth", percent(analysis.get("terminal_growth"))), ("FCF margin used", percent(analysis.get("model_fcf_margin"))), ("Solver status", analysis.get("solver_status", "N/A"))])}'
-            f'</div>'
-        )
-
-    risks = risk_rows(analysis)
-    render_html(
-        f'<div class="section-label">Key risks <small>Readable warnings tied to the current evidence</small></div>'
-        f'<div class="panel"><div class="panel-kicker">Key risks</div>'
-    )
-    for risk_index, (title, detail, why) in enumerate(risks):
-        risk_cols = st.columns([0.75, 1.8, 0.45], gap="small")
-        with risk_cols[0]:
-            first_class = " risk-first" if risk_index == 0 else ""
-            render_html(f'<div class="risk-cell{first_class}"><strong>{esc(title)}</strong></div>')
-        with risk_cols[1]:
-            render_html(f'<div class="risk-cell{first_class}"><span>{esc(detail)}<br>{esc(why)}</span></div>')
-        with risk_cols[2]:
-            review_target = "Expectations" if title in {"Growth burden", "Expectation burden", "Cash conversion"} else "Data"
-            if st.button(
-                "Review",
-                key=f"review_risk_{ticker}_{risk_index}",
-                width="stretch",
-                type="secondary",
-                help=f"Open {review_target} for {title.lower()} evidence",
-            ):
-                st.session_state.detail_section = review_target
-                st.session_state.pending_review = title
-                st.rerun()
-    render_html('</div></div>')
-
-    source_values = provenance_values(analysis, display_currency, display_fx_reporting, display_fx_trading)
-    source_rows = []
-    for label, source in analysis.get("sources", {}).items():
-        source_label = source or "Unavailable"
-        if label == "SEC EDGAR status":
-            source_label = "SEC EDGAR"
-        elif label == "Yahoo Finance status":
-            source_label = "Yahoo Finance"
-        value = source_values.get(label, "N/A")
-        source_rows.append((label, value if value == source_label else f"{value} · {source_label}"))
-    sources_markup = make_rows(source_rows)
-    render_html(
-        f'<div class="overview-grid">'
-        f'<div class="panel"><div class="panel-kicker">Data sources</div>{sources_markup}</div>'
-        f'<div class="panel"><div class="panel-kicker">Research notes</div>'
-        f'<div class="note-box">{esc(" · ".join(label for label, _ in analysis.get("quality_flags", [])[:4]) or "No material coverage warnings.")}</div>'
-        f'<div class="signal-limitations">{esc(company_name)} · {esc(ticker)} · {esc(sector)} · {esc(industry)}</div></div>'
-        f'</div>'
-    )
-
-
-if active_detail in {"Overview", "Expectations"} and any(analysis[k] is not None for k in ("required_growth", "consensus_growth", "historical_growth")):
-    years = analysis.get("historical_growth_years") or 0
-    hist_caption = f"Historical ({years}y CAGR)" if years else "Historical CAGR"
-    render_html(
-        f'<div class="growth-plain">'
-        f'{growth_bar("Required", analysis["required_growth"] if not analysis.get("growth_clamped") else None, "req")}'
-        f'{growth_bar("Analysts", analysis["consensus_growth"], "con")}'
-        f'{growth_bar(hist_caption, analysis["historical_growth"], "his")}'
-        f"{growth_verdict(analysis)}"
-        f"</div>"
-    )
-
-if active_detail == "Overview":
-    render_overview_sections(analysis, company_name, ticker, sector, industry, display_currency, display_fx_reporting, display_fx_trading)
-
-def pick_detail_section():
-    options = ["Overview", "Price", "Expectations", "Scenarios", "Compare", "Data", "Methodology"]
-    current = st.session_state.get("detail_section")
-    if hasattr(st, "segmented_control"):
-        selected = st.segmented_control(
-            "Research section",
-            options,
-            default=current if current in options else "Overview",
-            key="detail_nav",
-            label_visibility="collapsed",
-        ) or current or "Overview"
-        if selected != current:
-            st.session_state.detail_section = selected
-            st.rerun()
-        return selected
-
-    keyed_options = [(name, f"nav_{name.lower()}") for name in options]
-    cols = st.columns(len(keyed_options), gap="small")
-    for col, (name, key) in zip(cols, keyed_options):
-        with col:
-            if st.button(name, key=key, width="stretch", type="primary" if current == name else "secondary"):
-                st.session_state.detail_section = name
-                st.rerun()
-    return st.session_state.get("detail_section")
-
-
-def chart_control(label, options, default, key):
-    if hasattr(st, "segmented_control"):
-        selected = st.segmented_control(label, options, default=default, key=key, label_visibility="collapsed")
-        return selected or default
-    return st.radio(label, options, index=options.index(default), horizontal=True, key=key, label_visibility="collapsed")
-
-
-def chart_control_multi(label, options, default, key):
-    if hasattr(st, "pills"):
-        return st.pills(label, options, selection_mode="multi", default=default, key=key, label_visibility="collapsed") or []
-    return st.multiselect(label, options, default=default, key=key, label_visibility="collapsed")
-
-
-def cashflow_trend_dataframe(yahoo_data):
-    """Build a period-aligned annual cash-flow trend without manufacturing values."""
-    financials = yahoo_data.get("financials")
-    cashflow = yahoo_data.get("cashflow")
-    revenue = get_row(financials, ["Total Revenue", "Operating Revenue"])
-    ocf = get_row(cashflow, ["Operating Cash Flow", "Total Cash From Operating Activities"])
-    capex = get_row(cashflow, ["Capital Expenditure", "Capital Expenditures"])
-    reported = get_row(cashflow, ["Free Cash Flow"])
-    if revenue is None or (ocf is None and reported is None):
-        return pd.DataFrame()
-
-    rows = []
-    for period in sorted(set(revenue.index), reverse=True):
-        revenue_value = safe_float(revenue.get(period))
-        ocf_value = safe_float(ocf.get(period)) if ocf is not None else None
-        capex_value = normalize_capex(capex.get(period)) if capex is not None else None
-        reported_value = safe_float(reported.get(period)) if reported is not None else None
-        fcf_value = compute_fcf(ocf_value, capex_value, reported_value)
-        if revenue_value is None or fcf_value is None:
-            continue
-        rows.append({
-            "Period": str(period)[:10],
-            "Revenue": revenue_value,
-            "Free cash flow": fcf_value,
-            "FCF margin": fcf_value / revenue_value if revenue_value > 0 else None,
-        })
-    return pd.DataFrame(rows)
-
-
-def render_expectations_view(analysis, yahoo_data, display_currency, display_fx_reporting):
-    historical_years = analysis.get("historical_growth_years") or 0
-    render_html(
-        '<div class="section-label">Expectations <small>What the current price appears to require versus operating evidence</small></div>'
-    )
-    render_html(
-        f'<div class="metric-grid">'
-        f'{metric_card("Implied growth", required_growth_label(analysis), "Multi-year price-implied revenue path", "blue")}'
-        f'{metric_card("Historical growth", percent(analysis.get("historical_growth")), f"{historical_years}-year revenue CAGR", "green")}'
-        f'{metric_card("Analyst consensus", percent(analysis.get("consensus_growth")), "Near-term next-FY estimate", "purple")}'
-        f'{metric_card("Current FCF margin", percent(analysis.get("fcf_margin")), "Latest compatible period", "cyan")}'
-        f'</div>'
-    )
-    left, right = st.columns([1, 1], gap="large")
-    with left:
-        render_html('<div class="panel"><div class="panel-kicker">Growth reality</div><div class="signal-copy">The price is a claim about future operating performance.</div>')
-        render_html(implied_line_html(analysis))
-        hist_years = analysis.get("historical_growth_years") or 0
-        render_html(
-            f'{growth_bar("Price-implied", analysis["required_growth"] if not analysis.get("growth_clamped") else None, "req")}'
-            f'{growth_bar("Analyst consensus", analysis.get("consensus_growth"), "con")}'
-            f'{growth_bar(f"Historical ({hist_years}y)", analysis.get("historical_growth"), "his")}'
-            f'{growth_verdict(analysis)}'
-        )
-        render_html('</div>')
-    with right:
-        render_html(
-            f'<div class="panel"><div class="panel-kicker">Model assumptions</div>'
-            f'{make_rows(pricing_points(analysis, display_currency, display_fx_reporting))}'
-            f'<div class="note-box">Analyst consensus is a near-term comparison. It is not the same horizon as the multi-year reverse-DCF path.</div></div>'
-        )
-
-    trend = cashflow_trend_dataframe(yahoo_data)
-    render_html('<div class="section-label">Cash-flow quality <small>Annual operating cash flow and capex are period-aligned where available</small></div>')
-    if trend.empty:
-        st.info("Cash-flow trend is unavailable for the periods returned by Yahoo Finance.")
-    else:
-        display = trend.copy()
-        display["Revenue"] = display["Revenue"].map(lambda value: money(value, analysis["reporting_currency"], display_currency, display_fx_reporting))
-        display["Free cash flow"] = display["Free cash flow"].map(lambda value: money(value, analysis["reporting_currency"], display_currency, display_fx_reporting))
-        display["FCF margin"] = display["FCF margin"].map(percent)
-        st.dataframe(display, width="stretch", hide_index=True)
-    render_html(
-        '<div class="panel"><div class="panel-kicker">How to read this page</div>'
-        '<p class="hero-copy">A demanding implied growth rate is not a prediction. It is a description of the operating path embedded in the current enterprise value. TSRP places that path beside history and consensus, then shows which evidence is missing.</p></div>'
-    )
-
-
-detail = pick_detail_section()
-
-pending_review = st.session_state.pop("pending_review", None)
-if pending_review:
-    st.info(f"Reviewing {pending_review}: supporting evidence is shown below.")
-
-if detail == "Price":
-    ctrl_kind, ctrl_tf, ctrl_ma = st.columns([1, 1.7, 1.5])
-    with ctrl_kind:
-        chart_kind = chart_control("Chart type", ["Candles", "Line"], "Candles", "chart_kind")
-    with ctrl_tf:
-        chart_tf = chart_control("Timeframe", CHART_TIMEFRAMES, "1Y", "chart_tf")
-    with ctrl_ma:
-        ma_selected = chart_control_multi("Moving averages", ["SMA 20", "SMA 50", "SMA 200"], ["SMA 50"], "chart_ma")
-    smas = tuple(int(label.split()[1]) for label in ma_selected if str(label).startswith("SMA "))
-
-    refresh_col, _ = st.columns([1, 5])
-    with refresh_col:
-            if st.button("↻", key="refresh_chart", help="Refresh price history"):
-                fetch_yahoo_data.clear()
-                fetch_price_history.clear()
-                st.rerun()
-
-    period = "max" if chart_tf == "Max" else ("5y" if chart_tf in {"3Y", "5Y"} else "1y")
-    history = fetch_price_history(ticker, period)
-    if history is None or history.empty:
-        st.info("No price history available for this ticker.")
-    else:
-        render_html(
-            f'<div class="section-label">Price history <small>{esc(ticker)} · {esc(display_currency)} · Yahoo Finance · As of {esc(analysis.get("last_refreshed", "N/A"))}</small></div>'
-        )
-        st.markdown('<div class="chart-wrap">', unsafe_allow_html=True)
-        fx = display_fx_trading if trading_currency != display_currency else 1.0
-        render_price_chart(history, fx, chart_kind, chart_tf, smas)
-        st.markdown("</div>", unsafe_allow_html=True)
-        st.caption(f"{ticker} · {chart_tf} · prices in {display_currency} · Yahoo Finance · values may be delayed")
-
-elif detail == "Expectations":
-    render_expectations_view(analysis, yahoo_data, display_currency, display_fx_reporting)
-
-elif detail == "Scenarios":
-    market_cap_reporting = safe_float(analysis["market_cap_reporting"])
-    if not analysis["revenue"] or not market_cap_reporting or market_cap_reporting <= 0:
-        st.info("Revenue or market cap is unavailable, so the what-if model cannot run for this ticker.")
-    else:
-        base_growth = analysis["required_growth"]
-        if base_growth is None:
-            base_growth = analysis["historical_growth"] if analysis["historical_growth"] is not None else 0.08
-        base_growth_pct = float(min(max(base_growth * 100, -10.0), 40.0))
-        # What-If may start from DEFAULT only as an explicit slider seed — never used in the scored model
-        seed_margin = analysis["model_fcf_margin"] if analysis["model_fcf_margin"] is not None else DEFAULT_FCF_MARGIN
-        base_margin_pct = float(min(max(seed_margin * 100, 1.0), 50.0))
-        margin_note = (
-            " Reverse DCF was not solved on the main page because free cash is not positive. These sliders are a hypothetical."
-            if analysis.get("model_fcf_refused")
-            else f" Model cash margin: {analysis.get('model_fcf_note', '')}."
-        )
-        base_discount = safe_float(analysis.get("discount_rate"), DISCOUNT_RATE)
-        base_terminal = safe_float(analysis.get("terminal_growth"), TERMINAL_GROWTH)
-
-        render_html(
-            '<div class="whatif-note"><b>Hypothetical scenario inputs.</b> Set your own assumptions and see the enterprise value and share-price equivalent they produce. '
-            "These outputs are derived from the model, not targets, recommendations, or expected returns. "
-            f"{margin_note}</div>"
-        )
-
-        preset_col, reset_col = st.columns([3, 1])
-        with preset_col:
-            preset = st.selectbox("Assumption set", ["User-defined", "Base", "Cautious", "Optimistic"], key="scenario_preset")
-        with reset_col:
-            st.write("")
-            if st.button("Reset assumptions", key="reset_scenarios", width="stretch"):
-                st.session_state.pop("scenario_preset", None)
-                for preset_key in ("user-defined", "base", "cautious", "optimistic"):
-                    for field in ("growth", "margin", "discount", "terminal"):
-                        st.session_state.pop(f"wi_{field}_{preset_key}", None)
-                st.rerun()
-
-        preset_delta = {"User-defined": 0.0, "Base": 0.0, "Cautious": -0.05, "Optimistic": 0.05}[preset]
-        margin_delta = {"User-defined": 0.0, "Base": 0.0, "Cautious": -0.03, "Optimistic": 0.03}[preset]
-        discount_delta = {"User-defined": 0.0, "Base": 0.0, "Cautious": 0.02, "Optimistic": -0.01}[preset]
-        terminal_delta = {"User-defined": 0.0, "Base": 0.0, "Cautious": -0.005, "Optimistic": 0.005}[preset]
-        preset_note = "User-defined inputs" if preset == "User-defined" else f"{preset} sensitivity around the available evidence; adjust or reset the inputs below."
-        render_html(f'<div class="note-box">{esc(preset_note)}</div>')
-        widget_suffix = preset.lower().replace(" ", "-")
-        growth_key = f"wi_growth_{widget_suffix}"
-        margin_key = f"wi_margin_{widget_suffix}"
-        discount_key = f"wi_discount_{widget_suffix}"
-        terminal_key = f"wi_terminal_{widget_suffix}"
-
-        sl_left, sl_right = st.columns(2)
-        with sl_left:
-            wi_growth = st.slider("User assumption · starting revenue growth", -10.0, 40.0, round(min(max(base_growth_pct + preset_delta * 100, -10.0), 40.0), 1), 0.5, format="%.1f%%", key=growth_key) / 100
-            wi_margin = st.slider("User assumption · FCF margin at maturity", 1.0, 50.0, round(min(max(base_margin_pct + margin_delta * 100, 1.0), 50.0), 1), 0.5, format="%.1f%%", key=margin_key) / 100
-        with sl_right:
-            wi_discount = st.slider("User assumption · discount rate", 3.0, 20.0, round(min(max((base_discount + discount_delta) * 100, 3.0), 20.0), 2), 0.25, format="%.2f%%", key=discount_key) / 100
-            wi_terminal = st.slider("User assumption · terminal growth", 0.0, 6.0, round(min(max((base_terminal + terminal_delta) * 100, 0.0), 6.0), 2), 0.25, format="%.2f%%", key=terminal_key) / 100
-
-        if wi_discount <= wi_terminal:
-            st.warning("Discount rate must be above terminal growth for the model to converge.")
-        else:
-            implied_ev = dcf_enterprise_value(
-                analysis["revenue"],
-                wi_growth,
-                wi_margin,
-                wi_discount,
-                wi_terminal,
-                start_margin=analysis["fcf_margin"] if analysis.get("fcf_margin") and analysis["fcf_margin"] > 0 else wi_margin,
-            )
-            if implied_ev is None:
-                st.info("These inputs do not produce a valid valuation.")
-            else:
-                implied_equity = None
-                ratio = None
-                if analysis.get("debt") is not None and analysis.get("cash") is not None and market_cap_reporting:
-                    implied_equity = implied_ev - analysis["debt"] + analysis["cash"]
-                    ratio = implied_equity / market_cap_reporting
-                upside = ratio - 1 if ratio is not None else None
-                price = safe_float(analysis["price"])
-                implied_price = price * ratio if price is not None and ratio is not None else None
-                delta_cls = "up" if upside is not None and upside >= 0 else "down"
-                delta_txt = f"{upside:+.1%}" if upside is not None else "N/A"
-                price_txt = money(implied_price, trading_currency, display_currency, display_fx_trading) if implied_price is not None else "N/A"
-                current_txt = money(price, trading_currency, display_currency, display_fx_trading)
-
-                render_html(
-                    f'<div class="metric-grid" style="margin-top:14px">'
-                    f'{metric_card("Scenario-implied price", price_txt, "At your assumptions", "blue")}'
-                    f'{metric_card("Current price", current_txt, f"{trading_currency} quote", "purple")}'
-                    f'{metric_card("Implied enterprise value", money(implied_ev, reporting_currency, display_currency, display_fx_reporting), "DCF at your inputs", "green")}'
-                    f'<div class="metric-card accent-cyan"><div class="metric-label">Difference vs current</div>'
-                    f'<div class="metric-value"><span class="delta-chip {delta_cls}">{delta_txt}</span></div>'
-                    f'<div class="metric-meta">scenario value relative to current quote</div></div>'
-                    f"</div>"
-                )
-
-                req = analysis["required_growth"]
-                if req is not None:
-                    render_html(
-                        f'<div class="whatif-note">For reference, the current price implies about '
-                        f"<b>{required_growth_label(analysis)}</b> starting growth at a {percent(analysis['model_fcf_margin'])} FCF margin, "
-                        f"{percent(analysis.get('discount_rate'))} discount rate, and {percent(analysis.get('terminal_growth'))} terminal growth "
-                        f"(faded path, {analysis.get('rate_currency', reporting_currency)} money world).</div>"
-                        )
-                if implied_equity is None:
-                    st.warning("Scenario enterprise value is available, but a share-price equivalent is unavailable because cash or debt is missing.")
-
-                render_html('<div class="section-label">Scenario sensitivity <small>Derived enterprise value at nearby user-defined assumptions</small></div>')
-                sensitivity_growth = [wi_growth - 0.05, wi_growth, wi_growth + 0.05]
-                sensitivity_margin = [max(wi_margin - 0.03, 0.01), wi_margin, min(wi_margin + 0.03, 0.50)]
-                sensitivity_rows = []
-                for growth_value in sensitivity_growth:
-                    row = {"Starting growth": percent(growth_value)}
-                    for margin_value in sensitivity_margin:
-                        value = dcf_enterprise_value(
-                            analysis["revenue"], growth_value, margin_value, wi_discount, wi_terminal,
-                            start_margin=analysis["fcf_margin"] if analysis.get("fcf_margin") and analysis["fcf_margin"] > 0 else margin_value,
-                        )
-                        row[f"FCF margin {percent(margin_value)}"] = money(value, reporting_currency, display_currency, display_fx_reporting)
-                    sensitivity_rows.append(row)
-                st.dataframe(pd.DataFrame(sensitivity_rows), width="stretch", hide_index=True)
-                st.caption("Sensitivity outputs are hypothetical model results. They are not target prices, recommendations, or expected returns.")
-
-elif detail == "Compare":
-    if st.session_state.pop("clear_compare_search", False):
-        st.session_state.compare_search = ""
-    cmp_col, btn_col = st.columns([3, 1])
-    with cmp_col:
-        cmp_input = st.text_input(
-            "Peers to compare",
-            placeholder="Search a company to add as a peer",
-            key="compare_search",
-            help="Type a company name or ticker and choose a result. You can also enter comma-separated names.",
-        )
-    with btn_col:
-        st.write("")
-        cmp_submit = st.button("Compare", key="compare_submit", width="stretch", type="primary")
-
-    compare_query = str(cmp_input or "").strip()
-    compare_hits = []
-    if compare_query and "," not in compare_query and ";" not in compare_query and len(compare_query) >= 2:
-        compare_hits = search_companies(compare_query)
-
-    selected_peer = render_company_suggestions(compare_hits, "pick_compare")
-    if selected_peer:
-        selected_symbol = selected_peer["symbol"]
-        existing = [symbol for symbol in st.session_state.get("compare_symbols", []) if symbol != ticker]
-        if selected_symbol != ticker and selected_symbol not in existing:
-            st.session_state.compare_symbols = (existing + [selected_symbol])[:3]
-        st.session_state.clear_compare_search = True
-        st.rerun()
-
-    if cmp_submit:
-        tokens = [part.strip() for part in cmp_input.replace(";", ",").split(",") if part.strip()]
-        valid_peers = []
-        seen = {ticker}
-        for token in tokens[:6]:
-            symbol, error = resolve_compare_peer(token)
-            if not symbol:
-                st.error(error or f"Could not resolve “{token}”")
-                continue
-            if symbol in seen:
-                continue
-            seen.add(symbol)
-            valid_peers.append(symbol)
-            if len(valid_peers) == 3:
-                break
-        st.session_state.compare_symbols = valid_peers
-
-    peer_symbols = [s for s in st.session_state.get("compare_symbols", []) if s != ticker]
-
-    if not peer_symbols:
-        st.info("Enter one to three company names or tickers above — Microsoft, Google, Samsung all work.")
-    else:
-        analysis["name"] = company_name
-        compare_results = {ticker: analysis}
-        with st.spinner("Analyzing peers..."):
-            with ThreadPoolExecutor(max_workers=3) as pool:
-                futs = {pool.submit(fetch_compare_analysis, symbol): symbol for symbol in peer_symbols}
-                for fut in as_completed(futs):
-                    symbol = futs[fut]
-                    peer = fut.result()
-                    if peer is None:
-                        st.error(f"Invalid ticker: {symbol}")
-                    else:
-                        compare_results[symbol] = peer
-
-        if len(compare_results) > 1:
-            render_compare_chart(compare_results)
-            render_html(f'<div class="panel">{compare_table_html(compare_results)}</div>')
-            st.caption(
-                "Each ticker uses its own reporting-currency discount and terminal rates. "
-                "Scores are heuristics — compare required growth vs consensus inside the same money world, not as a global ranking."
-            )
-
-elif detail == "Data":
-    render_html('<div class="section-label">Data <small>Metric-level provenance, periods, units, and quality status</small></div>')
-    st.caption("Unavailable values remain N/A. Converted values identify the display currency; source currency remains in the notes.")
-    table = evidence_dataframe(
-        analysis,
-        company_name,
-        ticker,
-        sector,
-        industry,
-        reporting_currency,
-        trading_currency,
-        display_currency,
-        display_fx_reporting,
-        display_fx_trading,
-    )
-    st.dataframe(table, width="stretch", hide_index=True)
-    st.download_button(
-        "Download CSV",
-        data=table.to_csv(index=False).encode("utf-8"),
-        file_name=f"tsrp_{ticker}_{display_currency}.csv",
-        mime="text/csv",
-        width="content",
-    )
-    st.download_button(
-        "Download JSON",
-        data=export_payload(analysis, company_name, ticker, sector, industry, display_currency),
-        file_name=f"tsrp_{ticker}_{display_currency}.json",
-        mime="application/json",
-        width="content",
-    )
-    source_values = provenance_values(analysis, display_currency, display_fx_reporting, display_fx_trading)
-    source_labels = dict(analysis["sources"])
-    source_labels["SEC EDGAR status"] = "SEC EDGAR"
-    source_labels["Yahoo Finance status"] = "Yahoo Finance"
-    source_table = pd.DataFrame(
-        [
-            [label, source_values.get(label, "N/A"), source_labels.get(label) or "Unavailable"]
-            for label in analysis["sources"]
-        ],
-        columns=["Data item", "Value", "Source"],
-    )
-    render_html('<div class="section-label">Data sources <small>Source coverage for this analysis</small></div>')
-    st.dataframe(source_table, width="stretch", hide_index=True)
-    st.caption(f"Market data: Yahoo Finance. Annual filing facts: {analysis.get('sec_status', 'N/A')}.")
-    if reporting_currency != trading_currency:
-        st.caption(
-            f"Statements are in {reporting_currency}. Price and market cap are in {trading_currency}."
-        )
-
-elif detail == "Methodology":
-    render_methodology()
-
-render_html(
-    f'<div class="app-footer">{esc(APP_SHORT)} · Yahoo Finance · SEC EDGAR status disclosed · {esc(EDUCATIONAL_DISCLAIMER)}</div>'
-)
-
-st.markdown("</div>", unsafe_allow_html=True)
