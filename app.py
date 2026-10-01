@@ -5085,17 +5085,17 @@ html, body, [class*="css"], .stApp {
 }
 .product-header {
   display: flex; align-items: center; justify-content: space-between; gap: 22px;
-  padding: 4px 0 24px; border-bottom: 1px solid var(--tsrp-border);
+  padding: 4px 0 24px; border-bottom: 0;
 }
-.brand-lockup-new { display:flex; align-items:center; gap:12px; min-width:190px; }
+.brand-lockup-new { display:flex; align-items:center; gap:12px; min-width:0; flex:1 1 auto; }
 .brand-mark-new {
   width:34px; height:34px; display:grid; place-items:center; border-radius:10px;
   background:var(--tsrp-accent); color:#081311; font-weight:850; letter-spacing:-.08em;
 }
-.brand-copy-new { display:flex; flex-direction:column; gap:2px; }
+.brand-copy-new { display:flex; flex-direction:column; gap:2px; min-width:0; }
 .brand-copy-new strong { font-size:15px; letter-spacing:.08em; }
 .brand-copy-new span { color:var(--tsrp-muted); font-size:11px; }
-.header-status-new { color:var(--tsrp-muted); font-size:11px; text-align:right; line-height:1.5; }
+.header-status-new { color:var(--tsrp-muted); font-size:11px; text-align:right; line-height:1.5; flex:0 1 320px; min-width:0; overflow-wrap:anywhere; }
 .search-zone {
   display:flex; align-items:flex-end; gap:10px; margin:24px 0 18px;
   padding:14px; background:var(--tsrp-surface); border:1px solid var(--tsrp-border);
@@ -5279,7 +5279,9 @@ html, body, [class*="css"], .stApp {
 .evidence-card p { color:var(--tsrp-muted); font-size:11px; line-height:1.55; margin:6px 0; }
 .evidence-card .eyebrow-new { color:var(--tsrp-faint); font-size:9px; text-transform:uppercase; letter-spacing:.12em; }
 .evidence-card .evidence-meta { margin-top:12px; padding-top:10px; border-top:1px solid var(--tsrp-border); color:var(--tsrp-faint); font-size:10px; line-height:1.5; }
-.research-tools { margin-top:18px; }
+.research-tools { max-width:100%; margin:40px auto 0; padding-top:4px; }
+.research-tools > .section-kicker-new { margin:0 0 9px; }
+.research-tools, .research-tools * { font-family:Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important; }
 .research-tools [data-testid="stExpander"] { background:var(--tsrp-surface) !important; border:1px solid var(--tsrp-border) !important; border-radius:12px !important; }
 .research-tools [data-testid="stExpander"] summary { color:var(--tsrp-text) !important; font-size:12px !important; }
 .research-tools [data-testid="stExpander"] > div { border-top:1px solid var(--tsrp-border) !important; }
@@ -5314,7 +5316,7 @@ body, .stApp { font-variant-numeric:tabular-nums; }
 h1, h2, h3, h4, h5, h6, button, input, textarea, select {
   font-family:Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
 }
-.product-header { padding:6px 0 22px; border-bottom-color:var(--tsrp-border); }
+.product-header { padding:6px 0 22px; border-bottom:0 !important; }
 .brand-mark-new { background:var(--tsrp-accent); color:var(--tsrp-surface) !important; }
 .brand-copy-new strong, .company-strip h1, .section-intro h2, .score-hero-copy h2, .panel-new h3, .empty-new h3, .evidence-card h4 { font-weight:700 !important; }
 .brand-copy-new span, .header-status-new, .company-strip p, .section-intro p, .panel-new p, .score-hero-copy p, .metric-card-new .meta, .source-foot, .evidence-card p, .evidence-card .evidence-meta { color:var(--tsrp-muted) !important; }
@@ -5327,6 +5329,10 @@ h1, h2, h3, h4, h5, h6, button, input, textarea, select {
 .stButton button, .stDownloadButton button, [data-testid="stFormSubmitButton"] button {
   min-height:44px !important; height:auto !important; padding:10px 16px !important; border:1px solid var(--tsrp-border-strong) !important; border-radius:10px !important; background:var(--tsrp-surface) !important; color:var(--tsrp-text) !important; font-family:Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important; font-size:12px !important; font-weight:600 !important; line-height:1.2 !important; white-space:nowrap !important; display:flex !important; align-items:center !important; justify-content:center !important; gap:8px !important; box-shadow:none !important; transform:none !important; transition:background-color .12s ease, border-color .12s ease, color .12s ease !important;
 }
+.stButton button p, .stDownloadButton button p, [data-testid="stFormSubmitButton"] button p,
+[data-testid="stWidgetLabel"] p, [data-testid="stExpander"] summary p {
+  font-family:Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
 .stButton button:hover, .stDownloadButton button:hover { background:var(--tsrp-surface-2) !important; border-color:var(--tsrp-accent) !important; color:var(--tsrp-text) !important; transform:none !important; }
 .stButton button:active, .stDownloadButton button:active { background:var(--tsrp-surface-3) !important; border-color:var(--tsrp-accent) !important; transform:none !important; }
 .stButton button[kind="primary"], [data-testid="stFormSubmitButton"] button[kind="primary"] { background:var(--tsrp-accent) !important; border-color:var(--tsrp-accent) !important; color:var(--tsrp-surface) !important; }
@@ -5334,9 +5340,14 @@ h1, h2, h3, h4, h5, h6, button, input, textarea, select {
 .stButton button[kind="primary"]:active, [data-testid="stFormSubmitButton"] button[kind="primary"]:active { background:#4E3D2C !important; border-color:#4E3D2C !important; }
 .stButton button:disabled, .stDownloadButton button:disabled { opacity:.52 !important; cursor:not-allowed !important; }
 button:focus-visible, input:focus-visible, textarea:focus-visible, [role="button"]:focus-visible { outline:3px solid var(--tsrp-focus) !important; outline-offset:2px !important; }
-[data-testid="stButtonGroup"] { background:var(--tsrp-surface) !important; border-color:var(--tsrp-border) !important; border-radius:12px !important; padding:5px !important; }
+[data-testid="stButtonGroup"] { width:100% !important; display:flex !important; background:var(--tsrp-surface) !important; border-color:var(--tsrp-border) !important; border-radius:12px !important; padding:5px !important; }
 [data-testid="stButtonGroup"] > div { background:transparent !important; }
-[data-testid="stButtonGroup"] button { min-height:42px !important; padding:10px 14px !important; border:0 !important; border-radius:8px !important; background:transparent !important; color:var(--tsrp-muted) !important; }
+[data-testid="stButtonGroup"] [data-baseweb="button-group"] { width:100% !important; flex-wrap:nowrap !important; }
+[data-testid="stButtonGroup"] > div, [data-testid="stButtonGroup"] button { flex:1 1 0 !important; min-width:0 !important; }
+[data-testid="stButtonGroup"] [data-baseweb="button-group"] > button { width:20% !important; max-width:none !important; flex:1 1 20% !important; }
+[data-testid="stButtonGroup"] [data-baseweb="button-group"] > button > div { width:100% !important; display:flex !important; justify-content:center !important; }
+.st-key-primary_section_nav, .st-key-primary_section_nav [data-testid="stButtonGroup"] { width:100% !important; }
+[data-testid="stButtonGroup"] button { min-height:42px !important; padding:10px 12px !important; border:0 !important; border-radius:8px !important; background:transparent !important; color:var(--tsrp-muted) !important; }
 [data-testid="stButtonGroup"] button[data-testid="stBaseButton-segmented_controlActive"] { background:var(--tsrp-surface-3) !important; color:var(--tsrp-text) !important; box-shadow:inset 0 0 0 1px var(--tsrp-border-strong) !important; }
 .section-nav-label { color:var(--tsrp-faint); margin:24px 0 10px; }
 .company-strip { padding:28px 0 20px; }
@@ -5366,12 +5377,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [role="button
   .stButton button[kind="primary"], [data-testid="stFormSubmitButton"] button[kind="primary"] { min-height:48px !important; width:100% !important; }
   .stButton button, .stDownloadButton button { min-height:48px !important; }
   .product-header { padding-bottom:18px; }
+  .header-status-new { width:100%; max-width:100%; flex:0 0 auto; height:auto; text-align:left; }
   .metric-grid-new { gap:10px; }
   .panel-new { padding:16px; }
   .score-hero { padding:20px 16px; }
   .score-table, .compare-table-new, .change-table { display:block; overflow-x:auto; white-space:nowrap; }
   [data-testid="stButtonGroup"] { width:100% !important; overflow-x:auto !important; }
-  [data-testid="stButtonGroup"] button { flex:0 0 auto !important; white-space:nowrap !important; }
+  [data-testid="stButtonGroup"] [data-baseweb="button-group"] { width:max-content !important; overflow-x:auto !important; justify-content:flex-start !important; }
+  [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button { width:auto !important; max-width:none !important; flex:0 0 auto !important; white-space:nowrap !important; }
+  .st-key-primary_section_nav, .st-key-primary_section_nav [data-testid="stButtonGroup"] { width:100% !important; }
 }
 @media (max-width: 900px) {
   [data-testid="stMainBlockContainer"] { padding:26px 22px 46px !important; }
@@ -6103,24 +6117,9 @@ if str(company_name).upper() == ticker and KNOWN_NAMES.get(ticker):
 sector = analysis["sector"]
 industry = info.get("industry") or "Unknown industry"
 
-with st.expander("Sources, currency & more", expanded=False):
-    display_currency = st.selectbox("Currency for displayed values", DISPLAY_CURRENCIES, key="display_currency", help="This changes how values are displayed. Company reporting currency is kept in the detailed source record.")
-    controls_left, controls_right = st.columns(2)
-    with controls_left:
-        if st.button("↻", key="new_refresh_data", help="Refresh market, FX, and SEC data"):
-            fetch_yahoo_data.clear()
-            fetch_price_history.clear()
-            fetch_sec_companyfacts.clear()
-            fetch_sec_ticker_map.clear()
-            fx_rate.clear()
-            rate_to_usd.clear()
-            st.rerun()
-    with controls_right:
-        export_table = evidence_dataframe(analysis, company_name, ticker, sector, industry, reporting_currency, trading_currency, display_currency, 1.0, 1.0)
-        st.download_button("Download source table", export_table.to_csv(index=False).encode("utf-8"), f"tsrp_{ticker}.csv", "text/csv", key="new_export_csv")
-        st.download_button("Download full research record", export_payload(analysis, company_name, ticker, sector, industry, display_currency), f"tsrp_{ticker}.json", "application/json", key="new_export_json")
-    render_html('<div class="panel-title-row" style="margin-top:18px"><h3>How TSRP works</h3><span>Optional detail</span></div>')
-    render_methodology()
+display_currency = st.session_state.get("display_currency", DISPLAY_CURRENCIES[0])
+if display_currency not in DISPLAY_CURRENCIES:
+    display_currency = DISPLAY_CURRENCIES[0]
 
 raw_fx_reporting = fx_rate(reporting_currency, display_currency)
 raw_fx_trading = fx_rate(trading_currency, display_currency)
@@ -6163,6 +6162,27 @@ elif active_section == "Catalysts & Risks":
     render_catalysts_risks_section(analysis, ticker)
 elif active_section == "What Changed?":
     render_changed_section(analysis, company_name, ticker, display_currency, display_fx_reporting)
+
+render_html('<div class="research-tools"><div class="section-kicker-new">Sources and controls</div>')
+with st.expander("Sources, currency & more", expanded=False):
+    display_currency = st.selectbox("Currency for displayed values", DISPLAY_CURRENCIES, key="display_currency", help="This changes how values are displayed. Company reporting currency is kept in the detailed source record.")
+    controls_left, controls_right = st.columns(2, gap="small")
+    with controls_left:
+        if st.button("↻", key="new_refresh_data", help="Refresh market, FX, and SEC data"):
+            fetch_yahoo_data.clear()
+            fetch_price_history.clear()
+            fetch_sec_companyfacts.clear()
+            fetch_sec_ticker_map.clear()
+            fx_rate.clear()
+            rate_to_usd.clear()
+            st.rerun()
+    with controls_right:
+        export_table = evidence_dataframe(analysis, company_name, ticker, sector, industry, reporting_currency, trading_currency, display_currency, 1.0, 1.0)
+        st.download_button("Download source table", export_table.to_csv(index=False).encode("utf-8"), f"tsrp_{ticker}.csv", "text/csv", key="new_export_csv")
+        st.download_button("Download full research record", export_payload(analysis, company_name, ticker, sector, industry, display_currency), f"tsrp_{ticker}.json", "application/json", key="new_export_json")
+    render_html('<div class="panel-title-row" style="margin-top:18px"><h3>How TSRP works</h3><span>Optional detail</span></div>')
+    render_methodology()
+render_html('</div>')
 
 render_html(
     f'<div class="app-footer-new">TSRP · Yahoo Finance · SEC EDGAR status disclosed · Data as of {esc(as_of)}<br>{esc(EDUCATIONAL_DISCLAIMER)}</div></div>'
