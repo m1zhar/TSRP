@@ -96,6 +96,13 @@ def model_rates(reporting_currency, sector=None):
 
 def year_growth(initial_growth, terminal_growth, year, years=FORECAST_YEARS, fade_start=FADE_START_YEAR):
     """High growth through fade_start, then linear fade to terminal by year `years`."""
+    initial_growth = _f(initial_growth)
+    terminal_growth = _f(terminal_growth)
+    year = _f(year)
+    years = _f(years)
+    fade_start = _f(fade_start)
+    if None in (initial_growth, terminal_growth, year, years, fade_start) or years <= 0 or year <= 0:
+        return None
     if year <= fade_start:
         return initial_growth
     span = max(years - fade_start, 1)
@@ -104,6 +111,12 @@ def year_growth(initial_growth, terminal_growth, year, years=FORECAST_YEARS, fad
 
 
 def year_margin(start_margin, mature_margin, year, years=FORECAST_YEARS):
+    start_margin = _f(start_margin)
+    mature_margin = _f(mature_margin)
+    year = _f(year)
+    years = _f(years)
+    if year is None or years is None or years <= 0 or year <= 0:
+        return None
     if start_margin is None or mature_margin is None or start_margin == mature_margin:
         return mature_margin if mature_margin is not None else start_margin
     t = year / years
@@ -121,7 +134,7 @@ def dcf_enterprise_value(
     start_margin=None,
 ):
     revenue = _f(revenue)
-    growth = _f(growth, 0.0)
+    growth = _f(growth)
     fcf_margin = _f(fcf_margin)
     discount_rate = _f(discount_rate)
     terminal_growth = _f(terminal_growth)
@@ -129,7 +142,7 @@ def dcf_enterprise_value(
 
     years = int(_f(years, 0) or 0)
     fade_start = int(_f(fade_start, 0) or 0)
-    if revenue is None or fcf_margin is None or discount_rate is None or terminal_growth is None:
+    if revenue is None or growth is None or fcf_margin is None or discount_rate is None or terminal_growth is None:
         return None
     if years <= 0 or fade_start < 0 or fade_start > years:
         return None
@@ -319,7 +332,7 @@ def expectation_score(required_growth, ev_sales, pe, ev_ebitda, sector_model):
     weights = sector_model["expectation_weights"]
 
     growth_pressure = MISSING_EVIDENCE_SCORE if required_growth is None else clamp(50 + required_growth * 180)
-    sales_pressure = clamp((ev_sales / benchmarks["ev_sales"]) * 100) if ev_sales else MISSING_EVIDENCE_SCORE
+    sales_pressure = clamp((ev_sales / benchmarks["ev_sales"]) * 100) if ev_sales and ev_sales > 0 else MISSING_EVIDENCE_SCORE
     pe_pressure = clamp((pe / benchmarks["pe"]) * 100) if pe and pe > 0 else MISSING_EVIDENCE_SCORE
     ebitda_pressure = clamp((ev_ebitda / benchmarks["ev_ebitda"]) * 100) if ev_ebitda and ev_ebitda > 0 else MISSING_EVIDENCE_SCORE
 
