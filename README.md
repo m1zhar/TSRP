@@ -12,27 +12,25 @@ The app compares what a current company value appears to require with historical
 
 > Educational research only. TSRP is not financial, investment, tax, accounting, or legal advice. It does not make recommendations, predict returns, or guarantee data accuracy. Market data may be delayed, incomplete, or incorrect. Do your own research and consult a qualified professional before making financial decisions.
 
-## Run locally
-
-Use a supported Python environment and install the tested dependency ranges:
-
-```bash
-python3 -m pip install -r requirements.txt
-python3 -m streamlit run app.py
-```
+## Streamlit deployment
 
 The Streamlit entrypoint is `app.py`; deterministic reverse-DCF and score logic lives in `engine.py`.
 
-## SEC EDGAR configuration
+To deploy on Streamlit Community Cloud:
 
-SEC EDGAR requests require a real monitored contact identity in the HTTP `User-Agent`. Copy `.env.example` as a reference and configure the value in the process environment; TSRP does not load `.env` files automatically and never stores the value in session state or exports.
+1. Create a new app from this GitHub repository.
+2. Select the `main` branch and `app.py` as the entrypoint.
+3. In the app settings, add the secret below, replacing the placeholder with a real monitored contact identity:
 
-```bash
-export SEC_USER_AGENT="TSRP your-monitored-email@example.com"
-python3 -m streamlit run app.py
+```toml
+SEC_USER_AGENT = "TSRP your-monitored-email@example.com"
 ```
 
-If the variable is missing or the provider is unavailable, SEC-derived figures remain unavailable and the app labels the exact filing-data state. It does not fabricate a fallback contact identity.
+Streamlit Cloud secrets are read through `st.secrets`. A process environment variable with the same name is also supported for other managed Streamlit deployments. TSRP does not load `.env` files automatically and never stores the value in session state or exports.
+
+## SEC EDGAR configuration
+
+SEC EDGAR requests require a real monitored contact identity in the HTTP `User-Agent`. If the secret is missing or the provider is unavailable, SEC-derived figures remain unavailable and the app labels the exact filing-data state. It does not fabricate a fallback contact identity.
 
 ## Data sources and limitations
 

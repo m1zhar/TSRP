@@ -84,7 +84,16 @@ def current_scheme():
     return INK
 
 
-SEC_USER_AGENT = os.getenv("SEC_USER_AGENT", "").strip()
+def configured_sec_user_agent():
+    """Read the monitored SEC identity from Streamlit Cloud secrets or the environment."""
+    try:
+        secret_value = str(st.secrets.get("SEC_USER_AGENT", "") or "").strip()
+    except Exception:
+        secret_value = ""
+    return secret_value or os.getenv("SEC_USER_AGENT", "").strip()
+
+
+SEC_USER_AGENT = configured_sec_user_agent()
 
 
 @dataclass(frozen=True)
@@ -5666,14 +5675,19 @@ input, textarea, [data-baseweb="select"] > div {
 .stButton button:hover, .stDownloadButton button:hover { background:var(--tsrp-surface-2) !important; border-color:var(--tsrp-accent) !important; }
 .stButton button[kind="primary"], [data-testid="stFormSubmitButton"] button[kind="primary"] { background:var(--tsrp-accent) !important; color:var(--tsrp-surface) !important; border-color:var(--tsrp-accent) !important; }
 input, textarea, [data-baseweb="select"] > div { background:var(--tsrp-surface) !important; }
-.st-key-new_analyze_company { width:100% !important; }
-.st-key-company_search, .st-key-new_analyze_company { width:100% !important; }
+.st-key-new_analyze_company { width:min(100%, 240px) !important; margin-left:auto !important; margin-right:auto !important; }
+.st-key-company_search { width:100% !important; }
 .st-key-company_search input, .st-key-new_analyze_company button { width:100% !important; min-width:0 !important; }
 .st-key-company_search input { width:calc(100% + 2px) !important; max-width:none !important; flex:0 0 calc(100% + 2px) !important; margin-left:-1px !important; }
 .st-key-new_analyze_company button {
   width:100% !important;
   min-height:44px !important;
   height:44px !important;
+  border:0 !important;
+  border-radius:10px !important;
+  background:var(--tsrp-accent) !important;
+  color:var(--tsrp-surface) !important;
+  box-shadow:0 8px 18px rgba(112,88,62,.18) !important;
   padding:0 16px !important;
   line-height:18.2px !important;
   box-sizing:border-box !important;
@@ -5684,6 +5698,17 @@ input, textarea, [data-baseweb="select"] > div { background:var(--tsrp-surface) 
   font-size:13px !important;
   font-weight:650 !important;
   letter-spacing:.01em !important;
+  transition:background-color .18s ease, box-shadow .18s ease, transform .18s ease !important;
+}
+.st-key-new_analyze_company button:hover {
+  background:#604A34 !important;
+  box-shadow:0 10px 22px rgba(112,88,62,.24) !important;
+  transform:translateY(-1px);
+}
+.st-key-new_analyze_company button:active { transform:translateY(0); }
+.st-key-new_analyze_company button:focus-visible {
+  outline:3px solid rgba(139,111,71,.28) !important;
+  outline-offset:3px;
 }
 .stAlert { border-radius:0 !important; box-shadow:none !important; }
 .score-table, .compare-table-new, .change-table { font-variant-numeric:tabular-nums; }
@@ -6065,7 +6090,7 @@ body [data-testid="stMain"] [data-testid="stFormSubmitButton"] button {
   .product-header, .brand-lockup-new, .company-strip { flex-direction:column !important; }
   .header-status-new { text-align:center !important; }
   .search-zone { flex-direction:column !important; gap:var(--space-3) !important; }
-  .search-zone > div, .st-key-company_search, .st-key-new_analyze_company { width:100% !important; }
+  .search-zone > div, .st-key-company_search { width:100% !important; }
   .st-key-new_analyze_company button[kind="primary"] { min-height:44px !important; height:44px !important; }
   .metric-grid-new, .score-driver-grid, .two-col-new, .three-col-new, .evidence-grid { grid-template-columns:1fr !important; gap:var(--space-4) !important; }
   .metric-card-new, .metric-card-new:nth-child(even) { min-height:104px !important; padding:var(--space-4) !important; border-left:0 !important; }
