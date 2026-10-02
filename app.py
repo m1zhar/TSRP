@@ -3921,7 +3921,8 @@ def render_methodology():
 <p><b>Sources and limits.</b> Yahoo Finance supplies market data, history, estimates, and supplemental fundamentals. SEC EDGAR is shown as the company-filing source; when filing data is unavailable, affected figures remain N/A and the reason stays visible. Reporting and trading currencies are kept separate; unavailable currency conversion blocks affected calculations.</p>
 <p><b>Automation boundary.</b> TSRP currently uses deterministic calculations and provider data. It does not call an AI text-generation service or turn generated commentary into financial evidence.</p>
 <p><b>Interpretation.</b> Past growth and analyst estimates are comparison points, not guarantees. TSRP cannot determine future returns, business quality beyond the selected evidence, accounting comparability, or whether any security is suitable for a person.</p>
-<div class="source-line">{esc(EDUCATIONAL_DISCLAIMER)}</div>
+<div class="policy-block"><h4>Privacy and data use</h4><p>{esc(PRIVACY_NOTICE)}</p></div>
+<div class="policy-block"><h4>Financial-information disclaimer</h4><p>{esc(EDUCATIONAL_DISCLAIMER)}</p></div>
 </div>'''
     )
 
@@ -5475,6 +5476,600 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [role="button
   .score-table, .compare-table-new, .change-table { font-size:10px; }
   .score-table th, .score-table td, .compare-table-new th, .compare-table-new td, .change-table th, .change-table td { padding:8px 5px; }
 }
+
+/* Final research layout: square controls, aligned edges, and fewer boxes. */
+*, *::before, *::after { border-radius:0 !important; }
+body [data-testid="stMain"] * { border-radius:0 !important; }
+body [data-testid="stMain"] button[data-testid="stBaseButton-segmented_controlActive"],
+body [data-testid="stMain"] button[data-testid="stBaseButton-segmented_control"],
+body [data-testid="stMain"] button[data-testid="stBaseButton-secondary"] {
+  border-radius:0 !important;
+}
+body [data-testid="stMain"] button[kind="secondary"][data-testid="stBaseButton-secondary"] {
+  border-radius:0 !important;
+}
+html body [data-testid="stMain"] button[kind="secondary"][data-testid="stBaseButton-secondary"] {
+  border-radius:0 !important;
+}
+html body [data-testid="stMain"] [data-testid="stHorizontalBlock"] .stButton button,
+html body [data-testid="stMain"] [data-testid="stForm"] .stButton button,
+html body [data-testid="stMain"] [data-testid="stFormSubmitButton"] button {
+  border-radius:0 !important;
+}
+html body [data-testid="stMain"] [data-testid="stColumn"] .stButton button[data-testid="stBaseButton-secondary"] {
+  border-radius:0 !important;
+}
+.empty-new, .panel-new, .score-hero, .metric-card-new, .comparison-card, .evidence-card,
+.research-answer, .state-strip-new, .driver-item, .score-driver, .methodology-panel,
+.company-tag, .source-tag, .state-tag, .compact-score, .brand-mark-new,
+[data-testid="stExpander"], [data-testid="stButtonGroup"], [data-baseweb="button-group"],
+[data-testid="stBaseButton-segmented_controlActive"], [data-testid="stBaseButton-segmented_control"],
+[data-testid="stBaseButton-secondary"], .data-quality-panel {
+  border-radius:0 !important;
+}
+body .stTextInput input, body textarea, body [data-baseweb="select"] > div {
+  border-radius:0 !important;
+}
+html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], header[data-testid="stHeader"] {
+  background:var(--tsrp-bg) !important;
+  color:var(--tsrp-text) !important;
+  font-family:Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+[data-testid="stMainBlockContainer"] {
+  max-width:1280px !important;
+  padding:30px clamp(16px, 4vw, 48px) 56px !important;
+}
+.app-wrap { max-width:1200px; margin:0 auto; }
+.product-header {
+  margin:0 0 24px;
+  padding:0 0 20px !important;
+  border-bottom:1px solid var(--tsrp-border) !important;
+}
+.brand-mark-new { width:32px; height:32px; background:var(--tsrp-accent); color:var(--tsrp-surface) !important; }
+.header-status-new { max-width:360px; }
+.company-strip {
+  padding:24px 0 20px !important;
+  border-bottom:1px solid var(--tsrp-border) !important;
+}
+.company-strip h1 { font-size:clamp(28px, 3.5vw, 42px); }
+.company-tag, .source-tag, .state-tag {
+  background:transparent !important;
+  border:1px solid var(--tsrp-border) !important;
+  padding:5px 8px;
+}
+.compact-score {
+  min-width:128px;
+  padding:8px 0 8px 24px;
+  background:transparent !important;
+  border:0 !important;
+  border-left:1px solid var(--tsrp-border-strong) !important;
+}
+.section-nav-label { margin:24px 0 8px; }
+.section-nav [data-testid="stSegmentedControl"],
+.section-nav [data-testid="stButtonGroup"],
+.section-nav-label + div [data-testid="stButtonGroup"],
+[data-testid="stButtonGroup"] {
+  background:transparent !important;
+  border:0 !important;
+  border-top:1px solid var(--tsrp-border) !important;
+  border-bottom:1px solid var(--tsrp-border) !important;
+  padding:0 !important;
+  box-shadow:none !important;
+}
+.section-nav [data-testid="stSegmentedControl"] button,
+.section-nav [data-testid="stButtonGroup"] button,
+.section-nav-label + div [data-testid="stButtonGroup"] button,
+[data-testid="stButtonGroup"] button {
+  min-height:42px !important;
+  padding:10px 12px !important;
+  background:transparent !important;
+  border:0 !important;
+  border-bottom:2px solid transparent !important;
+  color:var(--tsrp-muted) !important;
+  font-weight:650 !important;
+}
+.section-nav [data-testid="stSegmentedControl"] button[aria-checked="true"],
+.section-nav [data-testid="stSegmentedControl"] button[aria-pressed="true"],
+.section-nav [data-testid="stButtonGroup"] button[data-testid="stBaseButton-segmented_controlActive"],
+.section-nav-label + div [data-testid="stButtonGroup"] button[data-testid="stBaseButton-segmented_controlActive"],
+[data-testid="stButtonGroup"] button[data-testid="stBaseButton-segmented_controlActive"] {
+  background:transparent !important;
+  color:var(--tsrp-text) !important;
+  border-bottom-color:var(--tsrp-accent) !important;
+  box-shadow:none !important;
+}
+.section-intro { margin:38px 0 18px; }
+.section-intro h2 { font-size:clamp(24px, 3vw, 32px); }
+.section-kicker-new { margin-bottom:9px; }
+.panel-new, .score-hero, .metric-card-new, .empty-new, .comparison-card, .evidence-card,
+.research-answer, .state-strip-new, .driver-item, .score-driver {
+  box-shadow:none !important;
+}
+.panel-new, .metric-card-new, .comparison-card, .evidence-card, .score-driver {
+  background:transparent !important;
+  border:0 !important;
+  border-top:1px solid var(--tsrp-border) !important;
+}
+.panel-new { padding:18px 0 !important; }
+.score-hero {
+  background:transparent !important;
+  border:0 !important;
+  border-top:2px solid var(--tsrp-accent) !important;
+  border-bottom:1px solid var(--tsrp-border) !important;
+  padding:24px 0 !important;
+  box-shadow:none !important;
+}
+.score-emblem {
+  background:transparent !important;
+  border-left:1px solid var(--tsrp-border) !important;
+}
+.score-note, .research-answer {
+  background:transparent !important;
+  border:0 !important;
+  border-left:3px solid var(--tsrp-accent) !important;
+  padding:11px 0 11px 15px !important;
+}
+.metric-grid-new { gap:0 !important; margin:20px 0 !important; }
+.metric-card-new { min-height:98px; padding:16px 14px 14px 0 !important; }
+.metric-card-new + .metric-card-new { padding-left:14px !important; border-left:1px solid var(--tsrp-border) !important; }
+.metric-card-new.accent, .metric-card-new.warn, .metric-card-new.negative { border-top:1px solid var(--tsrp-border) !important; }
+.score-driver-grid { gap:0 28px !important; border-top:1px solid var(--tsrp-border); }
+.score-driver { padding:16px 0 !important; border-top:0 !important; border-bottom:1px solid var(--tsrp-border) !important; }
+.two-col-new, .evidence-grid { gap:32px !important; margin-top:22px !important; }
+.driver-item { background:transparent !important; border:0 !important; border-top:1px solid var(--tsrp-border) !important; padding:12px 0 !important; }
+.state-strip-new { background:transparent !important; border:0 !important; border-left:3px solid var(--tsrp-accent) !important; padding:10px 0 10px 14px !important; }
+.empty-new { background:transparent !important; border:0 !important; border-top:1px solid var(--tsrp-border) !important; border-bottom:1px solid var(--tsrp-border) !important; padding:32px 0 !important; }
+.evidence-card { padding:16px 0 !important; }
+.evidence-card.catalyst { border-top:2px solid var(--tsrp-green) !important; }
+.evidence-card.risk { border-top:2px solid var(--tsrp-red) !important; }
+.bar-track-new, .bar-fill-new { border-radius:0 !important; }
+.research-tools { margin-top:42px; border-top:1px solid var(--tsrp-border); padding-top:18px; }
+.research-tools [data-testid="stExpander"], [data-testid="stExpander"] {
+  background:transparent !important;
+  border:0 !important;
+  border-top:1px solid var(--tsrp-border) !important;
+  border-bottom:1px solid var(--tsrp-border) !important;
+  box-shadow:none !important;
+}
+.research-tools [data-testid="stExpander"] + [data-testid="stExpander"] { border-top:0 !important; }
+.research-tools [data-testid="stExpander"] > div { border-top:1px solid var(--tsrp-border) !important; }
+.methodology-panel { background:transparent !important; border:0 !important; padding:6px 0 0 !important; box-shadow:none !important; }
+.methodology-panel p { max-width:900px; }
+.policy-block { border-top:1px solid var(--tsrp-border); margin-top:18px; padding-top:14px; }
+.policy-block h4 { margin:0 0 6px; font-size:12px; }
+.policy-block p { margin:0; }
+.stButton button, .stDownloadButton button, [data-testid="stFormSubmitButton"] button,
+input, textarea, [data-baseweb="select"] > div {
+  border-radius:0 !important;
+  box-shadow:none !important;
+}
+.stButton button, .stDownloadButton button, [data-testid="stFormSubmitButton"] button {
+  min-height:44px !important;
+  border:1px solid var(--tsrp-border-strong) !important;
+  background:transparent !important;
+  color:var(--tsrp-text) !important;
+}
+.stButton button:hover, .stDownloadButton button:hover { background:var(--tsrp-surface-2) !important; border-color:var(--tsrp-accent) !important; }
+.stButton button[kind="primary"], [data-testid="stFormSubmitButton"] button[kind="primary"] { background:var(--tsrp-accent) !important; color:var(--tsrp-surface) !important; border-color:var(--tsrp-accent) !important; }
+input, textarea, [data-baseweb="select"] > div { background:var(--tsrp-surface) !important; }
+.st-key-new_analyze_company { width:100% !important; }
+.st-key-new_analyze_company button {
+  width:100% !important;
+  min-width:220px !important;
+  min-height:44px !important;
+  font-family:"Avenir Next", "SF Pro Display", "Helvetica Neue", sans-serif !important;
+  font-size:13px !important;
+  font-weight:650 !important;
+  letter-spacing:.01em !important;
+}
+.stAlert { border-radius:0 !important; box-shadow:none !important; }
+.score-table, .compare-table-new, .change-table { font-variant-numeric:tabular-nums; }
+.score-table th, .compare-table-new th, .change-table th { border-bottom:2px solid var(--tsrp-border) !important; }
+.app-footer-new { margin-top:34px; color:var(--tsrp-faint); }
+@media (max-width:900px) {
+  .metric-grid-new { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .metric-card-new + .metric-card-new { border-left:0 !important; padding-left:0 !important; }
+  .metric-card-new:nth-child(even) { padding-left:16px !important; border-left:1px solid var(--tsrp-border) !important; }
+}
+@media (max-width:640px) {
+  [data-testid="stMainBlockContainer"] { padding:22px 14px 40px !important; }
+  .header-status-new { text-align:left; }
+  .company-strip { gap:20px; }
+  .compact-score { width:100%; padding:14px 0 0; border-left:0 !important; border-top:1px solid var(--tsrp-border) !important; text-align:left; }
+  .metric-grid-new, .two-col-new, .three-col-new, .evidence-grid { grid-template-columns:1fr; }
+  .metric-card-new, .metric-card-new:nth-child(even) { padding-left:0 !important; border-left:0 !important; }
+  .score-hero { grid-template-columns:1fr; }
+  .score-emblem { border-left:0 !important; border-top:1px solid var(--tsrp-border) !important; padding:18px 0 0 !important; align-items:flex-start; text-align:left; }
+  .section-nav [data-testid="stSegmentedControl"], [data-testid="stButtonGroup"] { overflow-x:auto !important; }
+  .section-nav [data-testid="stSegmentedControl"] button, [data-testid="stButtonGroup"] button { white-space:nowrap; min-width:max-content; }
+  .score-table, .compare-table-new, .change-table { display:block; overflow-x:auto; white-space:nowrap; }
+  .st-key-new_analyze_company button { min-width:0 !important; }
+}
+
+/* Main research dashboard: dense enough for a first-screen read, quiet enough for research. */
+.company-tags { display:none !important; }
+.company-strip { padding:16px 0 14px !important; }
+.company-strip p { margin-top:5px; }
+.dashboard-score-heading { display:flex; align-items:end; justify-content:space-between; gap:16px; margin:22px 0 10px; }
+.dashboard-score-heading h2 { margin:0; padding:0 !important; font-size:clamp(23px, 3vw, 31px); line-height:1.1; letter-spacing:-.04em; }
+.dashboard-score-heading .state-tag { flex:0 0 auto; }
+.dashboard-score-hero { border-top:2px solid var(--tsrp-accent); border-bottom:1px solid var(--tsrp-border); padding:14px 0 16px; }
+.dashboard-score-hero h2 { margin:0; padding:0 !important; font-size:clamp(23px, 3vw, 31px); line-height:1.1; letter-spacing:-.04em; }
+.dashboard-score-hero p { max-width:760px; margin:7px 0 0; color:var(--tsrp-muted); font-size:13px; line-height:1.6; }
+.dashboard-score-meta { display:flex; flex-wrap:wrap; gap:10px 20px; margin-top:10px; color:var(--tsrp-faint); font-size:10px; }
+.dashboard-score-meta b { color:var(--tsrp-text); font-family:var(--tsrp-mono); }
+.dashboard-metrics { margin:18px 0 24px; }
+.dashboard-metrics .metric-card-new { min-height:104px; }
+.dashboard-main-panel, .dashboard-side-panel { border-top:1px solid var(--tsrp-border); border-bottom:1px solid var(--tsrp-border); padding:18px 0 8px; }
+.dashboard-side-panel { min-height:405px; }
+.dashboard-main-panel h3 { padding:0 !important; }
+.dashboard-main-panel h3, .dashboard-side-panel h3 { margin:0; font-size:15px; letter-spacing:-.015em; }
+.dashboard-panel-subtitle { color:var(--tsrp-muted); font-size:11px; line-height:1.5; margin:5px 0 12px; }
+.dashboard-chart-empty { display:flex; min-height:330px; align-items:center; justify-content:center; border-top:1px solid var(--tsrp-border); border-bottom:1px solid var(--tsrp-border); color:var(--tsrp-muted); font-size:12px; text-align:center; }
+.dashboard-chart-source { color:var(--tsrp-faint); font-size:10px; line-height:1.5; margin-top:4px; }
+.dashboard-driver-list { border-top:1px solid var(--tsrp-border); margin-top:13px; }
+.dashboard-driver-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px 16px; padding:12px 0; border-bottom:1px solid var(--tsrp-border); }
+.dashboard-driver-row strong { color:var(--tsrp-text); font-size:12px; }
+.dashboard-driver-row b { color:var(--tsrp-accent); font:700 16px/1 var(--tsrp-mono); }
+.dashboard-driver-row span { display:block; color:var(--tsrp-muted); font-size:10px; line-height:1.45; margin-top:3px; }
+.dashboard-driver-row small { grid-column:1 / -1; color:var(--tsrp-faint); font-size:9px; text-transform:uppercase; letter-spacing:.08em; }
+.dashboard-side-summary { margin-top:16px; }
+.dashboard-preview-heading { margin:34px 0 12px; padding-top:18px; border-top:1px solid var(--tsrp-border); }
+.dashboard-preview-heading h3 { margin:0; font-size:17px; letter-spacing:-.02em; }
+.dashboard-preview-heading p { margin:5px 0 0; color:var(--tsrp-muted); font-size:11px; }
+.dashboard-preview { min-height:228px; border-top:1px solid var(--tsrp-border); border-bottom:1px solid var(--tsrp-border); padding:16px 0 0; }
+.dashboard-preview h4 { margin:0; color:var(--tsrp-text); font-size:13px; }
+.dashboard-preview .preview-kicker { color:var(--tsrp-accent); font-size:9px; text-transform:uppercase; letter-spacing:.14em; font-weight:800; margin-bottom:7px; }
+.dashboard-preview .data-line { padding:9px 0; }
+.dashboard-preview .source-foot { margin-top:12px; }
+.dashboard-evidence-row { padding:11px 0; border-bottom:1px solid var(--tsrp-border); }
+.dashboard-evidence-row:last-child { border-bottom:0; }
+.dashboard-evidence-row b { color:var(--tsrp-text); display:block; font-size:11px; }
+.dashboard-evidence-row span { color:var(--tsrp-muted); display:block; font-size:10px; line-height:1.5; margin-top:3px; }
+.dashboard-preview-action { margin-top:10px; }
+.dashboard-preview-action .stButton button { width:100% !important; min-height:40px !important; }
+.dashboard-change-row { display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--tsrp-border); font-size:11px; }
+.dashboard-change-row:last-child { border-bottom:0; }
+.dashboard-change-row span { color:var(--tsrp-muted); }
+.dashboard-change-row b { color:var(--tsrp-text); font-family:var(--tsrp-mono); text-align:right; }
+@media (max-width:900px) {
+  .dashboard-side-panel { min-height:0; }
+}
+@media (max-width:640px) {
+  .dashboard-score-heading { align-items:flex-start; flex-direction:column; }
+  .dashboard-preview { min-height:0; }
+  .dashboard-score-meta { display:grid; gap:7px; }
+}
+
+/* Alignment pass: one centered rhythm across every visible research state. */
+:root {
+  --space-1:4px;
+  --space-2:8px;
+  --space-3:12px;
+  --space-4:16px;
+  --space-5:24px;
+  --space-6:32px;
+  --space-7:48px;
+  --space-8:64px;
+}
+body [data-testid="stMain"],
+body [data-testid="stMain"] .stMarkdown,
+body [data-testid="stMain"] .stMarkdown *,
+body [data-testid="stMain"] [data-testid="stWidgetLabel"],
+body [data-testid="stMain"] [data-testid="stWidgetLabel"] *,
+body [data-testid="stMain"] [data-testid="stCaptionContainer"],
+body [data-testid="stMain"] [data-testid="stAlert"],
+body [data-testid="stMain"] [data-testid="stExpander"] {
+  text-align:center !important;
+}
+body [data-testid="stMain"] input,
+body [data-testid="stMain"] textarea,
+body [data-testid="stMain"] [data-baseweb="select"] > div,
+body [data-testid="stMain"] [data-baseweb="select"] [role="combobox"],
+body [data-testid="stMain"] [role="option"] {
+  text-align:center !important;
+}
+body [data-testid="stMain"] button,
+body [data-testid="stMain"] .stButton,
+body [data-testid="stMain"] .stDownloadButton,
+body [data-testid="stMain"] [data-testid="stFormSubmitButton"] {
+  text-align:center !important;
+}
+body [data-testid="stMain"] .stButton button,
+body [data-testid="stMain"] .stDownloadButton button,
+body [data-testid="stMain"] [data-testid="stFormSubmitButton"] button {
+  margin-left:auto !important;
+  margin-right:auto !important;
+  justify-content:center !important;
+  align-items:center !important;
+  gap:var(--space-2) !important;
+}
+.product-header,
+.brand-lockup-new,
+.brand-copy-new,
+.company-strip,
+.section-intro,
+.dashboard-score-heading,
+.dashboard-score-hero,
+.dashboard-score-meta,
+.compact-score,
+.section-nav-label,
+.section-nav,
+.search-zone,
+.research-answer,
+.panel-new,
+.empty-new,
+.evidence-card,
+.score-driver,
+.state-strip-new,
+.source-foot,
+.app-footer-new,
+.research-tools,
+.dashboard-main-panel,
+.dashboard-side-panel,
+.dashboard-preview-heading,
+.dashboard-preview,
+.dashboard-preview-action,
+.dashboard-evidence-row {
+  text-align:center !important;
+}
+.product-header {
+  align-items:center !important;
+  justify-content:center !important;
+  flex-direction:column !important;
+  gap:var(--space-3) !important;
+  padding:var(--space-2) 0 var(--space-5) !important;
+}
+.brand-lockup-new {
+  flex-direction:column !important;
+  justify-content:center !important;
+  gap:var(--space-2) !important;
+}
+.brand-copy-new { align-items:center !important; gap:var(--space-1) !important; }
+.brand-copy-new span, .header-status-new { text-align:center !important; }
+.header-status-new { max-width:600px !important; width:100% !important; flex:0 0 auto !important; height:auto !important; }
+.app-wrap h1, .app-wrap h2, .app-wrap h3, .app-wrap h4, .app-wrap h5, .app-wrap h6,
+.app-wrap .stMarkdown h1, .app-wrap .stMarkdown h2, .app-wrap .stMarkdown h3,
+.app-wrap .stMarkdown h4, .app-wrap .stMarkdown h5, .app-wrap .stMarkdown h6 {
+  padding:0 !important;
+  margin-top:0 !important;
+}
+.search-zone { align-items:center !important; gap:var(--space-4) !important; margin:var(--space-5) 0 var(--space-4) !important; }
+.search-zone input { text-align:center !important; }
+.section-nav-label { margin:var(--space-6) 0 var(--space-3) !important; }
+.section-nav [data-testid="stButtonGroup"],
+.section-nav [data-testid="stSegmentedControl"],
+.section-nav-label + div [data-testid="stButtonGroup"],
+.section-nav [data-baseweb="button-group"] {
+  justify-content:center !important;
+  align-items:center !important;
+}
+.section-nav button { text-align:center !important; }
+.company-strip {
+  align-items:center !important;
+  justify-content:center !important;
+  flex-direction:column !important;
+  gap:var(--space-4) !important;
+  padding:var(--space-5) 0 !important;
+}
+.company-strip h1 { padding:0 !important; line-height:1.1 !important; }
+.company-strip h1, .company-strip p { text-align:center !important; }
+.company-strip p { margin:var(--space-2) 0 0 !important; }
+.compact-score {
+  min-width:0 !important;
+  width:min(100%, 260px) !important;
+  padding:var(--space-4) 0 0 !important;
+  border-left:0 !important;
+  border-top:1px solid var(--tsrp-border-strong) !important;
+  text-align:center !important;
+}
+.section-intro {
+  align-items:center !important;
+  justify-content:center !important;
+  flex-direction:column !important;
+  gap:var(--space-3) !important;
+  margin:var(--space-7) 0 var(--space-5) !important;
+}
+.section-intro > div { display:flex; flex-direction:column; align-items:center; gap:var(--space-2); }
+.section-intro h2, .section-intro p { text-align:center !important; }
+.section-intro p { max-width:720px !important; margin:0 !important; }
+.section-kicker-new { margin-bottom:0 !important; text-align:center !important; }
+.panel-new, .score-hero, .metric-card-new, .empty-new, .comparison-card, .evidence-card, .score-driver {
+  padding:var(--space-5) !important;
+}
+.panel-new h3, .panel-new p, .empty-new h3, .empty-new p, .evidence-card h4, .evidence-card p,
+.score-driver h4, .score-driver p, .research-answer, .definition, .unavailable-note { text-align:center !important; }
+.panel-title-row {
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:var(--space-2) !important;
+  margin-bottom:var(--space-4) !important;
+}
+.metric-grid-new, .three-col-new {
+  gap:var(--space-5) !important;
+  margin:var(--space-5) 0 var(--space-6) !important;
+}
+.metric-card-new {
+  min-height:116px !important;
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:var(--space-2) !important;
+  text-align:center !important;
+}
+.metric-card-new + .metric-card-new,
+.metric-card-new:nth-child(even) { border-left:0 !important; padding-left:var(--space-5) !important; }
+.metric-card-new .label, .metric-card-new .value, .metric-card-new .meta { text-align:center !important; margin:0 !important; }
+.metric-card-new .value { line-height:1.2 !important; }
+.score-hero {
+  grid-template-columns:1fr !important;
+  gap:var(--space-5) !important;
+  text-align:center !important;
+}
+.score-hero-copy, .score-emblem { align-items:center !important; text-align:center !important; }
+.score-hero-copy { display:flex; flex-direction:column; gap:var(--space-3); }
+.score-hero-copy h2, .score-hero-copy p, .score-note { text-align:center !important; margin:0 !important; }
+.score-note { border-left:0 !important; border-top:2px solid var(--tsrp-accent) !important; padding:var(--space-4) 0 0 !important; }
+.score-emblem {
+  border-left:0 !important;
+  border-top:1px solid var(--tsrp-border) !important;
+  padding:var(--space-5) 0 0 !important;
+  justify-content:center !important;
+  align-items:center !important;
+  text-align:center !important;
+}
+.score-driver-grid { gap:var(--space-5) !important; margin-top:var(--space-5) !important; }
+.score-driver { display:flex !important; flex-direction:column !important; align-items:center !important; justify-content:center !important; gap:var(--space-2) !important; }
+.score-driver .driver-score { justify-content:center !important; gap:var(--space-2) !important; margin:0 !important; }
+.score-driver .driver-score strong, .score-driver .driver-score span { text-align:center !important; }
+.research-answer { border-left:0 !important; border-top:2px solid var(--tsrp-accent) !important; padding:var(--space-4) 0 !important; margin:var(--space-5) 0 !important; }
+.two-col-new, .evidence-grid { gap:var(--space-6) !important; margin-top:var(--space-6) !important; }
+.driver-list { gap:var(--space-4) !important; margin-top:var(--space-4) !important; }
+.driver-item {
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:var(--space-2) !important;
+  padding:var(--space-4) 0 !important;
+  text-align:center !important;
+}
+.driver-item > div, .driver-item strong, .driver-item span { text-align:center !important; }
+.data-line {
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:var(--space-2) !important;
+  padding:var(--space-3) 0 !important;
+  text-align:center !important;
+}
+.data-line span, .data-line b { text-align:center !important; }
+.plain-list { gap:0 !important; }
+.bar-head { flex-direction:column !important; align-items:center !important; gap:var(--space-2) !important; }
+.bar-head b, .bar-head span { text-align:center !important; }
+.state-strip-new {
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:var(--space-2) !important;
+  padding:var(--space-4) !important;
+  border-left:0 !important;
+  border-top:2px solid var(--tsrp-accent) !important;
+  text-align:center !important;
+}
+.state-dot-new { margin:0 !important; }
+.empty-new { padding:var(--space-6) var(--space-5) !important; }
+.evidence-card { padding:var(--space-5) !important; }
+.evidence-card .evidence-meta { text-align:center !important; padding-top:var(--space-4) !important; margin-top:var(--space-4) !important; }
+.source-foot { margin-top:var(--space-4) !important; text-align:center !important; }
+.score-table, .compare-table-new, .change-table {
+  width:100% !important;
+  table-layout:fixed !important;
+  border-collapse:collapse !important;
+  word-break:break-word !important;
+  white-space:normal !important;
+}
+.score-table th, .score-table td, .compare-table-new th, .compare-table-new td, .change-table th, .change-table td {
+  text-align:center !important;
+  vertical-align:middle !important;
+  padding:var(--space-3) var(--space-2) !important;
+  overflow-wrap:anywhere !important;
+}
+.dashboard-score-heading {
+  align-items:center !important;
+  justify-content:center !important;
+  flex-direction:column !important;
+  gap:var(--space-3) !important;
+  margin:var(--space-6) 0 var(--space-4) !important;
+}
+.dashboard-score-heading h2, .dashboard-score-heading .state-tag { text-align:center !important; }
+.dashboard-score-hero { text-align:center !important; padding:var(--space-5) 0 !important; }
+.dashboard-score-hero p { max-width:760px !important; margin:var(--space-2) auto 0 !important; text-align:center !important; }
+.dashboard-score-meta { justify-content:center !important; gap:var(--space-3) var(--space-5) !important; }
+.dashboard-main-panel, .dashboard-side-panel { padding:var(--space-5) 0 var(--space-3) !important; text-align:center !important; }
+.dashboard-main-panel h3, .dashboard-panel-subtitle, .dashboard-chart-source { text-align:center !important; }
+.dashboard-panel-subtitle { margin:var(--space-2) 0 var(--space-4) !important; }
+.dashboard-driver-list { margin-top:var(--space-4) !important; }
+.dashboard-driver-row {
+  grid-template-columns:1fr !important;
+  justify-items:center !important;
+  gap:var(--space-2) !important;
+  padding:var(--space-4) 0 !important;
+  text-align:center !important;
+}
+.dashboard-driver-row strong, .dashboard-driver-row span, .dashboard-driver-row b, .dashboard-driver-row small { text-align:center !important; }
+.dashboard-side-summary { margin-top:var(--space-5) !important; }
+.dashboard-preview-heading { margin:var(--space-7) 0 var(--space-4) !important; padding-top:var(--space-5) !important; }
+.dashboard-preview-heading h3, .dashboard-preview-heading p { text-align:center !important; }
+.dashboard-preview-heading p { margin:var(--space-2) 0 0 !important; }
+.dashboard-preview { min-height:240px !important; padding:var(--space-5) !important; text-align:center !important; }
+.dashboard-preview h4, .dashboard-preview .preview-kicker { text-align:center !important; }
+.dashboard-preview .data-line { padding:var(--space-3) 0 !important; }
+.dashboard-preview-action { margin-top:var(--space-3) !important; }
+.dashboard-preview-action .stButton button { width:100% !important; }
+.dashboard-evidence-row, .dashboard-change-row { text-align:center !important; }
+.dashboard-change-row { flex-direction:column !important; align-items:center !important; gap:var(--space-2) !important; padding:var(--space-3) 0 !important; }
+.dashboard-change-row span, .dashboard-change-row b { text-align:center !important; }
+.research-tools { margin-top:var(--space-7) !important; padding-top:var(--space-5) !important; text-align:center !important; }
+.dashboard-utility-label { margin-bottom:var(--space-3); color:var(--tsrp-faint); font-size:10px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; text-align:center; }
+.research-tools [data-testid="stHorizontalBlock"] { gap:var(--space-4) !important; }
+.research-tools .stButton button, .research-tools .stDownloadButton button { width:100% !important; }
+.st-key-save_snapshot_AAPL, [class*="st-key-save_snapshot_"] { width:100% !important; display:flex !important; justify-content:center !important; }
+[class*="st-key-save_snapshot_"] button { width:min(100%, 240px) !important; margin-left:auto !important; margin-right:auto !important; }
+[class*="st-key-new_refresh_data"], [class*="st-key-new_export_csv"], [class*="st-key-new_export_json"] { width:100% !important; }
+[class*="st-key-new_refresh_data"] button, [class*="st-key-new_export_csv"] button, [class*="st-key-new_export_json"] button { width:100% !important; }
+.st-key-display_currency [data-baseweb="select"] > div { position:relative !important; }
+.st-key-display_currency [data-baseweb="select"] div[value] { position:absolute !important; left:calc(50% + 16px) !important; transform:translateX(-50%) !important; white-space:nowrap !important; }
+.st-key-display_currency [data-baseweb="select"],
+.st-key-display_currency [data-baseweb="select"] > div,
+.st-key-display_currency [data-baseweb="select"] > div > div,
+.st-key-display_currency [data-baseweb="select"] div[value] {
+  border:0 !important;
+  box-shadow:none !important;
+  background:transparent !important;
+}
+.st-key-display_currency [data-baseweb="select"] > div { justify-content:center !important; }
+.st-key-display_currency [data-baseweb="select"] div[value] { text-align:center !important; }
+.stSlider [data-testid="stWidgetLabel"] { justify-content:center !important; }
+.stSlider [data-testid="stWidgetLabel"] > div { width:auto !important; }
+[data-testid="stExpander"] > details > summary { justify-content:center !important; }
+[data-testid="stExpander"] > details > summary > span { width:auto !important; margin-left:auto !important; margin-right:auto !important; }
+.stAlert, [data-testid="stException"] { margin-left:auto !important; margin-right:auto !important; text-align:center !important; }
+.stAlert > div, [data-testid="stException"] > div { justify-content:center !important; }
+.stSpinner, [data-testid="stStatusWidget"] { text-align:center !important; }
+[data-testid="stDataFrame"], .stPlotlyChart, [data-testid="stVegaLiteChart"] { width:100% !important; margin-left:auto !important; margin-right:auto !important; }
+[data-testid="stDataFrame"] [role="gridcell"], [data-testid="stDataFrame"] [role="columnheader"] { text-align:center !important; justify-content:center !important; }
+@media (min-width:901px) {
+  .dashboard-main-panel, .dashboard-side-panel { min-height:405px !important; }
+}
+@media (max-width:900px) {
+  .product-header, .company-strip { gap:var(--space-4) !important; }
+  .two-col-new, .evidence-grid { grid-template-columns:1fr !important; }
+  .metric-grid-new, .score-driver-grid { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+  .panel-new, .score-hero, .metric-card-new, .empty-new, .comparison-card, .evidence-card, .score-driver { padding:var(--space-5) !important; }
+}
+@media (max-width:640px) {
+  [data-testid="stMainBlockContainer"] { padding:var(--space-5) var(--space-4) var(--space-7) !important; }
+  .product-header, .brand-lockup-new, .company-strip { flex-direction:column !important; }
+  .header-status-new { text-align:center !important; }
+  .search-zone { flex-direction:column !important; gap:var(--space-3) !important; }
+  .search-zone > div, .st-key-company_search, .st-key-new_analyze_company { width:100% !important; }
+  .metric-grid-new, .score-driver-grid, .two-col-new, .three-col-new, .evidence-grid { grid-template-columns:1fr !important; gap:var(--space-4) !important; }
+  .metric-card-new, .metric-card-new:nth-child(even) { min-height:104px !important; padding:var(--space-4) !important; border-left:0 !important; }
+  .panel-new, .score-hero, .metric-card-new, .empty-new, .comparison-card, .evidence-card, .score-driver { padding:var(--space-4) !important; }
+  .score-hero { gap:var(--space-4) !important; }
+  .section-intro { margin:var(--space-7) 0 var(--space-5) !important; }
+  [data-testid="stButtonGroup"], [data-testid="stButtonGroup"] [data-baseweb="button-group"] { overflow:visible !important; }
+  [data-testid="stButtonGroup"] [data-baseweb="button-group"] { flex-wrap:wrap !important; width:100% !important; justify-content:center !important; }
+  [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button { flex:1 1 50% !important; width:50% !important; min-width:0 !important; min-height:48px !important; height:48px !important; white-space:normal !important; }
+  .score-table, .compare-table-new, .change-table { display:table !important; overflow:visible !important; white-space:normal !important; font-size:9px !important; }
+  .score-table th, .score-table td, .compare-table-new th, .compare-table-new td, .change-table th, .change-table td { padding:var(--space-2) var(--space-1) !important; }
+  .research-tools [data-testid="stHorizontalBlock"] { flex-direction:column !important; gap:var(--space-3) !important; }
+  .research-tools [data-testid="stHorizontalBlock"] > div { width:100% !important; flex:1 1 100% !important; }
+  .dashboard-score-meta { display:flex !important; flex-direction:column !important; align-items:center !important; gap:var(--space-2) !important; }
+  .dashboard-preview { min-height:0 !important; }
+}
 </style>
 """
     )
@@ -5688,6 +6283,195 @@ def score_driver_copy(component):
     return display_labels.get(component["label"], component["label"]), labels.get(component["label"], "Evidence used in the overall research signal.")
 
 
+def dashboard_value_available(value, currency, display_currency, display_fx):
+    return safe_float(value) is not None and (currency == display_currency or display_fx is not None)
+
+
+def dashboard_metric_markup(analysis, info, display_currency, display_fx_reporting, display_fx_trading):
+    reporting = analysis.get("reporting_currency", "N/A")
+    trading = analysis.get("trading_currency", "N/A")
+    metrics = []
+
+    if dashboard_value_available(analysis.get("price"), trading, display_currency, display_fx_trading):
+        metrics.append(
+            new_metric_card(
+                "Current share price",
+                money(analysis.get("price"), trading, display_currency, display_fx_trading),
+                f"{friendly_currency(trading)} · Yahoo Finance",
+            )
+        )
+
+    target = analysis.get("target_mean_price")
+    if dashboard_value_available(target, trading, display_currency, display_fx_trading) and safe_float(analysis.get("price")) not in (None, 0):
+        target_change = safe_float(target) / safe_float(analysis["price"]) - 1
+        target_tone = "accent" if target_change >= 0 else "negative"
+        metrics.append(
+            new_metric_card(
+                "Analyst target price",
+                money(target, trading, display_currency, display_fx_trading),
+                f"Consensus view · {percent(target_change)} vs price · not a TSRP fair value",
+                target_tone,
+            )
+        )
+
+    market_cap = analysis.get("market_cap_reporting")
+    market_cap_currency = reporting
+    market_cap_fx = display_fx_reporting
+    if market_cap is None:
+        market_cap = analysis.get("market_cap")
+        market_cap_currency = trading
+        market_cap_fx = display_fx_trading
+    if dashboard_value_available(market_cap, market_cap_currency, display_currency, market_cap_fx):
+        metrics.append(
+            new_metric_card(
+                "Market capitalization",
+                money(market_cap, market_cap_currency, display_currency, market_cap_fx),
+                f"Value of listed shares · {friendly_currency(market_cap_currency)}",
+            )
+        )
+
+    if analysis.get("required_growth") is not None or analysis.get("model_fcf_refused"):
+        metrics.append(
+            new_metric_card(
+                "Growth required by price",
+                required_growth_label(analysis),
+                "Annual revenue growth implied by today’s price",
+                "accent" if analysis.get("required_growth") is not None else "warn",
+            )
+        )
+    else:
+        enterprise_value = analysis.get("enterprise_value")
+        if dashboard_value_available(enterprise_value, reporting, display_currency, display_fx_reporting):
+            metrics.append(
+                new_metric_card(
+                    "Enterprise value",
+                    money(enterprise_value, reporting, display_currency, display_fx_reporting),
+                    f"Company value after cash and debt · {friendly_currency(reporting)}",
+                )
+            )
+
+    if len(metrics) < 4 and analysis.get("ev_sales") is not None:
+        metrics.append(new_metric_card("Value / annual sales", multiple(analysis.get("ev_sales")), "Enterprise value compared with annual revenue"))
+    if len(metrics) < 4 and analysis.get("fcf_margin") is not None:
+        metrics.append(new_metric_card("Free-cash-flow margin", percent(analysis.get("fcf_margin")), "Latest compatible cash conversion"))
+    return "".join(metrics)
+
+
+def dashboard_driver_markup(trace):
+    rows = []
+    for component in trace["components"]:
+        display_label, explanation = score_driver_copy(component)
+        rows.append(
+            f'<div class="dashboard-driver-row"><div><strong>{esc(display_label)}</strong><span>{esc(explanation)}</span></div>'
+            f'<b>{component["value"]:.0f}</b><small>Evidence area · 0–100</small></div>'
+        )
+    return "".join(rows)
+
+
+def dashboard_change_markup(analysis, ticker, display_currency, display_fx_reporting):
+    history = st.session_state.setdefault("saved_snapshots", {}).setdefault(ticker, [])
+    if len(history) < 2:
+        return '<div class="dashboard-change-row"><span>No saved comparison yet</span><b>Unavailable</b></div><div class="source-foot">Save two analyses in What Changed? to compare real movements. TSRP does not display an invented score change.</div>'
+    previous, latest = history[-2], history[-1]
+    comparison = snapshot_diff(previous, latest)
+    if not comparison["comparable"]:
+        return '<div class="dashboard-change-row"><span>Saved versions use different rules</span><b>Not compared</b></div><div class="source-foot">Open What Changed? for the full explanation.</div>'
+    changed_fields = {item["field"] for item in comparison["changes"]}
+    labels = {
+        "score": ("TSRP Score", score_change_text),
+        "required_growth": ("Growth required by price", pct_change_text),
+        "historical_growth": ("Past revenue growth", pct_change_text),
+        "consensus_growth": ("Analyst growth estimate", pct_change_text),
+        "revenue": ("Reported revenue", lambda _a, _b: "Changed"),
+        "free_cash_flow": ("Free cash flow", lambda _a, _b: "Changed"),
+        "enterprise_value": ("Enterprise value", lambda _a, _b: "Changed"),
+    }
+    rows = []
+    for field, (label, movement) in labels.items():
+        if field in changed_fields:
+            rows.append(f'<div class="dashboard-change-row"><span>{esc(label)}</span><b>{esc(movement(latest.get(field), previous.get(field)))}</b></div>')
+        if len(rows) >= 3:
+            break
+    if not rows:
+        rows.append('<div class="dashboard-change-row"><span>Tracked research inputs</span><b>No material change</b></div>')
+    return "".join(rows) + f'<div class="source-foot">Latest saved {esc(latest.get("timestamp", "N/A"))} · compared with {esc(previous.get("timestamp", "N/A"))}.</div>'
+
+
+def dashboard_section_button(label, section, ticker, key):
+    if st.button(label, key=key, width="stretch", type="secondary"):
+        st.session_state.primary_section = section
+        st.rerun()
+
+
+def render_dashboard(analysis, yahoo_data, info, company_name, ticker, display_currency, display_fx_reporting, display_fx_trading, as_of, price_history):
+    score_value = score(analysis.get("reality_score"))
+    breakdown_markup, trace = score_breakdown_html(analysis)
+    history = st.session_state.setdefault("saved_snapshots", {}).setdefault(ticker, [])
+    score_change = ""
+    if len(history) >= 2 and snapshot_diff(history[-2], history[-1])["comparable"] and safe_float(history[-2].get("score")) is not None and safe_float(history[-1].get("score")) is not None:
+        score_change = f'<span>Saved score change <b>{esc(score_change_text(history[-1].get("score"), history[-2].get("score")))} pts</b></span>'
+
+    render_html(
+        '<div class="dashboard-score-heading"><div><div class="section-kicker-new">Overall research signal</div>'
+        '<h2>TSRP Score</h2></div><div class="state-tag">0–100 research signal</div></div>'
+    )
+    render_html(
+        f'<div class="dashboard-score-hero"><div class="section-kicker-new">{esc(score_label(analysis.get("reality_score")))}</div>'
+        f'<h2>{esc(score_value)} / 100</h2><p>{esc(conclusion_text(analysis))}</p>'
+        f'<div class="dashboard-score-meta"><span>Evidence confidence <b>{esc(analysis.get("confidence", "N/A"))}</b></span>{score_change}'
+        f'<span>Data refreshed <b>{esc(as_of)}</b></span></div></div>'
+    )
+
+    render_html(f'<div class="metric-grid-new dashboard-metrics">{dashboard_metric_markup(analysis, info, display_currency, display_fx_reporting, display_fx_trading)}</div>')
+
+    left, right = st.columns([1.65, 1], gap="large")
+    with left:
+        render_html('<div class="dashboard-main-panel"><h3>Price over the last year</h3><p class="dashboard-panel-subtitle">A market-data view for context, not a prediction of future returns.</p></div>')
+        if price_history is None or price_history.empty or "Close" not in price_history.columns:
+            render_html('<div class="dashboard-chart-empty">Price history is unavailable from the current market-data source.</div>')
+        else:
+            render_price_chart(price_history, display_fx=display_fx_trading, kind="Line", timeframe="1Y")
+        chart_currency = display_currency if display_fx_trading is not None else analysis.get("trading_currency", "N/A")
+        render_html(f'<div class="dashboard-chart-source">Source: {new_source_link(ticker, "Yahoo Finance")} · {esc(friendly_currency(chart_currency))} · as of {esc(as_of)}</div>')
+    with right:
+        new_status_strip(analysis)
+        render_html(
+            f'<div class="dashboard-side-panel"><div class="panel-title-row"><h3>What drives the score?</h3><span>{esc(score_value)} / 100</span></div>'
+            f'<div class="dashboard-driver-list">{dashboard_driver_markup(trace)}</div>'
+            f'<div class="dashboard-side-summary">{new_data_line("Growth required by price", required_growth_label(analysis))}{new_data_line("Value / annual sales", multiple(analysis.get("ev_sales")))}</div>'
+            f'<div class="source-foot">Calculated from sourced market and company evidence.</div></div>'
+        )
+
+    render_html('<div class="dashboard-preview-heading"><h3>Research previews</h3><p>Use these summaries to decide where to read next. Each opens its full research section.</p></div>')
+    preview_columns = st.columns(3, gap="large")
+    with preview_columns[0]:
+        render_html(
+            f'<div class="dashboard-preview"><div class="preview-kicker">Expectations</div><h4>Expectations vs Reality</h4>'
+            f'{new_data_line("Growth required by price", required_growth_label(analysis))}'
+            f'{new_data_line("Past revenue growth", percent(analysis.get("historical_growth")))}'
+            f'{new_data_line("Analyst growth estimate", percent(analysis.get("consensus_growth")))}'
+            f'<div class="source-foot">{esc(new_growth_verdict(analysis))}</div></div>'
+        )
+        render_html('<div class="dashboard-preview-action">')
+        dashboard_section_button("Open Expectations vs Reality", "Expectations vs Reality", ticker, f"dashboard_expectations_{ticker}")
+        render_html('</div>')
+
+    catalysts, risks = build_evidence_lists(analysis, ticker, compact=True)
+    with preview_columns[1]:
+        evidence_markup = "".join(catalysts[:1] + risks[:1])
+        if not evidence_markup:
+            evidence_markup = '<div class="dashboard-evidence-row"><span>No specific evidence-backed catalyst or risk is available yet.</span></div>'
+        render_html(f'<div class="dashboard-preview"><div class="preview-kicker">Thesis watchlist</div><h4>Catalysts &amp; Risks</h4>{evidence_markup}<div class="source-foot">Prompts to monitor, not predictions.</div></div>')
+        render_html('<div class="dashboard-preview-action">')
+        dashboard_section_button("Open Catalysts & Risks", "Catalysts & Risks", ticker, f"dashboard_catalysts_{ticker}")
+        render_html('</div>')
+
+    with preview_columns[2]:
+        render_html(f'<div class="dashboard-preview"><div class="preview-kicker">Research history</div><h4>What Changed?</h4>{dashboard_change_markup(analysis, ticker, display_currency, display_fx_reporting)}</div>')
+        render_html('<div class="dashboard-preview-action">')
+        dashboard_section_button("Open What Changed?", "What Changed?", ticker, f"dashboard_changed_{ticker}")
+        render_html('</div>')
+
 def render_score_section(analysis, company_name, ticker, display_currency, display_fx_reporting, display_fx_trading, as_of):
     tone = score_tone(analysis.get("reality_score"))
     score_value = score(analysis.get("reality_score"))
@@ -5723,13 +6507,6 @@ def render_score_section(analysis, company_name, ticker, display_currency, displ
         f'<div class="driver-item"><i>!</i><div><strong>Important limits</strong><span>{esc(" · ".join(label for label, _ in analysis.get("quality_flags", [])[:4]) or "No material coverage limits were returned.")}</span></div></div>'
         f'</div></div></div>'
     )
-    with st.expander("See score details, sources, and limits", expanded=False):
-        render_html('<div class="definition">The detailed view explains how each evidence area contributes to the overall signal. It is provided for review, not because it is needed to use the conclusion.</div>')
-        render_html(breakdown_markup)
-        render_methodology()
-        render_data_quality(analysis)
-
-
 def comparison_row(metric, expected, actual, difference, period, unit, source, status):
     return (
         f'<tr><td><strong>{esc(metric)}</strong></td><td>{esc(expected)}</td><td>{esc(actual)}</td>'
@@ -5798,7 +6575,7 @@ def render_expectations_section(analysis, yahoo_data, ticker, display_currency, 
         f'<div class="panel-new"><div class="panel-title-row"><h3>Reported evidence</h3><span>Past results</span></div>'
         f'<div class="plain-list">{new_data_line("Latest reported revenue", money(analysis.get("revenue"), analysis.get("reporting_currency"), display_currency, display_fx_reporting))}{new_data_line("Latest free cash flow", money(analysis.get("free_cash_flow"), analysis.get("reporting_currency"), display_currency, display_fx_reporting))}{new_data_line("Cash-flow margin", percent(analysis.get("fcf_margin")))}</div>'
         f'<div class="definition">Free cash flow is the cash left after operating costs and investment. Cash-flow margin is that amount as a share of revenue.</div>'
-        f'<div class="source-foot">Sources: {new_source_link(ticker, "Yahoo Finance")} · {new_source_link(ticker, "SEC EDGAR")} · periods and currencies are retained in the detailed view.</div></div>'
+        f'<div class="source-foot">Sources: {new_source_link(ticker, "Yahoo Finance")} · {new_source_link(ticker, "SEC EDGAR")} · as of {esc(analysis.get("last_refreshed", "N/A"))}</div></div>'
     )
     with st.expander("See the full comparison and annual cash-flow history", expanded=False):
         render_html(
@@ -5854,7 +6631,7 @@ def render_valuation_section(analysis, display_currency, display_fx_reporting, d
         f'<div class="two-col-new"><div class="panel-new"><div class="panel-title-row"><h3>What the price requires</h3><span>{esc(status_label)}</span></div>'
         f'{new_data_line("Cash flow margin used", percent(analysis.get("model_fcf_margin")))}'
         f'<div class="definition">Cash flow margin is the portion of revenue left after operating costs and investment. It is an important assumption because it affects how much cash the company can produce.</div>'
-        f'<div class="source-foot">Sources: Yahoo Finance and company filing data when available. Missing FX or cash-flow evidence keeps dependent results as N/A.</div></div>'
+        f'<div class="source-foot">Sources: Yahoo Finance and company filing data when available · as of {esc(analysis.get("last_refreshed", "N/A"))}. Missing FX or cash-flow evidence keeps dependent results as N/A.</div></div>'
         f'<div class="panel-new"><div class="panel-title-row"><h3>Where company value comes from</h3><span>{esc(friendly_currency(reporting))} reporting currency</span></div>'
         f'{new_data_line("Value of shares in the market", money(analysis.get("market_cap_reporting"), reporting, display_currency, display_fx_reporting))}'
         f'{new_data_line("Debt", money(analysis.get("debt"), reporting, display_currency, display_fx_reporting))}'
@@ -5899,7 +6676,9 @@ def render_valuation_section(analysis, display_currency, display_fx_reporting, d
                 )
 
 
-def evidence_card(kind, title, explanation, why, horizon, confirm, invalidate, ticker):
+def evidence_card(kind, title, explanation, why, horizon, confirm, invalidate, ticker, compact=False):
+    if compact:
+        return f'<div class="dashboard-evidence-row {esc(kind)}"><b>{esc(title)}</b><span>{esc(explanation)}</span></div>'
     source = new_source_link(ticker, "Yahoo Finance")
     return (
         f'<div class="evidence-card {esc(kind)}"><div class="eyebrow-new">{esc("Potential catalyst" if kind == "catalyst" else "Potential risk")}</div>'
@@ -5909,36 +6688,36 @@ def evidence_card(kind, title, explanation, why, horizon, confirm, invalidate, t
     )
 
 
-def build_evidence_lists(analysis, ticker):
+def build_evidence_lists(analysis, ticker, compact=False):
     catalysts = []
     risks = []
     if analysis.get("historical_growth") is not None and analysis["historical_growth"] > 0:
         catalysts.append(
-            evidence_card("catalyst", "Established revenue growth", f"Reported revenue has grown at {percent(analysis['historical_growth'])} over the comparable {analysis.get('historical_growth_years') or 0}-year history.", "A positive operating record gives the current thesis evidence to test.", "Next reported periods", "Revenue growth and margin trajectory", "Reported growth turns negative or coverage becomes non-comparable.", ticker)
+            evidence_card("catalyst", "Established revenue growth", f"Reported revenue has grown at {percent(analysis['historical_growth'])} over the comparable {analysis.get('historical_growth_years') or 0}-year history.", "A positive operating record gives the current thesis evidence to test.", "Next reported periods", "Revenue growth and margin trajectory", "Reported growth turns negative or coverage becomes non-comparable.", ticker, compact=compact)
         )
     if analysis.get("fcf_margin") is not None and analysis["fcf_margin"] > 0:
         catalysts.append(
-            evidence_card("catalyst", "Positive cash conversion", f"Latest compatible free-cash-flow margin is {percent(analysis['fcf_margin'])}.", "Cash conversion can support reinvestment, balance-sheet resilience, or capital returns.", "Next annual or quarterly cash-flow update", "Operating cash flow, capex, and free cash flow", "Free cash flow turns negative or cannot be period-matched.", ticker)
+            evidence_card("catalyst", "Positive cash conversion", f"Latest compatible free-cash-flow margin is {percent(analysis['fcf_margin'])}.", "Cash conversion can support reinvestment, balance-sheet resilience, or capital returns.", "Next annual or quarterly cash-flow update", "Operating cash flow, capex, and free cash flow", "Free cash flow turns negative or cannot be period-matched.", ticker, compact=compact)
         )
     if analysis.get("cash") is not None and analysis.get("debt") is not None and analysis["cash"] > analysis["debt"]:
         catalysts.append(
-            evidence_card("catalyst", "Net cash position", "Reported cash is greater than reported debt in the selected reporting currency.", "A stronger balance sheet can give the company more room to absorb execution volatility.", "Ongoing", "Cash, debt, and interest-bearing obligations", "Debt rises above cash or balance-sheet coverage becomes incomplete.", ticker)
+            evidence_card("catalyst", "Net cash position", "Reported cash is greater than reported debt in the selected reporting currency.", "A stronger balance sheet can give the company more room to absorb execution volatility.", "Ongoing", "Cash, debt, and interest-bearing obligations", "Debt rises above cash or balance-sheet coverage becomes incomplete.", ticker, compact=compact)
         )
     if analysis.get("required_growth") is not None and analysis["required_growth"] > 0.18:
         risks.append(
-            evidence_card("risk", "High growth burden", f"The current company value requires about {required_growth_label(analysis)} starting revenue growth within the range TSRP can test.", "A demanding operating path leaves less room for execution misses.", "Multi-year", "Reported revenue growth versus the growth required by price", "The growth required by price falls materially because the value or inputs change.", ticker)
+            evidence_card("risk", "High growth burden", f"The current company value requires about {required_growth_label(analysis)} starting revenue growth within the range TSRP can test.", "A demanding operating path leaves less room for execution misses.", "Multi-year", "Reported revenue growth versus the growth required by price", "The growth required by price falls materially because the value or inputs change.", ticker, compact=compact)
         )
     if analysis.get("market_expectations") is not None and analysis["market_expectations"] > 70:
         risks.append(
-            evidence_card("risk", "Expectation pressure", f"The price already assumes a demanding outcome: the expectations signal is {score(analysis['market_expectations'])}/100.", "Strong results may still disappoint if the price already embeds aggressive assumptions.", "Ongoing", "Value compared with sales, earnings, and required growth", "Valuation pressure normalizes or operating evidence improves.", ticker)
+            evidence_card("risk", "Expectation pressure", f"The price already assumes a demanding outcome: the expectations signal is {score(analysis['market_expectations'])}/100.", "Strong results may still disappoint if the price already embeds aggressive assumptions.", "Ongoing", "Value compared with sales, earnings, and required growth", "Valuation pressure normalizes or operating evidence improves.", ticker, compact=compact)
         )
     if analysis.get("fcf_margin") is not None and analysis["fcf_margin"] < 0.05:
         risks.append(
-            evidence_card("risk", "Weak cash conversion", f"Latest compatible free-cash-flow margin is {percent(analysis['fcf_margin'])}.", "Revenue quality is less durable when operating cash does not convert into free cash flow.", "Next cash-flow update", "Operating cash flow minus capex", "Cash conversion improves and remains period-aligned.", ticker)
+            evidence_card("risk", "Weak cash conversion", f"Latest compatible free-cash-flow margin is {percent(analysis['fcf_margin'])}.", "Revenue quality is less durable when operating cash does not convert into free cash flow.", "Next cash-flow update", "Operating cash flow minus capex", "Cash conversion improves and remains period-aligned.", ticker, compact=compact)
         )
     if analysis.get("debt") is not None and analysis.get("cash") is not None and analysis["debt"] > analysis["cash"] * 2:
         risks.append(
-            evidence_card("risk", "Balance-sheet leverage", "Reported debt is more than twice reported cash.", "Less balance-sheet flexibility can amplify an operating or valuation reset.", "Ongoing", "Debt, cash, and enterprise-value bridge", "Debt declines or cash coverage improves.", ticker)
+            evidence_card("risk", "Balance-sheet leverage", "Reported debt is more than twice reported cash.", "Less balance-sheet flexibility can amplify an operating or valuation reset.", "Ongoing", "Debt, cash, and enterprise-value bridge", "Debt declines or cash coverage improves.", ticker, compact=compact)
         )
     return catalysts, risks
 
@@ -6224,7 +7003,9 @@ render_html("</div>")
 current_snapshot = snapshot_payload(analysis, company_name, ticker)
 track_snapshot_state(ticker, current_snapshot)
 if active_section == "TSRP Score":
-    render_score_section(analysis, company_name, ticker, display_currency, display_fx_reporting, display_fx_trading, as_of)
+    with st.spinner("Loading one-year price history..."):
+        dashboard_history = fetch_price_history(ticker, "1y")
+    render_dashboard(analysis, yahoo_data, info, company_name, ticker, display_currency, display_fx_reporting, display_fx_trading, as_of, dashboard_history)
 elif active_section == "Expectations vs Reality":
     render_expectations_section(analysis, yahoo_data, ticker, display_currency, display_fx_reporting)
 elif active_section == "Valuation":
@@ -6234,27 +7015,29 @@ elif active_section == "Catalysts & Risks":
 elif active_section == "What Changed?":
     render_changed_section(analysis, company_name, ticker, display_currency, display_fx_reporting)
 
-render_html('<div class="research-tools"><div class="section-kicker-new">Sources and controls</div>')
-with st.expander("Sources, currency & more", expanded=False):
-    display_currency = st.selectbox("Currency for displayed values", DISPLAY_CURRENCIES, key="display_currency", help="This changes how values are displayed. Company reporting currency is kept in the detailed source record.")
-    controls_left, controls_right = st.columns(2, gap="small")
-    with controls_left:
-        if st.button("↻", key="new_refresh_data", help="Refresh market, FX, and SEC data"):
-            fetch_yahoo_data.clear()
-            fetch_price_history.clear()
-            fetch_sec_companyfacts.clear()
-            fetch_sec_ticker_map.clear()
-            fx_rate.clear()
-            rate_to_usd.clear()
-            st.rerun()
-    with controls_right:
-        export_table = evidence_dataframe(analysis, company_name, ticker, sector, industry, reporting_currency, trading_currency, display_currency, 1.0, 1.0)
-        st.download_button("Download source table", export_table.to_csv(index=False).encode("utf-8"), f"tsrp_{ticker}.csv", "text/csv", key="new_export_csv")
-        st.download_button("Download full research record", export_payload(analysis, company_name, ticker, sector, industry, display_currency), f"tsrp_{ticker}.json", "application/json", key="new_export_json")
-    render_html('<div class="panel-title-row" style="margin-top:18px"><h3>How TSRP works</h3><span>Optional detail</span></div>')
-    render_methodology()
-    with st.expander("Data and privacy", expanded=False):
-        st.markdown(PRIVACY_NOTICE)
+render_html('<div class="research-tools"><div class="dashboard-utility-label">Display and export</div>')
+display_currency = st.selectbox(
+    "Currency for displayed values",
+    DISPLAY_CURRENCIES,
+    key="display_currency",
+    label_visibility="collapsed",
+    help="Choose the display currency for available values.",
+)
+control_refresh, control_csv, control_json = st.columns(3, gap="medium")
+with control_refresh:
+    if st.button("↻", key="new_refresh_data", help="Refresh market, FX, and SEC data"):
+        fetch_yahoo_data.clear()
+        fetch_price_history.clear()
+        fetch_sec_companyfacts.clear()
+        fetch_sec_ticker_map.clear()
+        fx_rate.clear()
+        rate_to_usd.clear()
+        st.rerun()
+with control_csv:
+    export_table = evidence_dataframe(analysis, company_name, ticker, sector, industry, reporting_currency, trading_currency, display_currency, 1.0, 1.0)
+    st.download_button("Download source table", export_table.to_csv(index=False).encode("utf-8"), f"tsrp_{ticker}.csv", "text/csv", key="new_export_csv")
+with control_json:
+    st.download_button("Download full research record", export_payload(analysis, company_name, ticker, sector, industry, display_currency), f"tsrp_{ticker}.json", "application/json", key="new_export_json")
 render_html('</div>')
 
 render_html(
