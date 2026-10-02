@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>TSRP scroll refresh</title>
+    <style>
+      html, body { width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; }
+    </style>
+  </head>
+  <body>
+    <script>
+      (() => {
+        const PULL_DISTANCE = 72;
+        const COOLDOWN_MS = 15000;
+        let pullDistance = 0;
+        let touchStartY = null;
+        let lastSentAt = 0;
+        let scrollContainer = null;
+        let attached = false;
+        let hasScrolledAway = false;
+
+        const sendRefresh = () => {
+          const now = Date.now();
+          if (now - lastSentAt < COOLDOWN_MS) return;
+          lastSentAt = now;
+          window.parent.postMessage(
+            {
+              isStreamlitMessage: true,
+              type: "streamlit:setComponentValue",
+              dataType: "json",
+              value: { triggeredAt: now },
+            },
+            "*",
+          );
+        };
+
+        const currentScrollContainer = () => {
+          try {
+            return window.parent.document.querySelector("section.stMain") || window.parent;
+          } catch (_error) {
+            return window.parent;
+          }
+        };
+
+        const scrollPosition = () =>
+          scrollContainer === window.parent
+            ? window.parent.scrollY || 0
+            : scrollContainer?.scrollTop || 0;
+
+        const onScroll = () => {
+          const position = scrollPosition();
+          if (position > 120) {
+            hasScrolledAway = true;
+          } else if (hasScrolledAway && position <= 2) {
+            hasScrolledAway = false;
+            sendRefresh();
+          }
+        };
+
+        const onWheel = (event) => {
+          const position = scrollPosition();
+          if (position <= 2 && event.deltaY < 0) {
+            pullDistance += Math.abs(event.deltaY);
+            if (pullDistance >= PULL_DISTANCE) {
+              sendRefresh();
+              pullDistance = 0;
+            }
+          } else if (event.deltaY > 0 || position > 2) {
+            pullDistance = 0;
+          }
+        };
+
+        const onTouchStart = (event) => {
+          touchStartY = event.touches[0]?.clientY ?? null;
+        };
+
+        const onTouchMove = (event) => {
+          if (touchStartY === null) return;
+          const position = scrollPosition();
+          const distance = (event.touches[0]?.clientY ?? touchStartY) - touchStartY;
+          if (position <= 2 && distance > 0) {
+            pullDistance = distance;
+          } else if (distance < 0 || position > 2) {
+            pullDistance = 0;
+          }
+        };
+
+        const onTouchEnd = () => {
+          if (pullDistance >= PULL_DISTANCE) sendRefresh();
+          pullDistance = 0;
+          touchStartY = null;
+        };
+
+        const attach = () => {
+          if (attached) return;
+          scrollContainer = currentScrollContainer();
+          attached = true;
+          scrollContainer.addEventListener("wheel", onWheel, { passive: true });
+          scrollContainer.addEventListener("scroll", onScroll, { passive: true });
+          scrollContainer.addEventListener("touchstart", onTouchStart, { passive: true });
+          scrollContainer.addEventListener("touchmove", onTouchMove, { passive: true });
+          scrollContainer.addEventListener("touchend", onTouchEnd, { passive: true });
+          window.parent.addEventListener("wheel", onWheel, { passive: true, capture: true });
+          window.parent.addEventListener("scroll", onScroll, { passive: true, capture: true });
+          window.parent.addEventListener("touchstart", onTouchStart, { passive: true, capture: true });
+          window.parent.addEventListener("touchmove", onTouchMove, { passive: true, capture: true });
+          window.parent.addEventListener("touchend", onTouchEnd, { passive: true, capture: true });
+        };
+
+        window.addEventListener("message", (event) => {
+          if (event.data?.type === "streamlit:render") {
+            if (!scrollContainer) attach();
+          }
+        });
+
+        window.setTimeout(attach, 0);
+
+        const announceReady = () => {
+          window.parent.postMessage(
+            { isStreamlitMessage: true, type: "streamlit:componentReady", apiVersion: 1 },
+            "*",
+          );
+          window.parent.postMessage(
+            { isStreamlitMessage: true, type: "streamlit:setFrameHeight", height: 1 },
+            "*",
+          );
+        };
+        window.setTimeout(announceReady, 50);
+      })();
+    </script>
+  </body>
+</html>

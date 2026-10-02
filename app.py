@@ -14,6 +14,7 @@ import pandas as pd
 import requests
 import streamlit as st
 import yfinance as yf
+from streamlit.components.v1 import declare_component
 
 from engine import (
     FORECAST_YEARS,
@@ -34,6 +35,7 @@ from engine import (
 
 ROOT = Path(__file__).resolve().parent
 LOGO_PATH = ROOT / "assets" / "tsrp-logo.png"
+SCROLL_REFRESH = declare_component("tsrp_scroll_refresh", path=str(ROOT / "components" / "scroll_refresh"))
 APP_NAME = "The Saleh Research Project"
 APP_SHORT = "TSRP"
 EDUCATIONAL_DISCLAIMER = (
@@ -43,7 +45,7 @@ EDUCATIONAL_DISCLAIMER = (
 )
 PRIVACY_NOTICE = (
     "TSRP does not create accounts, collect personal names, store personal profiles, add analytics, or send telemetry. "
-    "The company name or ticker and selected display currency are used in the current Streamlit session; the ticker may also appear in the page URL. "
+    "The company name or ticker and fixed display currency are used in the current Streamlit session; the ticker may also appear in the page URL. "
     "Searches and ticker-derived requests are sent to Yahoo Finance, and SEC requests use the configured SEC contact identity and ticker-derived CIK. "
     "TSRP does not send personal research notes or exported files to those providers. Session state and provider infrastructure logs are controlled by the deployment environment, not by TSRP."
 )
@@ -4017,6 +4019,16 @@ def fetch_sec_companyfacts(ticker):
         return SecFactsResult(None, ProviderStatus("parse_error", "SEC response could not be parsed"))
 
 
+def clear_provider_caches():
+    """Clear provider snapshots before an intentional pull-to-refresh gesture."""
+    fetch_yahoo_data.clear()
+    fetch_price_history.clear()
+    fetch_sec_companyfacts.clear()
+    fetch_sec_ticker_map.clear()
+    fx_rate.clear()
+    rate_to_usd.clear()
+
+
 def has_sec_facts(sec_facts):
     return isinstance(sec_facts, dict) and bool(sec_facts.get("facts"))
 
@@ -5155,13 +5167,15 @@ html, body, [class*="css"], .stApp {
   padding: 4px 0 24px; border-bottom: 0;
 }
 .brand-lockup-new { display:flex; align-items:center; gap:12px; min-width:0; flex:1 1 auto; }
+a.brand-lockup-new { color:inherit; text-decoration:none; cursor:pointer; }
+a.brand-lockup-new:focus-visible { outline:2px solid var(--tsrp-accent); outline-offset:6px; }
 .brand-mark-new {
   width:34px; height:34px; display:grid; place-items:center; border-radius:10px;
   background:var(--tsrp-accent); color:#081311; font-weight:850; letter-spacing:-.08em;
 }
 .brand-copy-new { display:flex; flex-direction:column; gap:2px; min-width:0; }
-.brand-copy-new strong { font-size:15px; letter-spacing:.08em; }
-.brand-copy-new span { color:var(--tsrp-muted); font-size:11px; }
+.brand-copy-new strong { font-size:32px; line-height:1; letter-spacing:.08em; }
+.brand-copy-new span { color:var(--tsrp-muted); font-size:12px; line-height:1.35; letter-spacing:.03em; }
 .header-status-new { color:var(--tsrp-muted); font-size:11px; text-align:right; line-height:1.5; flex:0 1 320px; min-width:0; overflow-wrap:anywhere; }
 .search-zone {
   display:flex; align-items:flex-end; gap:10px; margin:24px 0 18px;
@@ -5653,10 +5667,19 @@ input, textarea, [data-baseweb="select"] > div {
 .stButton button[kind="primary"], [data-testid="stFormSubmitButton"] button[kind="primary"] { background:var(--tsrp-accent) !important; color:var(--tsrp-surface) !important; border-color:var(--tsrp-accent) !important; }
 input, textarea, [data-baseweb="select"] > div { background:var(--tsrp-surface) !important; }
 .st-key-new_analyze_company { width:100% !important; }
+.st-key-company_search, .st-key-new_analyze_company { width:100% !important; }
+.st-key-company_search input, .st-key-new_analyze_company button { width:100% !important; min-width:0 !important; }
+.st-key-company_search input { width:calc(100% + 2px) !important; max-width:none !important; flex:0 0 calc(100% + 2px) !important; margin-left:-1px !important; }
 .st-key-new_analyze_company button {
   width:100% !important;
-  min-width:220px !important;
   min-height:44px !important;
+  height:44px !important;
+  padding:0 16px !important;
+  line-height:18.2px !important;
+  box-sizing:border-box !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
   font-family:"Avenir Next", "SF Pro Display", "Helvetica Neue", sans-serif !important;
   font-size:13px !important;
   font-weight:650 !important;
@@ -6017,20 +6040,8 @@ body [data-testid="stMain"] [data-testid="stFormSubmitButton"] button {
 .research-tools .stButton button, .research-tools .stDownloadButton button { width:100% !important; }
 .st-key-save_snapshot_AAPL, [class*="st-key-save_snapshot_"] { width:100% !important; display:flex !important; justify-content:center !important; }
 [class*="st-key-save_snapshot_"] button { width:min(100%, 240px) !important; margin-left:auto !important; margin-right:auto !important; }
-[class*="st-key-new_refresh_data"], [class*="st-key-new_export_csv"], [class*="st-key-new_export_json"] { width:100% !important; }
-[class*="st-key-new_refresh_data"] button, [class*="st-key-new_export_csv"] button, [class*="st-key-new_export_json"] button { width:100% !important; }
-.st-key-display_currency [data-baseweb="select"] > div { position:relative !important; }
-.st-key-display_currency [data-baseweb="select"] div[value] { position:absolute !important; left:calc(50% + 16px) !important; transform:translateX(-50%) !important; white-space:nowrap !important; }
-.st-key-display_currency [data-baseweb="select"],
-.st-key-display_currency [data-baseweb="select"] > div,
-.st-key-display_currency [data-baseweb="select"] > div > div,
-.st-key-display_currency [data-baseweb="select"] div[value] {
-  border:0 !important;
-  box-shadow:none !important;
-  background:transparent !important;
-}
-.st-key-display_currency [data-baseweb="select"] > div { justify-content:center !important; }
-.st-key-display_currency [data-baseweb="select"] div[value] { text-align:center !important; }
+[class*="st-key-new_export_csv"], [class*="st-key-new_export_json"] { width:100% !important; }
+[class*="st-key-new_export_csv"] button, [class*="st-key-new_export_json"] button { width:100% !important; }
 .stSlider [data-testid="stWidgetLabel"] { justify-content:center !important; }
 .stSlider [data-testid="stWidgetLabel"] > div { width:auto !important; }
 [data-testid="stExpander"] > details > summary { justify-content:center !important; }
@@ -6055,6 +6066,7 @@ body [data-testid="stMain"] [data-testid="stFormSubmitButton"] button {
   .header-status-new { text-align:center !important; }
   .search-zone { flex-direction:column !important; gap:var(--space-3) !important; }
   .search-zone > div, .st-key-company_search, .st-key-new_analyze_company { width:100% !important; }
+  .st-key-new_analyze_company button[kind="primary"] { min-height:44px !important; height:44px !important; }
   .metric-grid-new, .score-driver-grid, .two-col-new, .three-col-new, .evidence-grid { grid-template-columns:1fr !important; gap:var(--space-4) !important; }
   .metric-card-new, .metric-card-new:nth-child(even) { min-height:104px !important; padding:var(--space-4) !important; border-left:0 !important; }
   .panel-new, .score-hero, .metric-card-new, .empty-new, .comparison-card, .evidence-card, .score-driver { padding:var(--space-4) !important; }
@@ -6065,7 +6077,7 @@ body [data-testid="stMain"] [data-testid="stFormSubmitButton"] button {
   [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button { flex:1 1 50% !important; width:50% !important; min-width:0 !important; min-height:48px !important; height:48px !important; white-space:normal !important; }
   .score-table, .compare-table-new, .change-table { display:table !important; overflow:visible !important; white-space:normal !important; font-size:9px !important; }
   .score-table th, .score-table td, .compare-table-new th, .compare-table-new td, .change-table th, .change-table td { padding:var(--space-2) var(--space-1) !important; }
-  .research-tools [data-testid="stHorizontalBlock"] { flex-direction:column !important; gap:var(--space-3) !important; }
+.research-tools [data-testid="stHorizontalBlock"] { flex-direction:column !important; gap:var(--space-3) !important; }
   .research-tools [data-testid="stHorizontalBlock"] > div { width:100% !important; flex:1 1 100% !important; }
   .dashboard-score-meta { display:flex !important; flex-direction:column !important; align-items:center !important; gap:var(--space-2) !important; }
   .dashboard-preview { min-height:0 !important; }
@@ -6850,16 +6862,26 @@ def select_primary_section():
 
 st.markdown('<div class="app-wrap">', unsafe_allow_html=True)
 render_product_system()
+scroll_refresh_event = SCROLL_REFRESH(default=None, key="scroll_refresh", tab_index=-1)
+if scroll_refresh_event:
+    if isinstance(scroll_refresh_event, dict):
+        scroll_refresh_token = str(scroll_refresh_event.get("triggeredAt") or "")
+    else:
+        scroll_refresh_token = str(scroll_refresh_event)
+    if scroll_refresh_token and scroll_refresh_token != st.session_state.get("last_scroll_refresh"):
+        st.session_state.last_scroll_refresh = scroll_refresh_token
+        clear_provider_caches()
+        st.rerun()
 render_html(
-    '<div class="product-header"><div class="brand-lockup-new"><div class="brand-mark-new">TS</div>'
-    '<div class="brand-copy-new"><strong>TSRP</strong><span>The Saleh Research Project · research before opinion</span></div></div>'
+    '<div class="product-header"><a class="brand-lockup-new" href="/" target="_self" aria-label="TSRP home">'
+    '<div class="brand-copy-new"><strong>TSRP</strong><span>The Saleh Research Project</span></div></a>'
     '<div class="header-status-new">Company stock research<br>Market data and filing status shown with every analysis</div></div>'
 )
 
 try:
-    search_col, action_col = st.columns([5, 1.15], gap="small", vertical_alignment="bottom")
+    _, search_col, _ = st.columns([1, 2, 1], gap="small", vertical_alignment="bottom")
 except TypeError:
-    search_col, action_col = st.columns([5, 1.15])
+    _, search_col, _ = st.columns([1, 2, 1])
 with search_col:
     typed = st.text_input(
         "Company or ticker",
@@ -6867,6 +6889,10 @@ with search_col:
         max_chars=MAX_SEARCH_QUERY_LENGTH,
         key="company_search",
     )
+try:
+    _, action_col, _ = st.columns([1, 2, 1], gap="small", vertical_alignment="bottom")
+except TypeError:
+    _, action_col, _ = st.columns([1, 2, 1])
 with action_col:
     submitted = st.button("Analyze company", key="new_analyze_company", width="stretch", type="primary")
 
@@ -6967,9 +6993,7 @@ if str(company_name).upper() == ticker and KNOWN_NAMES.get(ticker):
 sector = analysis["sector"]
 industry = info.get("industry") or "Unknown industry"
 
-display_currency = st.session_state.get("display_currency", DISPLAY_CURRENCIES[0])
-if display_currency not in DISPLAY_CURRENCIES:
-    display_currency = DISPLAY_CURRENCIES[0]
+display_currency = DISPLAY_CURRENCIES[0]
 
 raw_fx_reporting = fx_rate(reporting_currency, display_currency)
 raw_fx_trading = fx_rate(trading_currency, display_currency)
@@ -7015,24 +7039,8 @@ elif active_section == "Catalysts & Risks":
 elif active_section == "What Changed?":
     render_changed_section(analysis, company_name, ticker, display_currency, display_fx_reporting)
 
-render_html('<div class="research-tools"><div class="dashboard-utility-label">Display and export</div>')
-display_currency = st.selectbox(
-    "Currency for displayed values",
-    DISPLAY_CURRENCIES,
-    key="display_currency",
-    label_visibility="collapsed",
-    help="Choose the display currency for available values.",
-)
-control_refresh, control_csv, control_json = st.columns(3, gap="medium")
-with control_refresh:
-    if st.button("↻", key="new_refresh_data", help="Refresh market, FX, and SEC data"):
-        fetch_yahoo_data.clear()
-        fetch_price_history.clear()
-        fetch_sec_companyfacts.clear()
-        fetch_sec_ticker_map.clear()
-        fx_rate.clear()
-        rate_to_usd.clear()
-        st.rerun()
+render_html('<div class="research-tools"><div class="dashboard-utility-label">Export research</div>')
+control_csv, control_json = st.columns(2, gap="medium")
 with control_csv:
     export_table = evidence_dataframe(analysis, company_name, ticker, sector, industry, reporting_currency, trading_currency, display_currency, 1.0, 1.0)
     st.download_button("Download source table", export_table.to_csv(index=False).encode("utf-8"), f"tsrp_{ticker}.csv", "text/csv", key="new_export_csv")
