@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>TSRP section focus</title>
+    <style>
+      html, body { width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; }
+    </style>
+  </head>
+  <body>
+    <script>
+      (() => {
+        const focusSection = () => {
+          try {
+            const target = window.parent.document.querySelector(".research-section-anchor");
+            if (!target) return;
+            target.scrollIntoView({ behavior: "smooth", block: "start" });
+            target.focus({ preventScroll: true });
+          } catch (_error) {
+            // The parent document can be unavailable while Streamlit is rerendering.
+          }
+        };
+
+        window.setTimeout(() => {
+          window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(focusSection);
+          });
+        }, 60);
+
+        window.parent.postMessage(
+          { isStreamlitMessage: true, type: "streamlit:componentReady", apiVersion: 1 },
+          "*",
+        );
+        window.parent.postMessage(
+          { isStreamlitMessage: true, type: "streamlit:setFrameHeight", height: 1 },
+          "*",
+        );
+      })();
+    </script>
+  </body>
+</html>

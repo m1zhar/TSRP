@@ -36,6 +36,7 @@ from engine import (
 ROOT = Path(__file__).resolve().parent
 LOGO_PATH = ROOT / "assets" / "tsrp-logo.png"
 SCROLL_REFRESH = declare_component("tsrp_scroll_refresh", path=str(ROOT / "components" / "scroll_refresh"))
+SECTION_FOCUS = declare_component("tsrp_section_focus", path=str(ROOT / "components" / "section_focus"))
 APP_NAME = "The Saleh Research Project"
 APP_SHORT = "TSRP"
 EDUCATIONAL_DISCLAIMER = (
@@ -318,6 +319,14 @@ def render_html(markup):
 
 def esc(value):
     return html.escape("" if value is None else str(value))
+
+
+def company_title_markup(company_name, ticker):
+    name = str(company_name or "").strip()
+    symbol = str(ticker or "").strip()
+    if not name or name.casefold() == symbol.casefold():
+        return f'<span class="company-ticker company-ticker-only">{esc(symbol)}</span>'
+    return f'{esc(name)} <span class="company-ticker">{esc(symbol)}</span>'
 
 
 def brand_logo_svg(size="sm"):
@@ -5111,7 +5120,29 @@ PRIMARY_SECTIONS = [
     "Catalysts & Risks",
     "What Changed?",
 ]
+SECTION_SLUGS = {section: f"research-section-{index}" for index, section in enumerate(PRIMARY_SECTIONS, start=1)}
 SNAPSHOT_METHODOLOGY_VERSION = "score-v2"
+
+
+def query_primary_section():
+    try:
+        value = st.query_params.get("section", "")
+    except Exception:
+        return None
+    if isinstance(value, list):
+        value = value[0] if value else ""
+    value = str(value or "")
+    return value if value in PRIMARY_SECTIONS else None
+
+
+def sync_primary_section_query(section):
+    try:
+        if section in PRIMARY_SECTIONS:
+            st.query_params["section"] = section
+        elif "section" in st.query_params:
+            del st.query_params["section"]
+    except Exception:
+        pass
 
 
 def render_product_system():
@@ -5902,6 +5933,17 @@ body [data-testid="stMain"] [data-testid="stFormSubmitButton"] button {
 }
 .company-strip h1 { padding:0 !important; line-height:1.1 !important; }
 .company-strip h1, .company-strip p { text-align:center !important; }
+.company-strip .company-ticker,
+.score-hero-copy .company-ticker {
+  color:var(--tsrp-muted) !important;
+  font-family:var(--tsrp-mono) !important;
+  font-size:.46em !important;
+  font-weight:800 !important;
+  letter-spacing:.02em !important;
+  white-space:nowrap !important;
+}
+.company-strip .company-ticker-only { font-size:.72em !important; }
+.score-hero-copy .company-ticker-only { font-size:.72em !important; }
 .company-strip p { margin:var(--space-2) 0 0 !important; }
 .compact-score {
   min-width:0 !important;
@@ -6106,6 +6148,224 @@ body [data-testid="stMain"] [data-testid="stFormSubmitButton"] button {
   .research-tools [data-testid="stHorizontalBlock"] > div { width:100% !important; flex:1 1 100% !important; }
   .dashboard-score-meta { display:flex !important; flex-direction:column !important; align-items:center !important; gap:var(--space-2) !important; }
   .dashboard-preview { min-height:0 !important; }
+}
+
+/* Keep every research question readable at every viewport width. Streamlit's
+   segmented control applies single-line ellipsis styles to its labels by
+   default, so the navigation must explicitly allow labels to wrap. */
+.st-key-primary_section_nav {
+  width:100% !important;
+  max-width:none !important;
+}
+.st-key-primary_section_nav [role="radiogroup"] {
+  display:grid !important;
+  grid-template-columns:repeat(5, minmax(0, 1fr)) !important;
+  width:100% !important;
+  max-width:none !important;
+  overflow:visible !important;
+  align-items:stretch !important;
+}
+.st-key-primary_section_nav [role="radiogroup"] button {
+  width:100% !important;
+  min-width:0 !important;
+  max-width:none !important;
+  min-height:52px !important;
+  height:auto !important;
+  padding:10px 8px !important;
+  white-space:normal !important;
+  overflow:visible !important;
+  text-overflow:clip !important;
+  line-height:1.25 !important;
+  text-align:center !important;
+}
+.st-key-primary_section_nav [role="radiogroup"] button > div,
+.st-key-primary_section_nav [role="radiogroup"] button [data-testid="stMarkdownContainer"],
+.st-key-primary_section_nav [role="radiogroup"] button p {
+  width:auto !important;
+  max-width:none !important;
+  white-space:normal !important;
+  overflow:visible !important;
+  text-overflow:clip !important;
+  line-height:1.25 !important;
+  text-align:center !important;
+  overflow-wrap:normal !important;
+}
+@media (max-width:900px) {
+  .st-key-primary_section_nav [role="radiogroup"] {
+    grid-template-columns:repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+@media (max-width:640px) {
+  .st-key-primary_section_nav [role="radiogroup"] {
+    grid-template-columns:1fr !important;
+  }
+}
+
+/* One active state for the five research questions. */
+.st-key-primary_section_nav [role="radiogroup"] button,
+.st-key-primary_section_nav [data-testid="stButton"] button {
+  border-bottom:3px solid transparent !important;
+  color:var(--tsrp-muted) !important;
+  transition:color .16s ease, background-color .16s ease, border-color .16s ease !important;
+}
+.st-key-primary_section_nav [role="radiogroup"] button:hover,
+.st-key-primary_section_nav [data-testid="stButton"] button:hover {
+  color:var(--tsrp-text) !important;
+  background:var(--tsrp-surface-2) !important;
+}
+.st-key-primary_section_nav [role="radiogroup"] button:focus-visible,
+.st-key-primary_section_nav [data-testid="stButton"] button:focus-visible {
+  outline:3px solid rgba(139,111,71,.28) !important;
+  outline-offset:-3px !important;
+}
+.st-key-primary_section_nav [role="radiogroup"] button:active,
+.st-key-primary_section_nav [data-testid="stButton"] button:active {
+  background:var(--tsrp-surface-3) !important;
+}
+.st-key-primary_section_nav [role="radiogroup"] button[data-testid="stBaseButton-segmented_controlActive"],
+.st-key-primary_section_nav [role="radiogroup"] button[aria-checked="true"],
+.st-key-primary_section_nav [role="radiogroup"] button[aria-pressed="true"],
+.st-key-primary_section_nav [data-testid="stButton"] button[kind="primary"] {
+  border-bottom-color:var(--tsrp-accent) !important;
+  color:var(--tsrp-text) !important;
+  font-weight:750 !important;
+}
+.st-key-primary_section_nav [role="radiogroup"] button:disabled,
+.st-key-primary_section_nav [data-testid="stButton"] button:disabled {
+  cursor:not-allowed !important;
+  opacity:.5 !important;
+}
+.research-section-anchor {
+  height:0 !important;
+  margin:0 !important;
+  padding:0 !important;
+  scroll-margin-top:24px !important;
+  outline:none !important;
+}
+.dashboard-preview-action.dashboard-score-action { margin-top:var(--space-3) !important; }
+.dashboard-secondary-actions {
+  display:grid;
+  grid-template-columns:minmax(0, 1fr);
+  gap:var(--space-4);
+  margin-top:var(--space-5);
+  border-top:1px solid var(--tsrp-border);
+  padding-top:var(--space-5);
+}
+.dashboard-secondary-action { text-align:center; }
+.dashboard-secondary-action .preview-kicker {
+  margin:0 0 var(--space-3) !important;
+  color:var(--tsrp-faint) !important;
+  font-family:Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  font-size:10px !important;
+  font-weight:800 !important;
+  letter-spacing:.16em !important;
+  line-height:1.2 !important;
+  text-align:center !important;
+  text-transform:uppercase !important;
+}
+.dashboard-secondary-action p { margin:0 0 var(--space-3); color:var(--tsrp-muted); font-size:11px; }
+.dashboard-secondary-action .dashboard-preview-action { margin-top:0 !important; }
+html body [data-testid="stMain"] [class*="st-key-dashboard_score_"] .stButton button,
+html body [data-testid="stMain"] [class*="st-key-dashboard_expectations_"] .stButton button,
+html body [data-testid="stMain"] [class*="st-key-dashboard_catalysts_"] .stButton button,
+html body [data-testid="stMain"] [class*="st-key-dashboard_changed_"] .stButton button,
+html body [data-testid="stMain"] [class*="st-key-dashboard_valuation_"] .stButton button {
+  min-height:44px !important;
+  height:44px !important;
+  padding:0 16px !important;
+  background:transparent !important;
+  border:1px solid var(--tsrp-border-strong) !important;
+  color:var(--tsrp-text) !important;
+  box-shadow:none !important;
+  font-family:"Avenir Next", "SF Pro Display", "Helvetica Neue", sans-serif !important;
+  font-size:12px !important;
+  font-weight:600 !important;
+  letter-spacing:.01em !important;
+  transition:background-color .16s ease, border-color .16s ease, color .16s ease !important;
+}
+html body [data-testid="stMain"] [class*="st-key-dashboard_score_"] .stButton button:hover,
+html body [data-testid="stMain"] [class*="st-key-dashboard_expectations_"] .stButton button:hover,
+html body [data-testid="stMain"] [class*="st-key-dashboard_catalysts_"] .stButton button:hover,
+html body [data-testid="stMain"] [class*="st-key-dashboard_changed_"] .stButton button:hover,
+html body [data-testid="stMain"] [class*="st-key-dashboard_valuation_"] .stButton button:hover {
+  background:var(--tsrp-surface-2) !important;
+  border-color:var(--tsrp-accent) !important;
+  color:var(--tsrp-text) !important;
+}
+html body [data-testid="stMain"] [class*="st-key-dashboard_score_"] .stButton button:active,
+html body [data-testid="stMain"] [class*="st-key-dashboard_expectations_"] .stButton button:active,
+html body [data-testid="stMain"] [class*="st-key-dashboard_catalysts_"] .stButton button:active,
+html body [data-testid="stMain"] [class*="st-key-dashboard_changed_"] .stButton button:active,
+html body [data-testid="stMain"] [class*="st-key-dashboard_valuation_"] .stButton button:active {
+  background:var(--tsrp-surface-3) !important;
+}
+html body [data-testid="stMain"] [class*="st-key-dashboard_score_"] .stButton button:focus-visible,
+html body [data-testid="stMain"] [class*="st-key-dashboard_expectations_"] .stButton button:focus-visible,
+html body [data-testid="stMain"] [class*="st-key-dashboard_catalysts_"] .stButton button:focus-visible,
+html body [data-testid="stMain"] [class*="st-key-dashboard_changed_"] .stButton button:focus-visible,
+html body [data-testid="stMain"] [class*="st-key-dashboard_valuation_"] .stButton button:focus-visible {
+  outline:3px solid rgba(139,111,71,.28) !important;
+  outline-offset:3px !important;
+}
+/* Streamlit's preview action wrapper has a stronger late-emitted rule. Keep
+   this final, explicit selector so all dashboard Open buttons remain equal. */
+html body [data-testid="stMain"] div[class*="st-key-dashboard_expectations_"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"],
+html body [data-testid="stMain"] div[class*="st-key-dashboard_catalysts_"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"],
+html body [data-testid="stMain"] div[class*="st-key-dashboard_changed_"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"] {
+  min-height:44px !important;
+  height:44px !important;
+  background-color:transparent !important;
+  border-color:var(--tsrp-border-strong) !important;
+  color:var(--tsrp-text) !important;
+  font-family:"Avenir Next", "SF Pro Display", "Helvetica Neue", sans-serif !important;
+  font-size:12px !important;
+  font-weight:600 !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  text-align:center !important;
+}
+html body [data-testid="stMain"] div[class*="st-key-dashboard_expectations_"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"] > div,
+html body [data-testid="stMain"] div[class*="st-key-dashboard_catalysts_"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"] > div,
+html body [data-testid="stMain"] div[class*="st-key-dashboard_changed_"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"] > div,
+html body [data-testid="stMain"] div[class*="st-key-dashboard_expectations_"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"] p,
+html body [data-testid="stMain"] div[class*="st-key-dashboard_catalysts_"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"] p,
+html body [data-testid="stMain"] div[class*="st-key-dashboard_changed_"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"] p {
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  width:100% !important;
+  margin:0 !important;
+  text-align:center !important;
+}
+html body [data-testid="stMain"] div[class*="st-key-dashboard_expectations_"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"]:hover,
+html body [data-testid="stMain"] div[class*="st-key-dashboard_catalysts_"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"]:hover,
+html body [data-testid="stMain"] div[class*="st-key-dashboard_changed_"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"]:hover {
+  background-color:var(--tsrp-surface-2) !important;
+  border-color:var(--tsrp-accent) !important;
+}
+.dashboard-side-summary {
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  gap:var(--space-3) !important;
+  text-align:center !important;
+}
+.dashboard-side-summary .data-line {
+  width:100% !important;
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:var(--space-2) !important;
+  padding:var(--space-3) 0 !important;
+  border-bottom:1px solid var(--tsrp-border) !important;
+}
+.dashboard-side-summary .data-line:last-child { border-bottom:0 !important; }
+.dashboard-side-summary .data-line span,
+.dashboard-side-summary .data-line b { text-align:center !important; }
+@media (max-width:640px) {
+  .dashboard-secondary-actions { grid-template-columns:1fr; gap:var(--space-3); }
 }
 </style>
 """
@@ -6434,10 +6694,35 @@ def dashboard_change_markup(analysis, ticker, display_currency, display_fx_repor
     return "".join(rows) + f'<div class="source-foot">Latest saved {esc(latest.get("timestamp", "N/A"))} · compared with {esc(previous.get("timestamp", "N/A"))}.</div>'
 
 
+def set_primary_section(section, *, focus=True, rerun=False):
+    if section not in PRIMARY_SECTIONS:
+        return
+    st.session_state.primary_section = section
+    sync_primary_section_query(section)
+    # The widget key is synchronized before the next widget render. Streamlit
+    # rejects changing a widget key after that widget has rendered in a run.
+    st.session_state.sync_primary_section_nav = True
+    if focus:
+        st.session_state.section_focus_nonce = int(st.session_state.get("section_focus_nonce", 0)) + 1
+        st.session_state.pending_section_focus = section
+    if rerun:
+        st.rerun()
+
+
+def render_section_anchor(section):
+    slug = SECTION_SLUGS.get(section, SECTION_SLUGS[PRIMARY_SECTIONS[0]])
+    render_html(
+        f'<div id="{esc(slug)}" class="research-section-anchor" tabindex="-1" '
+        f'aria-label="Current research section: {esc(section)}"></div>'
+    )
+    if st.session_state.pop("pending_section_focus", None) == section:
+        nonce = st.session_state.get("section_focus_nonce", 0)
+        SECTION_FOCUS(key=f"section_focus_{slug}_{nonce}")
+
+
 def dashboard_section_button(label, section, ticker, key):
     if st.button(label, key=key, width="stretch", type="secondary"):
-        st.session_state.primary_section = section
-        st.rerun()
+        set_primary_section(section, focus=True, rerun=True)
 
 
 def render_dashboard(analysis, yahoo_data, info, company_name, ticker, display_currency, display_fx_reporting, display_fx_trading, as_of, price_history):
@@ -6458,6 +6743,9 @@ def render_dashboard(analysis, yahoo_data, info, company_name, ticker, display_c
         f'<div class="dashboard-score-meta"><span>Evidence confidence <b>{esc(analysis.get("confidence", "N/A"))}</b></span>{score_change}'
         f'<span>Data refreshed <b>{esc(as_of)}</b></span></div></div>'
     )
+    render_html('<div class="dashboard-preview-action dashboard-score-action">')
+    dashboard_section_button("Open TSRP Score", "TSRP Score", ticker, f"dashboard_score_{ticker}")
+    render_html('</div>')
 
     render_html(f'<div class="metric-grid-new dashboard-metrics">{dashboard_metric_markup(analysis, info, display_currency, display_fx_reporting, display_fx_trading)}</div>')
 
@@ -6509,6 +6797,10 @@ def render_dashboard(analysis, yahoo_data, info, company_name, ticker, display_c
         dashboard_section_button("Open What Changed?", "What Changed?", ticker, f"dashboard_changed_{ticker}")
         render_html('</div>')
 
+    render_html('<div class="dashboard-secondary-actions"><div class="dashboard-secondary-action"><div class="preview-kicker">Valuation</div><p>See what the current company value requires.</p>')
+    dashboard_section_button("Open Valuation", "Valuation", ticker, f"dashboard_valuation_{ticker}")
+    render_html('</div></div>')
+
 def render_score_section(analysis, company_name, ticker, display_currency, display_fx_reporting, display_fx_trading, as_of):
     tone = score_tone(analysis.get("reality_score"))
     score_value = score(analysis.get("reality_score"))
@@ -6521,7 +6813,7 @@ def render_score_section(analysis, company_name, ticker, display_currency, displ
     render_html(
         f'<div class="score-hero">'
         f'<div class="score-hero-copy"><div class="section-kicker-new">{esc(score_label(analysis.get("reality_score")))}</div>'
-        f'<h2>{esc(company_name)} <span style="color:var(--tsrp-muted);font-size:.55em;font-family:var(--tsrp-mono)">{esc(ticker)}</span></h2>'
+        f'<h2>{company_title_markup(company_name, ticker)}</h2>'
         f'<p>{esc(conclusion_text(analysis))}</p>'
         f'<div class="score-note">Evidence confidence: <b>{esc(analysis.get("confidence", "N/A"))}</b>. Missing or incompatible information is shown as unavailable, not treated as positive evidence.</div></div>'
         f'<div class="score-emblem" aria-label="TSRP Score {esc(score_value)} out of 100"><small>TSRP Score</small><b>{esc(score_value)}</b><span>{esc(score_label(analysis.get("reality_score")))}</span></div></div>'
@@ -6864,24 +7156,28 @@ def render_changed_section(analysis, company_name, ticker, display_currency, dis
 
 def select_primary_section():
     current = st.session_state.get("primary_section", PRIMARY_SECTIONS[0])
+    if current not in PRIMARY_SECTIONS:
+        current = PRIMARY_SECTIONS[0]
+        set_primary_section(current, focus=False)
     if hasattr(st, "segmented_control"):
+        if st.session_state.pop("sync_primary_section_nav", False):
+            st.session_state.primary_section_nav = current
+        elif st.session_state.get("primary_section_nav") not in PRIMARY_SECTIONS:
+            st.session_state.primary_section_nav = current
         selected = st.segmented_control(
             "Primary research section",
             PRIMARY_SECTIONS,
-            default=current if current in PRIMARY_SECTIONS else PRIMARY_SECTIONS[0],
             key="primary_section_nav",
             label_visibility="collapsed",
         ) or current
         if selected != current:
-            st.session_state.primary_section = selected
-            st.rerun()
+            set_primary_section(selected, focus=True, rerun=True)
         return selected
     cols = st.columns(len(PRIMARY_SECTIONS), gap="small")
     for col, name in zip(cols, PRIMARY_SECTIONS):
         with col:
             if st.button(name, key=f"primary_{name}", width="stretch", type="primary" if current == name else "secondary"):
-                st.session_state.primary_section = name
-                st.rerun()
+                set_primary_section(name, focus=True, rerun=True)
     return current
 
 
@@ -6933,11 +7229,13 @@ if submitted:
         symbol, error, hits = resolve_company_query(typed)
         st.session_state.search_hits = hits
         if symbol:
+            ticker_changed = normalize_ticker(st.session_state.get("ticker", "")) != symbol
             st.session_state.ticker = symbol
             st.session_state.invalid_ticker = ""
             st.session_state.ticker_error = None
             st.session_state.search_hits = []
-            st.session_state.primary_section = PRIMARY_SECTIONS[0]
+            if ticker_changed:
+                set_primary_section(PRIMARY_SECTIONS[0], focus=False)
         else:
             st.session_state.ticker = ""
             st.session_state.invalid_ticker = typed
@@ -6952,12 +7250,14 @@ if len(typed_query) >= 2 and typed_query.upper() != st.session_state.get("ticker
     live_hits = search_companies(typed_query)
 selected_hit = render_company_suggestions(st.session_state.search_hits or live_hits, "new_pick_company")
 if selected_hit:
+    ticker_changed = normalize_ticker(st.session_state.get("ticker", "")) != selected_hit["symbol"]
     st.session_state.ticker = selected_hit["symbol"]
     st.session_state.pending_search = selected_hit["symbol"]
     st.session_state.search_hits = []
     st.session_state.ticker_error = None
     st.session_state.invalid_ticker = ""
-    st.session_state.primary_section = PRIMARY_SECTIONS[0]
+    if ticker_changed:
+        set_primary_section(PRIMARY_SECTIONS[0], focus=False)
     st.rerun()
 if st.session_state.search_hits:
     st.stop()
@@ -7032,12 +7332,13 @@ if trading_currency != display_currency and raw_fx_trading is None:
 as_of = analysis.get("last_refreshed") or "N/A"
 previous_price = first_value(info, "previousClose", "regularMarketPreviousClose")
 price_change = analysis.get("price") / previous_price - 1 if analysis.get("price") is not None and previous_price not in (None, 0) else None
-st.session_state.setdefault("primary_section", PRIMARY_SECTIONS[0])
+if st.session_state.get("primary_section") not in PRIMARY_SECTIONS:
+    set_primary_section(query_primary_section() or PRIMARY_SECTIONS[0], focus=False)
 compact_score_markup = "" if st.session_state.get("primary_section") == "TSRP Score" else (
     f'<div class="compact-score"><span>TSRP Score</span><b>{esc(score(analysis.get("reality_score")))}</b><span>{esc(analysis.get("confidence", "N/A"))} confidence</span></div>'
 )
 render_html(
-    f'<div class="company-strip"><div><h1>{esc(company_name)} <span style="color:var(--tsrp-muted);font:600 .46em var(--tsrp-mono)">{esc(ticker)}</span></h1>'
+    f'<div class="company-strip"><div><h1>{company_title_markup(company_name, ticker)}</h1>'
     f'<p>{esc(friendly_exchange(info.get("exchange")))} · {esc(friendly_currency(trading_currency))} · {esc(money(analysis.get("price"), trading_currency, display_currency, display_fx_trading))} · '
     f'{esc(percent(price_change) if price_change is not None else "N/A")} vs prior close · As of {esc(as_of)}</p>'
     f'<div class="company-tags"><span class="company-tag"><strong>{esc(sector)}</strong></span><span class="company-tag">{esc(industry)}</span>'
@@ -7048,6 +7349,7 @@ render_html(
 render_html('<div class="section-nav-label">Research questions</div><div class="section-nav">')
 active_section = select_primary_section()
 render_html("</div>")
+render_section_anchor(active_section)
 
 current_snapshot = snapshot_payload(analysis, company_name, ticker)
 track_snapshot_state(ticker, current_snapshot)
