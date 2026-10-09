@@ -1,10 +1,11 @@
+import asyncio
 import json
 from io import BytesIO
 import unittest
 from unittest.mock import patch
 
 from api.analyze import handler as AnalyzeHandler
-from api.index import ROUTES, handler as ApiEntryHandler
+from api.index import ROUTES, app as VercelApp, handler as ApiEntryHandler
 from api.scenario import handler as ScenarioHandler
 
 
@@ -40,6 +41,26 @@ class RequestRecorder:
 
 
 class ApiRouteTests(unittest.TestCase):
+    def run_asgi(self, path, *, method="GET", body=b"", headers=None):
+        incoming = [{"type": "http.request", "body": body, "more_body": False}]
+        outgoing = []
+
+        async def receive():
+            return incoming.pop(0)
+
+        async def send(message):
+            outgoing.append(message)
+
+        scope = {
+            "type": "http",
+            "method": method,
+            "path": path.split("?", 1)[0],
+            "query_string": path.partition("?")[2].encode(),
+            "headers": [(key.lower().encode(), value.encode()) for key, value in (headers or {}).items()],
+        }
+        asyncio.run(VercelApp(scope, receive, send))
+        return outgoing
+
     def test_vercel_entrypoint_exposes_each_api_route(self):
         self.assertEqual(set(ROUTES), {
             "/api/analyze", "/api/movers", "/api/top_stocks",
@@ -52,6 +73,21 @@ class ApiRouteTests(unittest.TestCase):
         with patch.dict(ROUTES, {"/api/analyze": {"GET": lambda received: calls.append(received)}}):
             ApiEntryHandler._dispatch(request)
         self.assertEqual(calls, [request])
+
+    def test_vercel_asgi_entrypoint_dispatches_api_requests(self):
+        with patch("api.analyze.analyze_company", return_value={"company": {"ticker": "AAPL"}}):
+            outgoing = self.run_asgi("/api/analyze?ticker=AAPL")
+        self.assertEqual(outgoing[0]["status"], 200)
+        self.assertEqual(json.loads(outgoing[1]["body"])["data"]["company"]["ticker"], "AAPL")
+
+    def test_vercel_asgi_entrypoint_enforces_existing_body_limit(self):
+        oversized = b"x" * (16_384 + 1)
+        outgoing = self.run_asgi(
+            "/api/scenario", method="POST", body=oversized,
+            headers={"Content-Type": "application/json", "Content-Length": str(len(oversized))},
+        )
+        self.assertEqual(outgoing[0]["status"], 413)
+        self.assertEqual(json.loads(outgoing[1]["body"])["error"]["code"], "request_too_large")
 
     def test_vercel_entrypoint_rejects_unknown_routes_and_methods(self):
         unknown = RequestRecorder("/api/not-real")

@@ -10,7 +10,7 @@ The five primary research sections, in order, are **TSRP Score**, **Expectations
 
 The Vercel project must have the Services framework enabled for this two-runtime repository. `vercel.json` defines a Next.js frontend in `frontend/`, a Python API service in `backend/`, and routes `/api/*` to the backend. The Python entrypoint and its runtime dependencies are declared in `backend/pyproject.toml`; Python 3.12 is pinned in `backend/.python-version`. Keep `backend/requirements.txt` aligned for CI and local installs. Set `SEC_USER_AGENT` only if you want SEC requests; use a real monitored contact identity. No API key is required for the current Yahoo Finance adapter.
 
-The Python API is implemented under `backend/api/` with one `BaseHTTPRequestHandler` entrypoint dispatching the six API routes. Function duration uses the Vercel project/runtime defaults. Vercel currently documents Services as Beta; verify this project's access and current plan/runtime limits before release. See [Vercel Services](https://vercel.com/docs/services) and [Vercel’s Python runtime documentation](https://vercel.com/docs/functions/runtimes/python).
+The Python API is implemented under `backend/api/`. A small ASGI entrypoint dispatches to the six existing `BaseHTTPRequestHandler` routes, keeping their validation and response logic unchanged. Function duration uses the Vercel project/runtime defaults. Vercel currently documents Services as Beta; verify this project's access and current plan/runtime limits before release. See [Vercel Services](https://vercel.com/docs/services) and [Vercel’s Python runtime documentation](https://vercel.com/docs/functions/runtimes/python).
 
 ## Architecture
 
