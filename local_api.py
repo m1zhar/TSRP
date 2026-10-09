@@ -1,7 +1,13 @@
 """Tiny local adapter so the same Vercel handler functions run during dev."""
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+import sys
 from urllib.parse import urlparse
+
+BACKEND_PATH = str(Path(__file__).resolve().parent / "backend")
+if BACKEND_PATH not in sys.path:
+    sys.path.insert(0, BACKEND_PATH)
 
 from api.analyze import handler as AnalyzeHandler
 from api.movers import handler as MoversHandler

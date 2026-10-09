@@ -26,6 +26,7 @@ jobs:
         uses: pnpm/setup@v3
         with:
           runtime: node@22
+          working-directory: frontend
           cache: true
           require-lockfile: true
 
@@ -34,24 +35,28 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: backend/requirements.txt
 
       - name: Install Python dependencies
-        run: python -m pip install -r requirements.txt
+        run: python -m pip install -r backend/requirements.txt
 
       - name: Lint
         run: pnpm lint
+        working-directory: frontend
 
       - name: Type-check
         run: pnpm typecheck
+        working-directory: frontend
 
       - name: Test Python analysis and API
-        run: pnpm test:python
+        run: python -m unittest -q
 
       - name: Test TypeScript utilities
         run: pnpm test:node
+        working-directory: frontend
 
       - name: Build production app
         run: pnpm build
+        working-directory: frontend
         env:
           NEXT_TELEMETRY_DISABLED: "1"
