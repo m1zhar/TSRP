@@ -26,6 +26,20 @@ class FinancialDataAlignmentTests(unittest.TestCase):
         self.assertEqual(value, 20)
         self.assertEqual(str(period)[:10], "2024-12-31")
 
+    def test_timestamp_periods_are_normalized_for_provider_alignment(self):
+        periods = pd.to_datetime(["2024-12-31", "2023-12-31"])
+        revenue = pd.DataFrame([[120, 100]], index=["Total Revenue"], columns=periods)
+        cashflow = pd.DataFrame(
+            [[30, 25], [-10, -8]],
+            index=["Operating Cash Flow", "Capital Expenditure"],
+            columns=periods,
+        )
+
+        value, period = latest_period_aligned_fcf(cashflow, revenue, ["Total Revenue"])
+
+        self.assertEqual(value, 20)
+        self.assertEqual(period, "2024-12-31")
+
     def test_missing_cash_flow_period_is_not_paired_by_position(self):
         revenue = pd.DataFrame(
             [[120, 100]], index=["Total Revenue"], columns=["2024-12-31", "2023-12-31"]
