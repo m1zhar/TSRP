@@ -321,6 +321,21 @@ class InputAndSourceSafetyTests(unittest.TestCase):
         self.assertIsNone(company["market_expectations"])
         self.assertIsNotNone(company["enterprise_value"])
 
+    def test_active_analysis_handles_yfinance_timestamp_statement_columns(self):
+        fiscal_year = datetime.now(timezone.utc).year - 1
+        instrument = MockEquity(fiscal_year)
+        for statement in (instrument.financials, instrument.balance_sheet, instrument.cashflow):
+            statement.columns = pd.to_datetime(statement.columns)
+        with patch("research_service.yf.Ticker", return_value=instrument), patch(
+            "research_service._sec_facts", return_value=(None, {"kind": "not_configured", "label": "SEC unavailable"})
+        ):
+            result = analyze_company("AAPL")
+
+        company = result["company"]
+        self.assertEqual(company["fcf_period"], company["revenue_period"])
+        self.assertEqual(company["free_cash_flow"], 180)
+        self.assertTrue(company["score_available"])
+
     def test_previous_close_is_not_substituted_for_missing_current_price(self):
         fiscal_year = datetime.now(timezone.utc).year - 1
         instrument = MockEquity(fiscal_year)

@@ -106,7 +106,10 @@ def period_aligned_fcf_details(cashflow, revenue, revenue_names, *, years=None):
         key = _period_key(period)
         fcf, method = compute_fcf_detail(operating.get(key), capex.get(key), reported.get(key))
         if fcf is not None:
-            matches.append((period, revenue_value, fcf, method))
+            # yfinance labels statement columns with pandas Timestamps while
+            # revenue periods are serialized as YYYY-MM-DD strings. Return one
+            # canonical representation so downstream equality checks work.
+            matches.append((_period_key(period), revenue_value, fcf, method))
         if years and len(matches) >= years:
             break
     return matches
