@@ -5,12 +5,14 @@ from engine import (
     dcf_enterprise_value,
     expectation_score,
     history_cagr,
+    history_cagr_periods,
     model_rates,
     reality_score,
     score_breakdown,
     snapshot_diff,
     solve_required_growth,
     solve_required_growth_detail,
+    supported_score_breakdown,
     year_growth,
 )
 
@@ -66,6 +68,12 @@ class DcfTests(unittest.TestCase):
 
     def test_invalid_projection_inputs_do_not_produce_numbers(self):
         self.assertIsNone(year_growth(0.10, 0.03, float("inf")))
+        self.assertIsNone(dcf_enterprise_value(100, 1e308, 0.15, 0.08, 0.02))
+        self.assertIsNone(dcf_enterprise_value(100, 0.08, 0.15, 0.08, 0.02, years=51))
+
+    def test_reverse_solver_rejects_nonpositive_enterprise_value(self):
+        self.assertEqual(solve_required_growth_detail(0, 100, .15, .08, .02)["status"], "unavailable")
+        self.assertEqual(solve_required_growth_detail(-1, 100, .15, .08, .02)["status"], "unavailable")
 
     def test_round_trip_solver(self):
         target = dcf_enterprise_value(200, 0.12, 0.18, 0.09, 0.02)
@@ -80,6 +88,22 @@ class HistoryAndMarginTests(unittest.TestCase):
         growth, years = history_cagr([160, 140, 120, 100], max_years=10)
         self.assertEqual(years, 3)
         self.assertAlmostEqual(growth, (160 / 100) ** (1 / 3) - 1, places=6)
+
+    def test_dated_cagr_uses_elapsed_days_not_row_count(self):
+        growth, years, start, end = history_cagr_periods([
+            ("2024-12-31", 120), ("2023-12-30", 110), ("2022-12-31", 100),
+        ])
+        self.assertAlmostEqual(growth, (120 / 100) ** (1 / years) - 1)
+        self.assertAlmostEqual(years, ( __import__("datetime").date.fromisoformat(end) - __import__("datetime").date.fromisoformat(start)).days / 365.2425)
+
+    def test_dated_cagr_does_not_bridge_a_missing_year(self):
+        growth, years, _, _ = history_cagr_periods([("2024-12-31", 140), ("2022-12-31", 100)])
+        self.assertIsNone(growth)
+        self.assertEqual(years, 0)
+
+    def test_cagr_extreme_finite_inputs_do_not_overflow(self):
+        from engine import cagr
+        self.assertIsNone(cagr(1e-308, 1e308, 0.01))
 
     def test_refuses_negative_latest_without_positive_history(self):
         margin, refused, _ = choose_model_fcf_margin(-0.04, [-0.02, -0.01], 0.12)
@@ -96,6 +120,15 @@ class HistoryAndMarginTests(unittest.TestCase):
         margin, refused, _ = choose_model_fcf_margin(None, [], 0.12)
         self.assertTrue(refused)
         self.assertIsNone(margin)
+
+    def test_nonpositive_historical_average_is_unavailable_without_latest_margin(self):
+        margin, refused, _ = choose_model_fcf_margin(None, [-0.10, 0.0], 0.12)
+        self.assertTrue(refused)
+        self.assertIsNone(margin)
+
+    def test_historical_mean_keeps_negative_observations(self):
+        from engine import average_positive_margins
+        self.assertAlmostEqual(average_positive_margins([0.10, -0.20, 0.0]), -0.10 / 3)
 
 
 class ScoreTests(unittest.TestCase):
@@ -129,6 +162,34 @@ class ScoreTests(unittest.TestCase):
         self.assertFalse(trace["growth_comparison_available"])
         self.assertEqual(trace["components"][2]["value"], 40)
         self.assertEqual(trace["components"][3]["value"], 40)
+
+    def test_score_v3_does_not_impute_missing_growth_comparisons(self):
+        trace = supported_score_breakdown(
+            {"score": 80, "evidence_coverage": 1.0},
+            {"score": 70, "evidence_coverage": 1.0},
+            historical_growth=None, required_growth=0.12, consensus_growth=None,
+        )
+        self.assertIsNone(trace["score"])
+        self.assertAlmostEqual(trace["evidence_coverage"], 0.65)
+        self.assertIsNone(trace["components"][2]["value"])
+        self.assertIsNone(trace["components"][3]["value"])
+
+    def test_score_v3_rebalances_only_when_evidence_threshold_is_met(self):
+        trace = supported_score_breakdown(
+            {"score": 80, "evidence_coverage": 1.0},
+            {"score": 70, "evidence_coverage": 1.0},
+            historical_growth=0.08, required_growth=0.12, consensus_growth=None,
+        )
+        self.assertIsNotNone(trace["score"])
+        self.assertAlmostEqual(trace["evidence_coverage"], 0.85)
+        self.assertAlmostEqual(sum(item["contribution"] or 0 for item in trace["components"]), trace["score"])
+
+    def test_score_v3_extreme_factor_overflow_is_not_a_zero_score_observation(self):
+        from engine import business_quality_detail
+        model = {"business_benchmarks": {"gross": .7, "operating": .3, "fcf": .2, "roe": .2}, "business_weights": {"growth": .25, "gross": .2, "operating": .15, "fcf": .2, "roe": .1, "balance": .1}}
+        detail = business_quality_detail(None, 1e308, None, None, None, None, model)
+        gross = next(item for item in detail["components"] if item["key"] == "gross")
+        self.assertIsNone(gross["value"])
 
 
 class SnapshotTests(unittest.TestCase):

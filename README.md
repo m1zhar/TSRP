@@ -1,66 +1,84 @@
-# The Saleh Research Project (TSRP)
+# TSRP — Saleh Research Project
 
-TSRP is an educational equity-research application for listed company stocks. Its five research sections are:
+TSRP is an independent, evidence-led equity research application for listed company stocks. The application UI is Next.js App Router with strict TypeScript; the existing Python engine remains the single source of truth for scores, assumptions, and valuation calculations. Python HTTP functions expose a small validated boundary to the browser.
 
-1. TSRP Score
-2. Expectations vs Reality
-3. Valuation
-4. Catalysts & Risks
-5. What Changed?
+The five primary research sections, in order, are **TSRP Score**, **Expectations vs Reality**, **Valuation**, **Catalysts & Risks**, and **What Changed?**. The score view is the home view. Ticker and section are encoded in the URL so links, refresh, and browser history retain the selected research view.
 
-The app compares what a current company value appears to require with historical revenue growth, near-term analyst estimates, operating quality, free-cash-flow conversion, and balance-sheet evidence. Indexes, commodities, currencies, funds, and other non-company instruments are excluded.
+## Run locally
 
-> Educational research only. TSRP is not financial, investment, tax, accounting, or legal advice. It does not make recommendations, predict returns, or guarantee data accuracy. Market data may be delayed, incomplete, or incorrect. Do your own research and consult a qualified professional before making financial decisions.
-
-## Streamlit deployment
-
-The Streamlit entrypoint is `app.py`; deterministic reverse-DCF and score logic lives in `engine.py`.
-
-To deploy on Streamlit Community Cloud:
-
-1. Create a new app from this GitHub repository.
-2. Select the `main` branch and `app.py` as the entrypoint.
-3. In the app settings, add the secret below, replacing the placeholder with a real monitored contact identity:
-
-```toml
-SEC_USER_AGENT = "TSRP your-monitored-email@example.com"
-```
-
-Streamlit Cloud secrets are read through `st.secrets`. A process environment variable with the same name is also supported for other managed Streamlit deployments. TSRP does not load `.env` files automatically and never stores the value in session state or exports.
-
-## SEC EDGAR configuration
-
-SEC EDGAR requests require a real monitored contact identity in the HTTP `User-Agent`. If the secret is missing or the provider is unavailable, SEC-derived figures remain unavailable and the app labels the exact filing-data state. It does not fabricate a fallback contact identity.
-
-## Data sources and limitations
-
-- Yahoo Finance, accessed through `yfinance` and its search/quote endpoints, supplies market quotes, history, estimates, and supplemental fundamentals. Availability, field definitions, delay, rate limits, and redistribution rights are controlled by that provider and should be reviewed before public or commercial use.
-- SEC EDGAR supplies annual company facts when a ticker can be mapped to a CIK and the request is configured correctly. SEC company-facts coverage is not universal for every international listing.
-- FX conversion uses Yahoo Finance currency symbols. If conversion is unavailable, dependent values stay N/A instead of being relabeled in another currency.
-- Market data is cached for up to 15 minutes, SEC facts for up to 24 hours, and FX rates for up to 1 hour. The interface shows the analysis timestamp and these freshness limits.
-- TSRP currently has no AI text-generation provider, news feed, account system, analytics, hidden telemetry, or server-side user research database.
-
-The reverse DCF is a scenario model, not a target price. It uses the reporting-currency value, a currency-aware discount-rate profile, a ten-year revenue path that fades toward terminal growth, and a positive evidence-based free-cash-flow margin. Negative or missing cash flow blocks the reverse solve. Scores are deterministic heuristic dashboards, not probabilities or recommendations.
-
-## Privacy and security
-
-TSRP uses the company name/ticker and display-currency selection for the current Streamlit session. The selected ticker may appear in the page URL. Search terms and ticker-derived provider requests are sent to Yahoo Finance; SEC requests send the configured contact identity and ticker-derived CIK to SEC endpoints. TSRP does not send personal notes or exported files to those providers, does not add analytics, and does not create user profiles or collect personal names.
-
-Session state and standard infrastructure/provider logs are controlled by the deployment environment and may have retention policies outside this repository. Review the hosting and provider terms before treating the hosted app as a private workspace. The repository ignores `.env`, Streamlit secrets, and common key files; never commit real credentials.
-
-## Tests and release checks
-
-Run the deterministic test suite and source checks before release:
+Requirements: Node.js 22 or newer (Node 22 is selected in `.nvmrc`), Python 3.12, and pnpm 11.
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile app.py engine.py test_engine.py
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -q
-git diff --check
-python3 -m pip check
+pnpm install --frozen-lockfile
+python3 -m pip install -r requirements.txt
 ```
 
-The automated tests cover currency-rate selection, reverse-DCF monotonicity and bounds, negative free-cash-flow refusal, score reconciliation, non-finite inputs, and snapshot comparability. A release still requires a manual smoke test with provider credentials: analyze a US company, analyze a non-US company with FX conversion, verify unavailable-provider states, test downloads, and inspect the hosted service’s secret configuration and provider terms.
+Start the Python API and Next.js in separate terminals from the repository root:
 
-## Release boundary
+```bash
+python3 local_api.py
+```
 
-This repository does not claim regulatory compliance, investment-adviser status, data-license clearance, security certification, or GDPR compliance. Those require a separate legal, provider-contract, and deployment review before public or commercial release.
+```bash
+pnpm dev
+```
+
+Open `http://localhost:3000`. During development, the browser calls the Python adapter on loopback directly so a slow public-data request is not cut off by a development proxy; the adapter accepts browser requests only from the two localhost origins. Without a valid `SEC_USER_AGENT`, SEC filing data is explicitly shown as unavailable; other Yahoo Finance values remain source-labeled. Do not place real credentials in `.env.example` or commit them.
+
+For local SEC access, export `SEC_USER_AGENT` in the shell that starts `local_api.py`; the Python development adapter does not automatically load `.env` files. Use your real monitored identity and contact email. TSRP validates only that the value resembles an email-bearing identity; it cannot verify that the contact is monitored.
+
+Run checks:
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test:python
+pnpm build
+```
+
+The old `app.py` and Streamlit component files remain in the repository as historical source and are not the new application entrypoint. Their pre-migration README, including its prior local changes, is preserved in [`docs/legacy-streamlit-readme.md`](docs/legacy-streamlit-readme.md). The Vercel app uses `app/page.tsx` and the Python API functions under `api/`.
+
+## Deploy to Vercel
+
+Import this repository as a Next.js project and use the repository root as the project root. Vercel should detect the Next.js framework. The Python functions use the root `requirements.txt` and `.python-version` (3.12). Set `SEC_USER_AGENT` in Vercel’s environment-variable settings only if you want to enable SEC requests; use a monitored, truthful contact identity as required by SEC policy. No API key is required for the current Yahoo Finance adapter.
+
+Vercel documents file-based Python functions under `/api`, including `BaseHTTPRequestHandler` subclasses, and supports Python 3.12. This repository uses that shape alongside the Next.js frontend. The 30-second function limits are declared in `vercel.json`; the analysis provider calls have a shorter total wait budget. As of 2026-10-09, Vercel’s Python runtime documentation labels the runtime Beta on all plans. A local Next.js build does not verify Vercel’s Python bundling or combined Next.js/Python routing, and this repository has not been linked to a Vercel project or Preview-deployed. Verify the actual project and plan in Preview, and decide whether relying on a Beta backend is acceptable before release. See [Vercel’s Python runtime documentation](https://vercel.com/docs/functions/runtimes/python) and [Python functions in `/api`](https://vercel.com/docs/functions/runtimes/python/api-directory).
+
+## Architecture
+
+- `app/`, `components/`, and `lib/`: App Router shell, interactive research views, client navigation, charts, exports, types, and formatting.
+- `engine.py`: existing deterministic score, sector-model math, and reverse-DCF implementation; remains the calculation authority.
+- `financial_data.py`: existing period-alignment helpers for reported revenue and cash-flow observations.
+- `methodology.py`: sector calibrations transcribed from the inspected Streamlit baseline. Parity fixtures and tests lock representative behavior.
+- `research_service.py`: server-only Yahoo/SEC adapters, currency conversion, provenance, validation, and analysis orchestration.
+- `api/`: server-side analyze, search, scenario, and compatible-snapshot comparison endpoints. Provider errors are returned as short safe messages; no raw responses or stack traces go to the browser.
+- `local_api.py`: development-only HTTP adapter that invokes those same handler methods. It is not deployed as a Vercel function.
+- `tests/fixtures/score-parity.json`: fixed baseline rates, sub-scores, weights, and DCF values for deterministic regression tests.
+
+## Data sources, freshness, and limitations
+
+- **Yahoo Finance through `yfinance`:** name search, listed-equity identity, quotes, daily price history, analyst revenue estimates, and supplemental financial statements. Provider field coverage, delay, definitions, revision behavior, request limits, and permitted use/redistribution are outside TSRP’s control. Yahoo’s [general Terms of Service](https://legal.yahoo.com/us/en/yahoo/terms/otos/index.html) restrict reuse and redistribution and restrict creating data products that compete with or substitute for Yahoo services absent express written permission. Do not assume this app’s public display is permitted: obtain written rights or replace this feed with a provider whose license covers the intended use before launch. TSRP does not claim real-time prices.
+- **Top ticker:** separate server requests query Yahoo Finance day-gainer/day-loser and most-active US equity screeners, so failure of one list does not suppress the other. “Top movers” combines up to seven valid gainers/losers ranked by absolute daily percentage movement; “Top stocks” is a separate list of up to seven most-active equities, kept in Yahoo's volume ranking. If that screener is unavailable, the ticker labels a fallback “Popular stocks” and computes actual daily changes from Yahoo bars for AAPL, MSFT, NVDA, AMZN, GOOGL, META, and TSLA; those are not described as volume leaders. Changes use a positive previous close; pre/post-market quotes are used only when Yahoo supplies their own fresh timestamps. Partial source failures remain visibly unavailable instead of being filled with guesses. This unofficial `yfinance` screener access and any public display/redistribution rights have not been cleared—review current provider terms before release.
+- **SEC EDGAR:** company ticker/CIK mapping and company facts when a listing is mapped and `SEC_USER_AGENT` contains a real monitored contact. SEC coverage is not universal for foreign listings. Missing identity, throttling, timeout, mapping, parse, or provider errors remain visible as unavailable states.
+- **Foreign exchange:** Yahoo Finance daily FX closes are requested only when conversion is required. A rate must be nonzero, no older than 72 hours, and date-comparable to the other pair in a cross-rate. The API discloses pair(s), rate, and timestamp in source metadata. If no valid rate is available, converted values are unavailable; values are not relabeled in another currency. Quote subunits such as GBp are not treated as whole pounds.
+- **Cache:** successful company GET responses advertise a five-minute shared edge freshness window with up to 15 minutes of stale-while-revalidate service. Search advertises 30 seconds with a further 60-second stale window. These headers do not guarantee a particular cache hit or persistence; behavior depends on Vercel’s cache. Scenario POSTs and snapshot comparisons are not cached. The Python service does not depend on in-process memory for durable cache or user state.
+- **Financial periods:** free cash flow is calculated as operating cash flow less capital spending only when the relevant inputs match on reporting period and currency. Annual history is not described as TTM. Consensus, reported results, and model-implied growth use distinct labels and horizons.
+- **Valuation:** the score-v3 reverse DCF uses a ten-year growth fade, period-aligned reported inputs, and disclosed cash-flow, discount-rate, terminal-growth, and sector assumptions. Enterprise value is calculated from current market capitalization plus same-date reported debt less cash; market capitalization follows the listing quote currency and is converted to the statement reporting currency only with a valid FX rate. It can omit other claims. Discount-rate and sector calibrations are static illustrative TSRP assumptions, copied from the earlier baseline, and have not been independently sourced or validated as current market inputs. The solve is not a target price or fair-value conclusion; outside-range and unavailable states are explicit. User scenario values are separate from the baseline analysis.
+- **TSRP Score:** score-v3 retains the original 35% business-quality, 30% financial-strength, 20% historical-fit, and 15% analyst-fit top-level weights. Missing observations are excluded instead of receiving the former fixed missing-evidence score; observed weights are rebalanced. Each subscore requires at least 50% of its own factor weight. A final score requires at least 70% observed evidence coverage and at least 70% of original component weight available. See [`docs/research-methodology.md`](docs/research-methodology.md).
+- No AI analysis, news provider, account, tracker, or server-side user-research database is included. Next.js anonymous framework telemetry is disabled by the project scripts. No persistent storage provider is configured.
+
+## Privacy, security, and retention
+
+Ticker symbols, company-name search strings, and requests for the top ticker's gainers, losers, most-active-stock screeners, and fixed popular-stock quote fallback (AAPL, MSFT, NVDA, AMZN, GOOGL, META, TSLA) are sent from the server to Yahoo Finance. The screener request does not include the user's search text or personal information. When enabled, SEC requests send the configured monitored `User-Agent` and a public company identifier to SEC endpoints. Assumptions are sent to TSRP’s own scenario API and are not sent to Yahoo or SEC. When comparing saved research, the browser sends only the required comparison fields from the current and selected saved analysis to TSRP’s snapshot-comparison API; TSRP does not persist those snapshots server-side. Requests are server-side; provider and hosting infrastructure can still observe normal request metadata and their own logs/retention practices apply.
+
+The app does not ask for a name or account and does not add analytics. If a user explicitly saves an analysis, up to eight snapshots per ticker are held in that browser’s `localStorage`; snapshots are not synchronized or backed up and may be removed through **What Changed?** or by clearing browser site data. They contain public-company analysis figures, source/provenance fields, methodology version, and any user-entered scenario assumptions present in the analyzed result. This browser storage is not encrypted by TSRP.
+
+Ticker inputs, query parameters, and scenario fields are validated server-side. Responses avoid provider payload dumps and exception details. Requests have upstream timeouts, but there is no distributed rate limiter configured in this repository. A public deployment needs an explicit request-abuse/provider-rate-limit plan appropriate to its audience and hosting setup.
+
+## Financial information disclaimer
+
+TSRP is an independent research and educational tool, not a broker, investment adviser, or source of personalized investment advice. Its score is a heuristic signal—not a probability, forecast, buy/sell/hold recommendation, or promise of performance. Data may be delayed, incomplete, restated, or wrong. Verify material facts against filings and other primary sources, review the assumptions, and consult a qualified professional before making financial decisions.
+
+## Release checks still required
+
+Before a public launch, treat these as stop-ship items: obtain written Yahoo data rights or select a properly licensed replacement; decide whether the Beta Vercel Python runtime is acceptable and verify a Preview deployment and combined routing; configure distributed request-abuse protection; choose and configure an identity provider if mandatory accounts remain a requirement; publish accurate privacy and terms pages using the real operator identity, contact, retention, and launch jurisdictions; provide a monitored SEC contact identity if SEC access is desired; and obtain qualified legal review of the financial product and the static valuation calibrations. Runtime and duration limits depend on current Vercel configuration and plan. This project does not claim regulatory compliance, GDPR compliance, investment-adviser status, legal clearance, or security certification.

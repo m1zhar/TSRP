@@ -19,7 +19,32 @@
         let attached = false;
         let hasScrolledAway = false;
 
+        const isAttached = () => {
+          try {
+            return Boolean(window.frameElement && window.parent.document.contains(window.frameElement));
+          } catch (_error) {
+            return false;
+          }
+        };
+
+        const detach = () => {
+          if (!attached) return;
+          scrollContainer?.removeEventListener("wheel", onWheel);
+          scrollContainer?.removeEventListener("scroll", onScroll);
+          scrollContainer?.removeEventListener("touchstart", onTouchStart);
+          scrollContainer?.removeEventListener("touchmove", onTouchMove);
+          scrollContainer?.removeEventListener("touchend", onTouchEnd);
+          window.parent.removeEventListener("wheel", onWheel, true);
+          window.parent.removeEventListener("scroll", onScroll, true);
+          window.parent.removeEventListener("touchstart", onTouchStart, true);
+          window.parent.removeEventListener("touchmove", onTouchMove, true);
+          window.parent.removeEventListener("touchend", onTouchEnd, true);
+          attached = false;
+          scrollContainer = null;
+        };
+
         const sendRefresh = () => {
+          if (!isAttached()) return;
           const now = Date.now();
           if (now - lastSentAt < COOLDOWN_MS) return;
           lastSentAt = now;
@@ -113,9 +138,13 @@
           }
         });
 
+        window.addEventListener("pagehide", detach, { once: true });
+        window.addEventListener("unload", detach, { once: true });
+
         window.setTimeout(attach, 0);
 
         const announceReady = () => {
+          if (!isAttached()) return;
           window.parent.postMessage(
             { isStreamlitMessage: true, type: "streamlit:componentReady", apiVersion: 1 },
             "*",
