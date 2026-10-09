@@ -2,30 +2,30 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "api/**/*.py": {
-      "excludeFiles": "{app.py,components/**,tests/**,test_*.py,**/*.test.py,README.md}"
+      "excludeFiles": "{components/**,tests/**,test_*.py,**/*.test.py,README.md}"
     },
     "api/analyze.py": {
-      "excludeFiles": "{app.py,components/**,tests/**,test_*.py,**/*.test.py,README.md}",
+      "excludeFiles": "{components/**,tests/**,test_*.py,**/*.test.py,README.md}",
       "maxDuration": 30
     },
     "api/scenario.py": {
-      "excludeFiles": "{app.py,components/**,tests/**,test_*.py,**/*.test.py,README.md}",
+      "excludeFiles": "{components/**,tests/**,test_*.py,**/*.test.py,README.md}",
       "maxDuration": 30
     },
     "api/search.py": {
-      "excludeFiles": "{app.py,components/**,tests/**,test_*.py,**/*.test.py,README.md}",
+      "excludeFiles": "{components/**,tests/**,test_*.py,**/*.test.py,README.md}",
       "maxDuration": 20
     },
     "api/snapshot_diff.py": {
-      "excludeFiles": "{app.py,components/**,tests/**,test_*.py,**/*.test.py,README.md}",
+      "excludeFiles": "{components/**,tests/**,test_*.py,**/*.test.py,README.md}",
       "maxDuration": 10
     },
     "api/movers.py": {
-      "excludeFiles": "{app.py,components/**,tests/**,test_*.py,**/*.test.py,README.md}",
+      "excludeFiles": "{components/**,tests/**,test_*.py,**/*.test.py,README.md}",
       "maxDuration": 30
     },
     "api/top_stocks.py": {
-      "excludeFiles": "{app.py,components/**,tests/**,test_*.py,**/*.test.py,README.md}",
+      "excludeFiles": "{components/**,tests/**,test_*.py,**/*.test.py,README.md}",
       "maxDuration": 30
     }
   }

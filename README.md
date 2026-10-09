@@ -1,58 +1,25 @@
 # TSRP — Saleh Research Project
 
+**[Open the live TSRP research app →](https://thesrp.vercel.app/)**
+
 TSRP is an independent, evidence-led equity research application for listed company stocks. The application UI is Next.js App Router with strict TypeScript; the existing Python engine remains the single source of truth for scores, assumptions, and valuation calculations. Python HTTP functions expose a small validated boundary to the browser.
 
 The five primary research sections, in order, are **TSRP Score**, **Expectations vs Reality**, **Valuation**, **Catalysts & Risks**, and **What Changed?**. The score view is the home view. Ticker and section are encoded in the URL so links, refresh, and browser history retain the selected research view.
-
-## Run locally
-
-Requirements: Node.js 22 or newer (Node 22 is selected in `.nvmrc`), Python 3.12, and pnpm 11.
-
-```bash
-pnpm install --frozen-lockfile
-python3 -m pip install -r requirements.txt
-```
-
-Start the Python API and Next.js in separate terminals from the repository root:
-
-```bash
-python3 local_api.py
-```
-
-```bash
-pnpm dev
-```
-
-Open `http://localhost:3000`. During development, the browser calls the Python adapter on loopback directly so a slow public-data request is not cut off by a development proxy; the adapter accepts browser requests only from the two localhost origins. Without a valid `SEC_USER_AGENT`, SEC filing data is explicitly shown as unavailable; other Yahoo Finance values remain source-labeled. Do not place real credentials in `.env.example` or commit them.
-
-For local SEC access, export `SEC_USER_AGENT` in the shell that starts `local_api.py`; the Python development adapter does not automatically load `.env` files. Use your real monitored identity and contact email. TSRP validates only that the value resembles an email-bearing identity; it cannot verify that the contact is monitored.
-
-Run checks:
-
-```bash
-pnpm lint
-pnpm typecheck
-pnpm test:python
-pnpm build
-```
-
-The old `app.py` and Streamlit component files remain in the repository as historical source and are not the new application entrypoint. Their pre-migration README, including its prior local changes, is preserved in [`docs/legacy-streamlit-readme.md`](docs/legacy-streamlit-readme.md). The Vercel app uses `app/page.tsx` and the Python API functions under `api/`.
 
 ## Deploy to Vercel
 
 Import this repository as a Next.js project and use the repository root as the project root. Vercel should detect the Next.js framework. The Python functions use the root `requirements.txt` and `.python-version` (3.12). Set `SEC_USER_AGENT` in Vercel’s environment-variable settings only if you want to enable SEC requests; use a monitored, truthful contact identity as required by SEC policy. No API key is required for the current Yahoo Finance adapter.
 
-Vercel documents file-based Python functions under `/api`, including `BaseHTTPRequestHandler` subclasses, and supports Python 3.12. This repository uses that shape alongside the Next.js frontend. The 30-second function limits are declared in `vercel.json`; the analysis provider calls have a shorter total wait budget. As of 2026-10-09, Vercel’s Python runtime documentation labels the runtime Beta on all plans. A local Next.js build does not verify Vercel’s Python bundling or combined Next.js/Python routing, and this repository has not been linked to a Vercel project or Preview-deployed. Verify the actual project and plan in Preview, and decide whether relying on a Beta backend is acceptable before release. See [Vercel’s Python runtime documentation](https://vercel.com/docs/functions/runtimes/python) and [Python functions in `/api`](https://vercel.com/docs/functions/runtimes/python/api-directory).
+Vercel documents file-based Python functions under `/api`, including `BaseHTTPRequestHandler` subclasses, and supports Python 3.12. This repository uses that shape alongside the Next.js frontend. The 30-second function limits are declared in `vercel.json`; the analysis provider calls have a shorter total wait budget. As of 2026-10-09, Vercel’s Python runtime documentation labels the runtime Beta on all plans. A successful Next.js build does not verify Vercel’s Python bundling or combined Next.js/Python routing. Verify the actual project and plan in Preview, and decide whether relying on a Beta backend is acceptable before release. See [Vercel’s Python runtime documentation](https://vercel.com/docs/functions/runtimes/python) and [Python functions in `/api`](https://vercel.com/docs/functions/runtimes/python/api-directory).
 
 ## Architecture
 
 - `app/`, `components/`, and `lib/`: App Router shell, interactive research views, client navigation, charts, exports, types, and formatting.
 - `engine.py`: existing deterministic score, sector-model math, and reverse-DCF implementation; remains the calculation authority.
 - `financial_data.py`: existing period-alignment helpers for reported revenue and cash-flow observations.
-- `methodology.py`: sector calibrations transcribed from the inspected Streamlit baseline. Parity fixtures and tests lock representative behavior.
+- `methodology.py`: sector calibrations reproduced from the prior TSRP research baseline. Parity fixtures and tests lock representative behavior.
 - `research_service.py`: server-only Yahoo/SEC adapters, currency conversion, provenance, validation, and analysis orchestration.
 - `api/`: server-side analyze, search, scenario, and compatible-snapshot comparison endpoints. Provider errors are returned as short safe messages; no raw responses or stack traces go to the browser.
-- `local_api.py`: development-only HTTP adapter that invokes those same handler methods. It is not deployed as a Vercel function.
 - `tests/fixtures/score-parity.json`: fixed baseline rates, sub-scores, weights, and DCF values for deterministic regression tests.
 
 ## Data sources, freshness, and limitations

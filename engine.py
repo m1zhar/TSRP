@@ -1,4 +1,4 @@
-"""Currency-aware reverse DCF core. No Streamlit, no I/O."""
+"""Currency-aware reverse DCF core. Pure calculations with no I/O."""
 
 from __future__ import annotations
 

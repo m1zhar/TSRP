@@ -391,7 +391,7 @@ p, h1, h2, h3 { margin-top: 0; }
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 
-/* Keep the migrated workspace visually close to TSRP's centered Streamlit layout. */
+/* Brand and search layout. */
 .masthead { min-height: 0; flex-direction: column; justify-content: center; gap: 2px; padding: 18px 0 0; border-bottom: 0; text-align: center; }
 .brand { justify-content: center; }
 .brand-copy { justify-items: center; gap: 4px; }

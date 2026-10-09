@@ -1,4 +1,4 @@
-"""TSRP sector calibrations copied from the inspected Streamlit baseline.
+"""TSRP sector calibrations reproduced from the prior research baseline.
 
 The score and valuation formulas remain centralized in ``engine.py``. These
 calibrations preserve the current sector benchmarks and weighting scheme.

@@ -1,7 +1,7 @@
 """Small, deterministic helpers for period-safe financial statement data.
 
-This module deliberately has no Streamlit, provider, or network dependencies.  The
-application passes provider tables in and receives only period-aligned values back.
+This module has no provider or network dependencies. The application passes
+provider tables in and receives only period-aligned values back.
 """
 
 from __future__ import annotations
