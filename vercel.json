@@ -8,7 +8,7 @@
     "backend": {
       "root": "backend/",
       "framework": "python",
-      "entrypoint": "api.index:handler"
+      "entrypoint": "api.index:app"
     }
   },
   "rewrites": [
