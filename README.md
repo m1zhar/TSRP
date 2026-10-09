@@ -2,24 +2,24 @@
 
 **[Open the live TSRP research app →](https://thesrp.vercel.app/)**
 
-TSRP is an independent, evidence-led equity research application for listed company stocks. The application UI is Next.js App Router with strict TypeScript; the existing Python engine remains the single source of truth for scores, assumptions, and valuation calculations. Python HTTP functions expose a small validated boundary to the browser.
+TSRP is an independent, evidence-led equity research application for listed company stocks. The UI is Next.js App Router with strict TypeScript; the Python engine remains the single source of truth for scores, assumptions, and valuation calculations. Vercel routes the frontend and Python API as two services in one deployment.
 
 The five primary research sections, in order, are **TSRP Score**, **Expectations vs Reality**, **Valuation**, **Catalysts & Risks**, and **What Changed?**. The score view is the home view. Ticker and section are encoded in the URL so links, refresh, and browser history retain the selected research view.
 
 ## Deploy to Vercel
 
-Import this repository as a Next.js project and use the repository root as the project root. Vercel should detect the Next.js framework. The Python functions use the root `requirements.txt` and `.python-version` (3.12). Set `SEC_USER_AGENT` in Vercel’s environment-variable settings only if you want to enable SEC requests; use a monitored, truthful contact identity as required by SEC policy. No API key is required for the current Yahoo Finance adapter.
+The Vercel project must have the Services framework enabled for this two-runtime repository. `vercel.json` defines a Next.js frontend in `frontend/`, a Python API service in `backend/`, and routes `/api/*` to the backend. Python dependencies and the 3.12 runtime declaration live in `backend/requirements.txt` and `backend/.python-version`. Set `SEC_USER_AGENT` only if you want SEC requests; use a real monitored contact identity. No API key is required for the current Yahoo Finance adapter.
 
-Vercel documents file-based Python functions under `/api`, including `BaseHTTPRequestHandler` subclasses, and supports Python 3.12. This repository uses that shape alongside the Next.js frontend. The 30-second function limits are declared in `vercel.json`; the analysis provider calls have a shorter total wait budget. As of 2026-10-09, Vercel’s Python runtime documentation labels the runtime Beta on all plans. A successful Next.js build does not verify Vercel’s Python bundling or combined Next.js/Python routing. Verify the actual project and plan in Preview, and decide whether relying on a Beta backend is acceptable before release. See [Vercel’s Python runtime documentation](https://vercel.com/docs/functions/runtimes/python) and [Python functions in `/api`](https://vercel.com/docs/functions/runtimes/python/api-directory).
+The Python API is implemented as file-based functions under `backend/api/`, using `BaseHTTPRequestHandler`. Function durations are declared in the backend service in `vercel.json`. Vercel currently documents Services as Beta; verify this project's access and current plan/runtime limits before release. See [Vercel Services](https://vercel.com/docs/services) and [Vercel’s Python runtime documentation](https://vercel.com/docs/functions/runtimes/python).
 
 ## Architecture
 
-- `app/`, `components/`, and `lib/`: App Router shell, interactive research views, client navigation, charts, exports, types, and formatting.
-- `engine.py`: existing deterministic score, sector-model math, and reverse-DCF implementation; remains the calculation authority.
-- `financial_data.py`: existing period-alignment helpers for reported revenue and cash-flow observations.
-- `methodology.py`: sector calibrations reproduced from the prior TSRP research baseline. Parity fixtures and tests lock representative behavior.
-- `research_service.py`: server-only Yahoo/SEC adapters, currency conversion, provenance, validation, and analysis orchestration.
-- `api/`: server-side analyze, search, scenario, and compatible-snapshot comparison endpoints. Provider errors are returned as short safe messages; no raw responses or stack traces go to the browser.
+- `frontend/app/`, `frontend/components/`, and `frontend/lib/`: App Router shell, interactive research views, navigation, charts, exports, types, and formatting.
+- `backend/engine.py`: deterministic score, sector-model math, and reverse-DCF implementation; remains the calculation authority.
+- `backend/financial_data.py`: period-alignment helpers for reported revenue and cash-flow observations.
+- `backend/methodology.py`: sector calibrations reproduced from the prior research baseline. Parity fixtures and tests lock representative behavior.
+- `backend/research_service.py`: server-only Yahoo/SEC adapters, currency conversion, provenance, validation, and analysis orchestration.
+- `backend/api/`: server-side analyze, search, scenario, movers, and snapshot-comparison endpoints. Provider errors stay short and safe.
 - `tests/fixtures/score-parity.json`: fixed baseline rates, sub-scores, weights, and DCF values for deterministic regression tests.
 
 ## Data sources, freshness, and limitations

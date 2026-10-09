@@ -1,33 +1,25 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nextjs",
-  "functions": {
-    "api/**/*.py": {
-      "excludeFiles": "{components/**,tests/**,test_*.py,**/*.test.py,README.md}"
+  "services": {
+    "frontend": {
+      "root": "frontend/",
+      "framework": "nextjs"
     },
-    "api/analyze.py": {
-      "excludeFiles": "{components/**,tests/**,test_*.py,**/*.test.py,README.md}",
-      "maxDuration": 30
-    },
-    "api/scenario.py": {
-      "excludeFiles": "{components/**,tests/**,test_*.py,**/*.test.py,README.md}",
-      "maxDuration": 30
-    },
-    "api/search.py": {
-      "excludeFiles": "{components/**,tests/**,test_*.py,**/*.test.py,README.md}",
-      "maxDuration": 20
-    },
-    "api/snapshot_diff.py": {
-      "excludeFiles": "{components/**,tests/**,test_*.py,**/*.test.py,README.md}",
-      "maxDuration": 10
-    },
-    "api/movers.py": {
-      "excludeFiles": "{components/**,tests/**,test_*.py,**/*.test.py,README.md}",
-      "maxDuration": 30
-    },
-    "api/top_stocks.py": {
-      "excludeFiles": "{components/**,tests/**,test_*.py,**/*.test.py,README.md}",
-      "maxDuration": 30
+    "backend": {
+      "root": "backend/",
+      "framework": "python",
+      "functions": {
+        "api/analyze.py": { "maxDuration": 30 },
+        "api/scenario.py": { "maxDuration": 30 },
+        "api/search.py": { "maxDuration": 20 },
+        "api/snapshot_diff.py": { "maxDuration": 10 },
+        "api/movers.py": { "maxDuration": 30 },
+        "api/top_stocks.py": { "maxDuration": 30 }
+      }
     }
-  }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": { "service": "backend" } },
+    { "source": "/(.*)", "destination": { "service": "frontend" } }
+  ]
 }
