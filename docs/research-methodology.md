@@ -54,4 +54,4 @@ Snapshots compare only when ticker, methodology version, analysis schema version
 - Static sector/discount-rate calibrations need an independently sourced and reviewed basis before being described as financially validated.
 - No distributed rate limiter or abuse protection is configured in the repository.
 - The SEC adapter can validate only the format of `SEC_USER_AGENT`, not whether its contact identity is actually monitored.
-- Vercel documents file-based Python functions in `/api`, including `BaseHTTPRequestHandler` handlers; verify this repository’s function bundling, duration, environment, and plan limits in a Preview deployment before release. A local Next.js build does not confirm Vercel’s Python-function build output.
+- The Next.js frontend and Python analysis service are built separately through Vercel Services and share the public `/api/*` route through an explicit rewrite. The Python entry point wraps the existing analysis functions; it does not implement a second score engine. Vercel documents Services and the Python runtime as Beta, so verify Preview routing, limits, environment, and plan behavior before release.

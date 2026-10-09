@@ -40,9 +40,9 @@ The old `app.py` and Streamlit component files remain in the repository as histo
 
 ## Deploy to Vercel
 
-Import this repository as a Next.js project and use the repository root as the project root. Vercel should detect the Next.js framework. The Python functions use the root `requirements.txt` and `.python-version` (3.12). Set `SEC_USER_AGENT` in Vercel’s environment-variable settings only if you want to enable SEC requests; use a monitored, truthful contact identity as required by SEC policy. No API key is required for the current Yahoo Finance adapter.
+In the Vercel project settings, select **Services** as the Framework Preset and keep the repository root as the project root. `vercel.json` builds a Next.js frontend service and a Python backend service from the same source tree, then routes `/api/*` to the backend and all other paths to the frontend. The backend entry point is `vercel_backend:app`; it reuses the existing research engine and exposes the same six API routes. The Python service uses the root `requirements.txt` and `.python-version` (3.12). Vercel Services and its Python runtime are currently documented as Beta and available on all plans; decide whether that Beta dependency is acceptable for release. Set `SEC_USER_AGENT` in Vercel’s environment-variable settings only if you want to enable SEC requests; use a monitored, truthful contact identity as required by SEC policy. No API key is required for the current Yahoo Finance adapter.
 
-Vercel documents file-based Python functions under `/api`, including `BaseHTTPRequestHandler` subclasses, and supports Python 3.12. This repository uses that shape alongside the Next.js frontend. The 30-second function limits are declared in `vercel.json`; the analysis provider calls have a shorter total wait budget. As of 2026-10-09, Vercel’s Python runtime documentation labels the runtime Beta on all plans. A local Next.js build does not verify Vercel’s Python bundling or combined Next.js/Python routing, and this repository has not been linked to a Vercel project or Preview-deployed. Verify the actual project and plan in Preview, and decide whether relying on a Beta backend is acceptable before release. See [Vercel’s Python runtime documentation](https://vercel.com/docs/functions/runtimes/python) and [Python functions in `/api`](https://vercel.com/docs/functions/runtimes/python/api-directory).
+The WSGI adapter preserves the existing request validation, safe error responses, response caching, and endpoint behavior. A local Next.js build alone does not verify Vercel’s multi-service routing; test all API routes in a Preview deployment before release. See [Vercel Services](https://vercel.com/docs/services) and [Vercel’s Python runtime documentation](https://vercel.com/docs/functions/runtimes/python).
 
 ## Architecture
 
@@ -51,8 +51,9 @@ Vercel documents file-based Python functions under `/api`, including `BaseHTTPRe
 - `financial_data.py`: existing period-alignment helpers for reported revenue and cash-flow observations.
 - `methodology.py`: sector calibrations transcribed from the inspected Streamlit baseline. Parity fixtures and tests lock representative behavior.
 - `research_service.py`: server-only Yahoo/SEC adapters, currency conversion, provenance, validation, and analysis orchestration.
-- `api/`: server-side analyze, search, scenario, and compatible-snapshot comparison endpoints. Provider errors are returned as short safe messages; no raw responses or stack traces go to the browser.
-- `local_api.py`: development-only HTTP adapter that invokes those same handler methods. It is not deployed as a Vercel function.
+- `api/`: the original individual Python API handlers, retained for the local development adapter.
+- `vercel_backend.py`: WSGI adapter for the Vercel Python service; maps the six API routes to the same server-side research functions and preserves safe errors and cache headers.
+- `local_api.py`: development-only HTTP adapter for the original Python handlers. It is not the production service entry point.
 - `tests/fixtures/score-parity.json`: fixed baseline rates, sub-scores, weights, and DCF values for deterministic regression tests.
 
 ## Data sources, freshness, and limitations
