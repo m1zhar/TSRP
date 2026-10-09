@@ -1,6 +1,6 @@
 # TSRP research calculations
 
-This note describes the calculations served by the Next.js application as of `score-v3`. The legacy Streamlit source remains historical and may still contain the earlier missing-evidence behavior; it is not the active web API calculation path.
+This note describes the calculations served by the Next.js application as of `score-v3`. The Python API and `engine.py` are the calculation authority; the interface does not reimplement these formulas.
 
 ## Evidence and periods
 
