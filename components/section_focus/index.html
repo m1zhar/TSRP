@@ -10,7 +10,18 @@
   <body>
     <script>
       (() => {
+        let cancelled = false;
+
+        const isAttached = () => {
+          try {
+            return Boolean(window.frameElement && window.parent.document.contains(window.frameElement));
+          } catch (_error) {
+            return false;
+          }
+        };
+
         const focusSection = () => {
+          if (cancelled) return;
           try {
             const target = window.parent.document.querySelector(".research-section-anchor");
             if (!target) return;
@@ -21,20 +32,26 @@
           }
         };
 
+        const cancel = () => { cancelled = true; };
+        window.addEventListener("pagehide", cancel, { once: true });
+        window.addEventListener("unload", cancel, { once: true });
+
         window.setTimeout(() => {
           window.requestAnimationFrame(() => {
             window.requestAnimationFrame(focusSection);
           });
         }, 60);
 
-        window.parent.postMessage(
-          { isStreamlitMessage: true, type: "streamlit:componentReady", apiVersion: 1 },
-          "*",
-        );
-        window.parent.postMessage(
-          { isStreamlitMessage: true, type: "streamlit:setFrameHeight", height: 1 },
-          "*",
-        );
+        if (isAttached()) {
+          window.parent.postMessage(
+            { isStreamlitMessage: true, type: "streamlit:componentReady", apiVersion: 1 },
+            "*",
+          );
+          window.parent.postMessage(
+            { isStreamlitMessage: true, type: "streamlit:setFrameHeight", height: 1 },
+            "*",
+          );
+        }
       })();
     </script>
   </body>

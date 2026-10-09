@@ -68,7 +68,10 @@ def clamp(value, low=0.0, high=100.0):
 
 
 def currency_profile(code):
-    key = str(code or "USD").upper()
+    raw = str(code or "USD").strip()
+    if raw in {"GBp", "GBX", "ZAc", "ILA"}:
+        return CURRENCY_PROFILES["USD"], "USD", True
+    key = raw.upper()
     if key in CURRENCY_PROFILES:
         return CURRENCY_PROFILES[key], key, False
     return CURRENCY_PROFILES["USD"], "USD", True
@@ -91,6 +94,7 @@ def model_rates(reporting_currency, sector=None):
         "currency": code,
         "currency_label": profile["label"],
         "used_fallback_currency": used_fallback,
+        "calibration_basis": "Static illustrative TSRP assumption; not a live yield or independently validated market calibration",
     }
 
 
@@ -144,27 +148,36 @@ def dcf_enterprise_value(
     fade_start = int(_f(fade_start, 0) or 0)
     if revenue is None or growth is None or fcf_margin is None or discount_rate is None or terminal_growth is None:
         return None
-    if years <= 0 or fade_start < 0 or fade_start > years:
+    if years <= 0 or years > 50 or fade_start < 0 or fade_start > years:
         return None
     if revenue <= 0 or fcf_margin <= 0 or growth <= -1 or discount_rate <= terminal_growth:
         return None
-    if terminal_growth < -1 or discount_rate <= -1:
+    if terminal_growth <= -1 or discount_rate <= -1:
         return None
 
-    present_value = 0.0
-    projected_revenue = revenue
-    final_fcf = 0.0
-    for year in range(1, years + 1):
-        projected_revenue *= 1 + year_growth(growth, terminal_growth, year, years, fade_start)
-        margin = year_margin(start_margin, fcf_margin, year, years)
-        if margin is None or margin <= 0:
-            return None
-        final_fcf = projected_revenue * margin
-        present_value += final_fcf / ((1 + discount_rate) ** year)
+    try:
+        present_value = 0.0
+        projected_revenue = revenue
+        final_fcf = 0.0
+        for year in range(1, years + 1):
+            annual_growth = year_growth(growth, terminal_growth, year, years, fade_start)
+            if annual_growth is None or annual_growth <= -1:
+                return None
+            projected_revenue *= 1 + annual_growth
+            margin = year_margin(start_margin, fcf_margin, year, years)
+            if not math.isfinite(projected_revenue) or margin is None or margin <= 0:
+                return None
+            final_fcf = projected_revenue * margin
+            discount_factor = (1 + discount_rate) ** year
+            if not math.isfinite(final_fcf) or not math.isfinite(discount_factor) or discount_factor <= 0:
+                return None
+            present_value += final_fcf / discount_factor
 
-    terminal_value = final_fcf * (1 + terminal_growth) / (discount_rate - terminal_growth)
-    present_value += terminal_value / ((1 + discount_rate) ** years)
-    return present_value
+        terminal_value = final_fcf * (1 + terminal_growth) / (discount_rate - terminal_growth)
+        present_value += terminal_value / ((1 + discount_rate) ** years)
+        return present_value if math.isfinite(present_value) and present_value > 0 else None
+    except (OverflowError, ZeroDivisionError):
+        return None
 
 
 def solve_required_growth(
@@ -222,6 +235,12 @@ def solve_required_growth_detail(
     )
     if low_value is None or high_value is None:
         return {"growth": None, "status": "unavailable", "low": low, "high": high}
+    if high_value < low_value:
+        return {"growth": None, "status": "unavailable", "low": low, "high": high}
+    if math.isclose(target, low_value, rel_tol=1e-12, abs_tol=1e-12):
+        return {"growth": low, "status": "exact", "low": low, "high": high}
+    if math.isclose(target, high_value, rel_tol=1e-12, abs_tol=1e-12):
+        return {"growth": high, "status": "exact", "low": low, "high": high}
     if target < low_value:
         return {"growth": low, "status": "below_range", "low": low, "high": high}
     if target > high_value:
@@ -251,7 +270,11 @@ def cagr(start, end, years):
         return None
     if start <= 0 or end <= 0 or years <= 0:
         return None
-    return (end / start) ** (1 / years) - 1
+    try:
+        result = math.exp((math.log(end) - math.log(start)) / years) - 1
+    except (OverflowError, ZeroDivisionError, ValueError):
+        return None
+    return result if math.isfinite(result) else None
 
 
 def history_cagr(values_newest_first, max_years=10):
@@ -266,10 +289,52 @@ def history_cagr(values_newest_first, max_years=10):
     return cagr(oldest, newest, years), years
 
 
+def history_cagr_periods(observations_newest_first, max_intervals=10):
+    """CAGR from dated annual observations; never treats missing periods as years."""
+    from datetime import date, datetime
+
+    def as_date(value):
+        try:
+            if isinstance(value, datetime):
+                return value.date()
+            if isinstance(value, date):
+                return value
+            return date.fromisoformat(str(value)[:10])
+        except (TypeError, ValueError):
+            return None
+
+    observations = []
+    for period, value in list(observations_newest_first or []):
+        parsed = as_date(period)
+        amount = _f(value)
+        if parsed is not None and amount is not None:
+            observations.append((parsed, amount))
+    observations.sort(key=lambda item: item[0], reverse=True)
+    if len(observations) < 2 or max_intervals < 1:
+        return None, 0.0, None, None
+
+    annual = [observations[0]]
+    for observation in observations[1:]:
+        gap_days = (annual[-1][0] - observation[0]).days
+        if gap_days < 330 or gap_days > 430:
+            break
+        annual.append(observation)
+        if len(annual) - 1 >= max_intervals:
+            break
+    if len(annual) < 2:
+        return None, 0.0, None, None
+    newest_date, newest_value = annual[0]
+    oldest_date, oldest_value = annual[-1]
+    if any(value <= 0 for _, value in annual):
+        return None, 0.0, oldest_date.isoformat(), newest_date.isoformat()
+    elapsed_years = (newest_date - oldest_date).days / 365.2425
+    return cagr(oldest_value, newest_value, elapsed_years), elapsed_years, oldest_date.isoformat(), newest_date.isoformat()
+
+
 def average_positive_margins(margins):
-    """Mean of positive cash margins; None if none are usable."""
+    """Mean of all finite observed margins, including zero and negative years."""
     usable = [_f(m) for m in list(margins or [])]
-    usable = [m for m in usable if m is not None and m > 0]
+    usable = [m for m in usable if m is not None]
     if not usable:
         return None
     return sum(usable) / len(usable)
@@ -288,13 +353,15 @@ def choose_model_fcf_margin(latest_margin, trailing_margins, mature_margin=None)
     if latest is not None and latest <= 0:
         return None, True, "latest free-cash-flow margin is non-positive — reverse DCF not solved"
     if latest is not None and latest > 0 and avg is not None:
-        blended = 0.5 * latest + 0.5 * avg
-        return blended, False, "blend of latest and multi-year average"
+        if avg > 0:
+            blended = 0.5 * latest + 0.5 * avg
+            return blended, False, "blend of latest and multi-year average"
+        return latest, False, "latest year; multi-year average is non-positive"
     if latest is not None and latest > 0:
         return latest, False, "latest year"
-    if avg is not None:
+    if avg is not None and avg > 0:
         return avg, False, "multi-year average (latest year not usable)"
-    return None, True, "no positive free-cash margin — reverse DCF not solved"
+    return None, True, "no positive usable free-cash margin — reverse DCF not solved"
 
 
 def growth_reality_score(benchmark_growth, required_growth):
@@ -325,6 +392,21 @@ def business_quality_score(revenue_growth, gross_margin, operating_margin, fcf_m
         + roe_score * weights["roe"]
         + balance_score * weights["balance"]
     )
+
+
+def business_quality_detail(revenue_growth, gross_margin, operating_margin, fcf_margin, roe, debt_to_assets, sector_model):
+    """Score only observed inputs and disclose the share of factor weight observed."""
+    benchmarks = sector_model["business_benchmarks"]
+    weights = sector_model["business_weights"]
+    raw = {
+        "growth": (revenue_growth, lambda value: 50 + value * 250, "Revenue growth"),
+        "gross": (gross_margin, lambda value: value / benchmarks["gross"] * 100, "Gross margin"),
+        "operating": (operating_margin, lambda value: value / benchmarks["operating"] * 100, "Operating margin"),
+        "fcf": (fcf_margin, lambda value: value / benchmarks["fcf"] * 100, "Free-cash-flow margin"),
+        "roe": (roe, lambda value: value / benchmarks["roe"] * 100, "Return on average equity"),
+        "balance": (debt_to_assets, lambda value: 100 - value / 0.80 * 100, "Debt to assets"),
+    }
+    return _observed_weighted_score(raw, weights, minimum_coverage=0.5)
 
 
 def expectation_score(required_growth, ev_sales, pe, ev_ebitda, sector_model):
@@ -363,6 +445,101 @@ def financial_strength_score(cash, debt, operating_margin, fcf_margin, debt_to_a
         + fcf_score * weights["fcf"]
         + leverage_score * weights["leverage"]
     )
+
+
+def financial_strength_detail(cash, debt, operating_margin, fcf_margin, debt_to_assets, sector_model):
+    benchmarks = sector_model["financial_benchmarks"]
+    weights = sector_model["financial_weights"]
+    cash_value, debt_value = _f(cash), _f(debt)
+    cash_debt_score = None
+    if cash_value is not None and debt_value is not None and cash_value >= 0 and debt_value >= 0:
+        raw_cash_debt_score = 100 if debt_value == 0 else 50 + (cash_value / debt_value) * 35
+        cash_debt_score = clamp(raw_cash_debt_score) if math.isfinite(raw_cash_debt_score) else None
+    raw = {
+        "cash_debt": (cash_debt_score, lambda value: value, "Cash relative to debt"),
+        "operating": (operating_margin, lambda value: value / benchmarks["operating"] * 100, "Operating margin"),
+        "fcf": (fcf_margin, lambda value: value / benchmarks["fcf"] * 100, "Free-cash-flow margin"),
+        "leverage": (debt_to_assets, lambda value: 100 - value / 0.80 * 100, "Debt to assets"),
+    }
+    return _observed_weighted_score(raw, weights, minimum_coverage=0.5)
+
+
+def _observed_weighted_score(raw_components, weights, minimum_coverage):
+    total_weight = sum(_f(weight, 0) for weight in weights.values())
+    observed = []
+    for key, (value, transform, label) in raw_components.items():
+        number = _f(value)
+        try:
+            transformed = transform(number) if number is not None else None
+        except (OverflowError, ZeroDivisionError, ValueError):
+            transformed = None
+        score = _f(transformed)
+        if score is not None:
+            score = clamp(score)
+        weight = _f(weights.get(key), 0) or 0
+        observed.append({"key": key, "label": label, "value": score, "weight": weight})
+    available_weight = sum(item["weight"] for item in observed if item["value"] is not None)
+    coverage = available_weight / total_weight if total_weight > 0 else 0.0
+    score = None
+    if coverage >= minimum_coverage and available_weight > 0:
+        score = clamp(sum(item["value"] * item["weight"] for item in observed if item["value"] is not None) / available_weight)
+    return {"score": score, "evidence_coverage": coverage, "components": observed}
+
+
+def supported_score_breakdown(business, financial, historical_growth, required_growth, consensus_growth=None, growth_clamped=False):
+    """Score-v3 trace: missing inputs are omitted, never assigned an invented score."""
+    required = _f(required_growth)
+    historical = _f(historical_growth)
+    consensus = _f(consensus_growth)
+    can_compare = required is not None and not growth_clamped
+
+    def growth_fit(observed):
+        if not can_compare or observed is None:
+            return None
+        raw_score = 75 - (required - observed) * 160
+        return clamp(raw_score) if math.isfinite(raw_score) else None
+
+    history_leg = growth_fit(historical)
+    street_leg = growth_fit(consensus)
+    specs = [
+        ("business_quality", "Business quality", business, 0.35),
+        ("financial_strength", "Financial strength", financial, 0.30),
+        ("historical_fit", "Historical growth fit", {"score": history_leg, "evidence_coverage": 1.0 if history_leg is not None else 0.0}, 0.20),
+        ("consensus_fit", "Consensus growth fit", {"score": street_leg, "evidence_coverage": 1.0 if street_leg is not None else 0.0}, 0.15),
+    ]
+    components = []
+    available_weight = 0.0
+    effective_coverage = 0.0
+    for key, label, detail, weight in specs:
+        detail = detail if isinstance(detail, dict) else {}
+        value = _f(detail.get("score"))
+        coverage = _f(detail.get("evidence_coverage"), 0.0) or 0.0
+        effective_coverage += weight * max(0.0, min(1.0, coverage))
+        if value is not None:
+            available_weight += weight
+        components.append({"key": key, "label": label, "value": value, "weight": weight, "evidence_coverage": coverage})
+    evidence_coverage = effective_coverage / sum(weight for _, _, _, weight in specs)
+    score = None
+    if evidence_coverage >= 0.70 and available_weight >= 0.70:
+        for component in components:
+            component["applied_weight"] = component["weight"] / available_weight if component["value"] is not None else 0.0
+            component["contribution"] = component["value"] * component["applied_weight"] if component["value"] is not None else None
+        score = clamp(sum(component["contribution"] or 0 for component in components))
+    else:
+        for component in components:
+            component["applied_weight"] = 0.0
+            component["contribution"] = None
+    return {
+        "score": score,
+        "components": components,
+        "subscores": {
+            "business_quality": business,
+            "financial_strength": financial,
+        },
+        "evidence_coverage": evidence_coverage,
+        "minimum_evidence_coverage": 0.70,
+        "growth_comparison_available": history_leg is not None or street_leg is not None,
+    }
 
 
 def reality_score(
@@ -457,7 +634,11 @@ def snapshot_diff(previous, current):
         "required_growth",
         "revenue",
         "free_cash_flow",
+        "fcf_period",
         "enterprise_value",
+        "model_fcf_margin",
+        "discount_rate",
+        "terminal_growth",
         "solver_status",
         "user_assumptions",
     )

@@ -9,6 +9,7 @@ import math
 import os
 import re
 from typing import Optional
+from urllib.parse import quote
 
 import pandas as pd
 import requests
@@ -30,6 +31,13 @@ from engine import (
     score_label,
     snapshot_diff,
     solve_required_growth_detail,
+)
+from financial_data import (
+    compute_fcf,
+    latest_period_aligned_fcf,
+    period_aligned_fcf,
+    period_observations,
+    trailing_aligned_fcf_margins,
 )
 
 
@@ -3004,6 +3012,14 @@ def first_value(source, *keys):
     return None
 
 
+def first_non_none(*values):
+    """Choose the first present value without treating a valid zero as missing."""
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
 def detect_currencies(info, fast_info):
     reporting = info.get("financialCurrency") or info.get("currency") or fast_info.get("currency") or "USD"
     trading = info.get("currency") or fast_info.get("currency") or reporting
@@ -3099,6 +3115,14 @@ def latest_value(df, names):
     return safe_float(sorted_row.iloc[0])
 
 
+def latest_period_value(df, names):
+    observations = period_observations(df, names)
+    if not observations:
+        return None, None
+    period, value = observations[0]
+    return value, period
+
+
 def sort_financial_row(row):
     try:
         dates = pd.to_datetime(row.index, errors="coerce")
@@ -3125,29 +3149,6 @@ def cagr(start, end, years):
     return (end / start) ** (1 / years) - 1
 
 
-def normalize_capex(capex):
-    capex = safe_float(capex)
-    if capex is None:
-        return None
-    return -abs(capex)
-
-
-def compute_fcf(operating_cash_flow, capex, reported_fcf=None):
-    """Prefer OCF − Capex; fall back to reported FCF. Never invent a number."""
-    ocf = safe_float(operating_cash_flow)
-    cap = normalize_capex(capex)
-    if ocf is not None and cap is not None:
-        return ocf + cap
-    return safe_float(reported_fcf)
-
-
-def ttm_sum(df, names, periods=4):
-    series = historical_series(df, names)
-    if len(series) < periods:
-        return None
-    return float(series.iloc[:periods].sum())
-
-
 YAHOO_HEADERS = {
     "User-Agent": "TSRP/1.0 (educational equity research application)"
 }
@@ -3155,34 +3156,24 @@ YAHOO_HEADERS = {
 
 def _yf_part(ticker, kind):
     empty = pd.DataFrame()
-    try:
-        stock = yf.Ticker(ticker)
-        if kind == "financials":
-            frame = stock.financials
-            if frame is not None and not frame.empty:
-                return frame
-            return stock.get_income_stmt(freq="yearly")
-        if kind == "balance":
-            frame = stock.balance_sheet
-            if frame is not None and not frame.empty:
-                return frame
-            return stock.get_balance_sheet(freq="yearly")
-        if kind == "cashflow":
-            frame = stock.cashflow
-            if frame is not None and not frame.empty:
-                return frame
-            return stock.get_cash_flow(freq="yearly")
-        if kind == "quarterly_cashflow":
-            frame = stock.quarterly_cashflow
-            if frame is not None and not frame.empty:
-                return frame
-            return stock.get_cash_flow(freq="quarterly")
-        if kind == "estimate":
-            return stock.revenue_estimate
-    except Exception:
-        return None if kind == "estimate" else empty
+    stock = yf.Ticker(ticker)
+    if kind == "financials":
+        frame = stock.financials
+        if frame is not None and not frame.empty:
+            return frame
+        return stock.get_income_stmt(freq="yearly")
+    if kind == "balance":
+        frame = stock.balance_sheet
+        if frame is not None and not frame.empty:
+            return frame
+        return stock.get_balance_sheet(freq="yearly")
+    if kind == "cashflow":
+        frame = stock.cashflow
+        if frame is not None and not frame.empty:
+            return frame
+        return stock.get_cash_flow(freq="yearly")
     if kind == "estimate":
-        return None
+        return stock.revenue_estimate
     return empty
 
 
@@ -3317,7 +3308,6 @@ def fetch_yahoo_data(ticker):
             pool.submit(_yf_part, ticker, "financials"): "financials",
             pool.submit(_yf_part, ticker, "balance"): "balance",
             pool.submit(_yf_part, ticker, "cashflow"): "cashflow",
-            pool.submit(_yf_part, ticker, "quarterly_cashflow"): "quarterly_cashflow",
             pool.submit(_yf_part, ticker, "estimate"): "estimate",
         }
         for fut in as_completed(futs):
@@ -3328,6 +3318,8 @@ def fetch_yahoo_data(ticker):
                 parts[kind] = None if kind == "estimate" else pd.DataFrame()
                 errors.append(f"Yahoo Finance {kind} unavailable ({type(exc).__name__})")
     quote = parts.get("quote") or {}
+    if not quote:
+        errors.append("Yahoo Finance quote unavailable")
     info = quote_to_info(quote)
     if KNOWN_NAMES.get(ticker):
         info["longName"] = info.get("longName") or KNOWN_NAMES[ticker]
@@ -3343,7 +3335,6 @@ def fetch_yahoo_data(ticker):
         "financials": parts.get("financials") if parts.get("financials") is not None else pd.DataFrame(),
         "balance": parts.get("balance") if parts.get("balance") is not None else pd.DataFrame(),
         "cashflow": parts.get("cashflow") if parts.get("cashflow") is not None else pd.DataFrame(),
-        "quarterly_cashflow": parts.get("quarterly_cashflow") if parts.get("quarterly_cashflow") is not None else pd.DataFrame(),
         "history": pd.DataFrame(),
         "revenue_estimate": parts.get("estimate"),
         "errors": errors,
@@ -3409,6 +3400,111 @@ def non_equity_reason(symbol, quote_type=None):
 
 def company_symbol_allowed(symbol, quote_type=None):
     return not non_equity_reason(symbol, quote_type)
+
+
+def _yahoo_mover_timestamp(quote):
+    timestamp = safe_float(quote.get("regularMarketTime")) if isinstance(quote, dict) else None
+    if timestamp is None:
+        return 0
+    return timestamp
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_yahoo_day_movers(limit=5):
+    """Return comparable company-stock moves from Yahoo's daily screeners.
+
+    The top strip deliberately has no fallback watchlist: if Yahoo does not
+    return current and prior-close values, hiding the strip is more truthful
+    than presenting a curated list as the market's movers.
+    """
+    rows = {}
+    screen = getattr(yf, "screen", None)
+    if not callable(screen):
+        return []
+
+    for screen_name in ("day_gainers", "day_losers"):
+        try:
+            result = screen(screen_name, count=max(limit * 4, 12)) or {}
+        except Exception:
+            continue
+        for quote_row in result.get("quotes", []) if isinstance(result, dict) else []:
+            if not isinstance(quote_row, dict):
+                continue
+            symbol = normalize_ticker(quote_row.get("symbol"))
+            quote_type = str(quote_row.get("quoteType") or "").upper()
+            if not symbol or quote_type != "EQUITY":
+                continue
+            if not ticker_format_ok(symbol) or not company_symbol_allowed(symbol, quote_type):
+                continue
+            current = first_value(quote_row, "regularMarketPrice", "price", "currentPrice")
+            previous = first_value(quote_row, "regularMarketPreviousClose", "previousClose")
+            if current is None or previous is None or previous <= 0:
+                continue
+            change = current - previous
+            percentage = change / abs(previous) * 100
+            if not math.isfinite(percentage):
+                continue
+            timestamp = _yahoo_mover_timestamp(quote_row)
+            rows[symbol] = {
+                "ticker": symbol,
+                "percentage_change": percentage,
+                "absolute_change": change,
+                "timestamp": timestamp,
+            }
+
+    ranked = sorted(
+        rows.values(),
+        key=lambda row: (
+            -abs(row["percentage_change"]),
+            -abs(row["absolute_change"]),
+            -row["timestamp"],
+        ),
+    )
+    return ranked[: max(1, min(int(limit), 5))]
+
+
+def _top_mover_percentage(value):
+    value = safe_float(value)
+    if value is None:
+        return "N/A"
+    if value > 0:
+        return f"+{value:.1f}%"
+    if value < 0:
+        return f"−{abs(value):.1f}%"
+    return "0.0%"
+
+
+def _top_mover_markup(row, hidden=False):
+    ticker = normalize_ticker(row.get("ticker"))
+    percentage = safe_float(row.get("percentage_change"))
+    if not ticker or percentage is None:
+        return ""
+    direction = "positive" if percentage > 0 else "negative" if percentage < 0 else "neutral"
+    direction_word = "up" if percentage > 0 else "down" if percentage < 0 else "unchanged"
+    hidden_attrs = ' aria-hidden="true" tabindex="-1"' if hidden else ""
+    href = f"?ticker={quote(ticker, safe='')}&section={quote(PRIMARY_SECTIONS[0], safe='')}"
+    return (
+        f'<a class="tsrp-top-mover {direction}" href="{esc(href)}" target="_self"{hidden_attrs} '
+        f'aria-label="Open research for {esc(ticker)}, {direction_word} {_top_mover_percentage(percentage)}">'
+        f'<span class="tsrp-top-mover-symbol">{esc(ticker)}</span>'
+        f'<span class="tsrp-top-mover-percent">{esc(_top_mover_percentage(percentage))}</span></a>'
+    )
+
+
+def render_top_movers_ticker():
+    rows = fetch_yahoo_day_movers(5)
+    if not rows:
+        return
+    visible = "".join(_top_mover_markup(row) for row in rows)
+    duplicate = "".join(_top_mover_markup(row, hidden=True) for row in rows)
+    render_html(
+        '<div class="tsrp-top-movers" aria-label="Yahoo Finance daily company movers">'
+        '<div class="tsrp-top-movers-viewport"><div class="tsrp-top-movers-track">'
+        f'<div class="tsrp-top-mover-set">{visible}</div>'
+        f'<div class="tsrp-top-mover-set" aria-hidden="true">{duplicate}</div>'
+        f'<div class="tsrp-top-mover-set" aria-hidden="true">{duplicate}</div>'
+        '</div></div></div>'
+    )
 
 
 def yahoo_data_is_valid(yahoo_data, ticker=None):
@@ -3806,7 +3902,7 @@ def evidence_dataframe(analysis, company_name, ticker, sector, industry, reporti
     add("Market capitalization", money(analysis["market_cap"], trading_currency, display_currency, display_fx_trading), "currency", display_currency, "Latest quote", "Yahoo Finance", "Available" if analysis.get("market_cap") is not None else "Missing", "Trading currency: " + trading_currency)
     add("Enterprise value", money(analysis["enterprise_value"], reporting_currency, display_currency, display_fx_reporting), "currency", display_currency, "Latest quote", "Yahoo Finance / derived", "Available" if analysis.get("enterprise_value") is not None else "Unavailable", "Requires compatible currency conversion")
     add("Revenue", money(analysis["revenue"], reporting_currency, display_currency, display_fx_reporting), "currency", display_currency, sec_period if analysis.get("has_sec") else "Latest annual", analysis.get("sources", {}).get("Revenue"), "Available" if analysis.get("revenue") is not None else "Missing", "Reporting currency: " + reporting_currency)
-    add("Free cash flow", money(analysis["free_cash_flow"], reporting_currency, display_currency, display_fx_reporting), "currency", display_currency, "Latest compatible annual / TTM", analysis.get("sources", {}).get("Free Cash Flow"), "Available" if analysis.get("free_cash_flow") is not None else "Unavailable", "OCF minus capex where compatible")
+    add("Free cash flow", money(analysis["free_cash_flow"], reporting_currency, display_currency, display_fx_reporting), "currency", display_currency, analysis.get("fcf_period") or "Unavailable", analysis.get("sources", {}).get("Free Cash Flow"), "Available" if analysis.get("free_cash_flow") is not None else "Unavailable", "OCF minus capex only when its period matches revenue")
     add("Cash", money(analysis["cash"], reporting_currency, display_currency, display_fx_reporting), "currency", display_currency, sec_period if analysis.get("has_sec") else "Latest balance sheet", analysis.get("sources", {}).get("Cash"), "Available" if analysis.get("cash") is not None else "Missing", "Reporting currency: " + reporting_currency)
     add("Debt", money(analysis["debt"], reporting_currency, display_currency, display_fx_reporting), "currency", display_currency, sec_period if analysis.get("has_sec") else "Latest balance sheet", analysis.get("sources", {}).get("Debt"), "Available" if analysis.get("debt") is not None else "Missing", "Reporting currency: " + reporting_currency)
     add("Historical revenue growth", percent(analysis["historical_growth"]), "% CAGR", "", f"{analysis.get('historical_growth_years') or 0}-year window", "Yahoo Finance / SEC EDGAR", "Available" if analysis.get("historical_growth") is not None else "Missing", "Historical evidence, not a forecast")
@@ -3865,6 +3961,7 @@ def export_payload(analysis, company_name, ticker, sector, industry, display_cur
             key: analysis.get(key)
             for key in (
                 "price", "market_cap", "enterprise_value", "revenue", "free_cash_flow", "cash", "debt",
+                "fcf_period",
                 "fcf_margin", "historical_growth", "historical_growth_years", "consensus_growth",
                 "required_growth", "reality_score", "business_quality", "market_expectations", "financial_strength",
             )
@@ -4311,22 +4408,13 @@ def pick_value(primary, fallback, primary_name, fallback_name, primary_currency=
 
 
 def trailing_fcf_margins(cashflow, financials, years=4):
-    """Newest-first FCF / revenue for up to `years` annual periods."""
-    ocf = historical_series(cashflow, ["Operating Cash Flow", "Total Cash From Operating Activities"])
-    capex = historical_series(cashflow, ["Capital Expenditure", "Capital Expenditures"])
-    reported = historical_series(cashflow, ["Free Cash Flow"])
-    rev = historical_series(financials, ["Total Revenue", "Operating Revenue"])
-    length = min(len(rev), years)
-    margins = []
-    for i in range(length):
-        cap = capex.iloc[i] if i < len(capex) else None
-        ocf_i = ocf.iloc[i] if i < len(ocf) else None
-        reported_i = reported.iloc[i] if i < len(reported) else None
-        fcf = compute_fcf(ocf_i, cap, reported_i)
-        revenue_i = safe_float(rev.iloc[i])
-        if fcf is not None and revenue_i and revenue_i > 0:
-            margins.append(fcf / revenue_i)
-    return margins
+    """Newest-first FCF / revenue for matched annual reporting periods."""
+    return trailing_aligned_fcf_margins(
+        cashflow,
+        financials,
+        ["Total Revenue", "Operating Revenue"],
+        years=years,
+    )
 
 
 def analyze_company(yahoo_data, sec_facts):
@@ -4340,9 +4428,6 @@ def analyze_company(yahoo_data, sec_facts):
     financials = yahoo_data["financials"]
     balance = yahoo_data["balance"]
     cashflow = yahoo_data["cashflow"]
-    quarterly_cashflow = yahoo_data.get("quarterly_cashflow")
-    if quarterly_cashflow is None:
-        quarterly_cashflow = pd.DataFrame()
     yahoo_errors = list(yahoo_data.get("errors") or [])
 
     reporting_currency, trading_currency = detect_currencies(info, fast_info)
@@ -4354,29 +4439,29 @@ def analyze_company(yahoo_data, sec_facts):
     terminal_growth = rates["terminal_growth"]
 
     price = get_quote_price(info, fast_info)
+    previous_close = first_non_none(
+        first_value(info, "previousClose", "regularMarketPreviousClose"),
+        first_value(fast_info, "previousClose", "previous_close"),
+    )
     market_cap = get_market_cap(info, fast_info)
 
-    yahoo_revenue = latest_value(financials, ["Total Revenue", "Operating Revenue"]) or safe_float(info.get("totalRevenue"))
-    yahoo_gross_profit = latest_value(financials, ["Gross Profit"]) or safe_float(info.get("grossProfit"))
-    yahoo_operating_income = latest_value(financials, ["Operating Income"]) or safe_float(info.get("operatingIncome"))
-    yahoo_net_income = latest_value(financials, ["Net Income", "Net Income Common Stockholders"]) or safe_float(info.get("netIncomeToCommon"))
-    yahoo_ebitda = latest_value(financials, ["EBITDA", "Normalized EBITDA"]) or safe_float(info.get("ebitda"))
+    yahoo_revenue, yahoo_revenue_period = latest_period_value(financials, ["Total Revenue", "Operating Revenue"])
+    yahoo_revenue = first_non_none(yahoo_revenue, safe_float(info.get("totalRevenue")))
+    yahoo_gross_profit = first_non_none(latest_value(financials, ["Gross Profit"]), safe_float(info.get("grossProfit")))
+    yahoo_operating_income = first_non_none(latest_value(financials, ["Operating Income"]), safe_float(info.get("operatingIncome")))
+    yahoo_net_income = first_non_none(latest_value(financials, ["Net Income", "Net Income Common Stockholders"]), safe_float(info.get("netIncomeToCommon")))
+    yahoo_ebitda = first_non_none(latest_value(financials, ["EBITDA", "Normalized EBITDA"]), safe_float(info.get("ebitda")))
 
-    yahoo_operating_cash_flow = latest_value(cashflow, ["Operating Cash Flow", "Total Cash From Operating Activities"]) or safe_float(info.get("operatingCashflow"))
-    yahoo_capex = latest_value(cashflow, ["Capital Expenditure", "Capital Expenditures"])
-    yahoo_reported_fcf = latest_value(cashflow, ["Free Cash Flow"])
-    yahoo_annual_fcf = compute_fcf(yahoo_operating_cash_flow, yahoo_capex, yahoo_reported_fcf)
-    yahoo_info_fcf = safe_float(info.get("freeCashflow"))
-    yahoo_ttm_fcf = compute_fcf(
-        ttm_sum(quarterly_cashflow, ["Operating Cash Flow", "Total Cash From Operating Activities"]),
-        ttm_sum(quarterly_cashflow, ["Capital Expenditure", "Capital Expenditures"]),
-        ttm_sum(quarterly_cashflow, ["Free Cash Flow"]),
+    yahoo_annual_fcf, yahoo_annual_fcf_period = latest_period_aligned_fcf(
+        cashflow,
+        financials,
+        ["Total Revenue", "Operating Revenue"],
     )
 
-    yahoo_cash = latest_value(balance, ["Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"]) or safe_float(info.get("totalCash"))
-    yahoo_debt = latest_value(balance, ["Total Debt", "Long Term Debt And Capital Lease Obligation"]) or safe_float(info.get("totalDebt"))
-    yahoo_assets = latest_value(balance, ["Total Assets"]) or safe_float(info.get("totalAssets"))
-    yahoo_equity = latest_value(balance, ["Stockholders Equity", "Total Equity Gross Minority Interest"]) or safe_float(info.get("totalStockholderEquity"))
+    yahoo_cash = first_non_none(latest_value(balance, ["Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"]), safe_float(info.get("totalCash")))
+    yahoo_debt = first_non_none(latest_value(balance, ["Total Debt", "Long Term Debt And Capital Lease Obligation"]), safe_float(info.get("totalDebt")))
+    yahoo_assets = first_non_none(latest_value(balance, ["Total Assets"]), safe_float(info.get("totalAssets")))
+    yahoo_equity = first_non_none(latest_value(balance, ["Stockholders Equity", "Total Equity Gross Minority Interest"]), safe_float(info.get("totalStockholderEquity")))
 
     sec_revenue, sec_revenue_currency = sec_fact_values(sec_facts, SEC_TAGS["revenue"], sec_currencies)
     sec_revenue_record = sec_latest_record(sec_facts, SEC_TAGS["revenue"], sec_currencies)
@@ -4396,7 +4481,7 @@ def analyze_company(yahoo_data, sec_facts):
     sec_capex_record = sec_latest_record(sec_facts, SEC_TAGS["capex"], sec_currencies)
     sec_ocf = sec_ocf_record["value"] if sec_ocf_record else None
     sec_capex_value = sec_capex_record["value"] if sec_capex_record else None
-    sec_fcf_period_matched = sec_records_period_match(sec_ocf_record, sec_capex_record)
+    sec_fcf_period_matched = sec_records_period_match(sec_ocf_record, sec_capex_record, sec_revenue_record)
     sec_fcf_raw = compute_fcf(sec_ocf, sec_capex_value) if sec_fcf_period_matched else None
     if sec_fcf_raw is not None and sec_revenue_currency and reporting_currency and sec_revenue_currency != reporting_currency:
         sec_fcf = convert_amount(sec_fcf_raw, sec_revenue_currency, reporting_currency)
@@ -4419,8 +4504,19 @@ def analyze_company(yahoo_data, sec_facts):
 
     revenue_from_sec = bool(revenue_source and str(revenue_source).startswith("SEC"))
     free_cash_flow, fcf_source = pick_fcf_from_sources(
-        sec_fcf, yahoo_annual_fcf, yahoo_ttm_fcf, yahoo_info_fcf, revenue_from_sec
+        sec_fcf if revenue_from_sec else None,
+        yahoo_annual_fcf if not revenue_from_sec else None,
+        None,
+        None,
+        revenue_from_sec,
     )
+    fcf_period = None
+    if fcf_source == "SEC EDGAR (OCF − Capex)" and sec_ocf_record:
+        fcf_period = sec_ocf_record.get("period")
+        fcf_source = f"{fcf_source} · period {fcf_period or 'N/A'}"
+    elif fcf_source == "Yahoo Finance annual (OCF − Capex)":
+        fcf_period = yahoo_annual_fcf_period
+        fcf_source = f"{fcf_source} · period {fcf_period or 'N/A'}"
 
     market_cap_reporting = convert_amount(market_cap, trading_currency, reporting_currency)
     enterprise_value_trading = safe_float(info.get("enterpriseValue"))
@@ -4463,7 +4559,11 @@ def analyze_company(yahoo_data, sec_facts):
     if free_cash_flow is not None and revenue:
         fcf_margin = free_cash_flow / revenue
 
-    trailing_margins = trailing_fcf_margins(cashflow, financials, years=4)
+    # Do not blend Yahoo cash-flow history into a margin whose current revenue
+    # base came from SEC facts.  The providers can report different fiscal
+    # periods and accounting presentations; a shorter same-source history is
+    # more honest than a precise-looking mixed series.
+    trailing_margins = [] if revenue_from_sec else trailing_fcf_margins(cashflow, financials, years=4)
     sector_mature_fcf = safe_float(sector_model.get("financial_benchmarks", {}).get("fcf"), DEFAULT_FCF_MARGIN)
     model_fcf_margin, model_fcf_refused, model_fcf_note = choose_model_fcf_margin(
         fcf_margin, trailing_margins, sector_mature_fcf
@@ -4631,6 +4731,7 @@ def analyze_company(yahoo_data, sec_facts):
         "sector": sector,
         "sector_model": sector_model,
         "price": price,
+        "previous_close": previous_close,
         "market_cap": market_cap,
         "market_cap_reporting": market_cap_reporting,
         "enterprise_value": enterprise_value,
@@ -4640,6 +4741,7 @@ def analyze_company(yahoo_data, sec_facts):
         "assets": total_assets,
         "equity": equity,
         "free_cash_flow": free_cash_flow,
+        "fcf_period": fcf_period,
         "cash": cash,
         "debt": debt,
         "gross_margin": gross_margin,
@@ -5051,19 +5153,24 @@ if st.session_state.get("pending_search") is not None:
 if st.session_state.display_currency not in DISPLAY_CURRENCIES:
     st.session_state.display_currency = "USD"
 
-if (
-    not st.session_state.ticker
-    and not st.session_state.search_hits
-    and not st.session_state.ticker_error
-):
-    incoming = query_ticker()
-    if incoming and ticker_format_ok(incoming) and company_symbol_allowed(incoming):
+incoming = query_ticker()
+current_ticker = normalize_ticker(st.session_state.get("ticker", ""))
+if incoming and ticker_format_ok(incoming) and company_symbol_allowed(incoming):
+    # Top-ticker links are normal internal navigation. Honor a changed URL
+    # ticker before widgets render, while leaving an in-progress search alone.
+    if incoming != current_ticker:
         st.session_state.ticker = incoming
-        if not st.session_state.company_search:
-            st.session_state.company_search = incoming
-    elif incoming:
-        st.session_state.invalid_ticker = incoming
-        st.session_state.ticker_error = COMPANY_ONLY_MESSAGE
+        st.session_state.company_search = incoming
+        st.session_state.search_hits = []
+        st.session_state.ticker_error = None
+        st.session_state.invalid_ticker = ""
+        st.session_state.primary_section = "TSRP Score"
+        st.session_state.sync_primary_section_nav = True
+    elif not current_ticker and not st.session_state.company_search:
+        st.session_state.company_search = incoming
+elif incoming and not current_ticker:
+    st.session_state.invalid_ticker = incoming
+    st.session_state.ticker_error = COMPANY_ONLY_MESSAGE
 
 
 def render_watch_row(items, key_prefix):
@@ -6367,6 +6474,184 @@ html body [data-testid="stMain"] div[class*="st-key-dashboard_changed_"] div[dat
 @media (max-width:640px) {
   .dashboard-secondary-actions { grid-template-columns:1fr; gap:var(--space-3); }
 }
+/* Final quiet-control pass: keep actions useful without boxed chrome. */
+.product-header { border-bottom:0 !important; }
+
+.section-nav [data-testid="stSegmentedControl"],
+.section-nav [data-testid="stButtonGroup"],
+.section-nav-label + div [data-testid="stButtonGroup"],
+.section-nav [data-baseweb="button-group"] {
+  background:transparent !important;
+  border:0 !important;
+  border-radius:0 !important;
+  box-shadow:none !important;
+  padding:0 !important;
+}
+body [data-testid="stButtonGroup"],
+body [data-testid="stSegmentedControl"],
+body [data-baseweb="button-group"] {
+  background:transparent !important;
+  border:0 !important;
+  border-radius:0 !important;
+  box-shadow:none !important;
+  padding:0 !important;
+}
+.section-nav [data-testid="stSegmentedControl"] button,
+.section-nav [data-testid="stButtonGroup"] button,
+.section-nav-label + div [data-testid="stButtonGroup"] button,
+.section-nav [data-baseweb="button-group"] button {
+  min-height:36px !important;
+  border:0 !important;
+  border-bottom:2px solid transparent !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+  color:var(--tsrp-muted) !important;
+}
+.section-nav [data-testid="stSegmentedControl"] button:hover,
+.section-nav [data-testid="stButtonGroup"] button:hover,
+.section-nav-label + div [data-testid="stButtonGroup"] button:hover,
+.section-nav [data-baseweb="button-group"] button:hover { color:var(--tsrp-text) !important; }
+.section-nav [data-testid="stSegmentedControl"] button[aria-checked="true"],
+.section-nav [data-testid="stSegmentedControl"] button[aria-pressed="true"],
+.section-nav [data-testid="stButtonGroup"] button[data-testid="stBaseButton-segmented_controlActive"],
+.section-nav-label + div [data-testid="stButtonGroup"] button[data-testid="stBaseButton-segmented_controlActive"] {
+  color:var(--tsrp-text) !important;
+  border-bottom-color:var(--tsrp-accent) !important;
+}
+body [data-testid="stButtonGroup"] button,
+body [data-testid="stSegmentedControl"] button,
+body [data-baseweb="button-group"] button {
+  min-height:36px !important;
+  border:0 !important;
+  border-bottom:2px solid transparent !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+  color:var(--tsrp-muted) !important;
+}
+body [data-testid="stButtonGroup"] button:hover,
+body [data-testid="stSegmentedControl"] button:hover,
+body [data-baseweb="button-group"] button:hover { color:var(--tsrp-text) !important; }
+body [data-testid="stButtonGroup"] button[data-testid="stBaseButton-segmented_controlActive"],
+body [data-testid="stSegmentedControl"] button[aria-checked="true"],
+body [data-testid="stSegmentedControl"] button[aria-pressed="true"] {
+  color:var(--tsrp-text) !important;
+  border-bottom-color:var(--tsrp-accent) !important;
+}
+
+.stButton button, .stDownloadButton button, [data-testid="stFormSubmitButton"] button {
+  min-height:36px !important;
+  border:0 !important;
+  border-bottom:1px solid var(--tsrp-border-strong) !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+  color:var(--tsrp-accent) !important;
+  font-weight:750 !important;
+}
+.stButton button:hover, .stDownloadButton button:hover, [data-testid="stFormSubmitButton"] button:hover {
+  background:transparent !important;
+  border-bottom-color:var(--tsrp-accent) !important;
+  color:var(--tsrp-text) !important;
+}
+.stButton button:active, .stDownloadButton button:active, [data-testid="stFormSubmitButton"] button:active {
+  background:rgba(112,88,62,.08) !important;
+  transform:none !important;
+}
+.stButton button:focus-visible, .stDownloadButton button:focus-visible, [data-testid="stFormSubmitButton"] button:focus-visible {
+  outline:2px solid var(--tsrp-focus) !important;
+  outline-offset:3px !important;
+}
+.st-key-new_analyze_company button {
+  min-height:38px !important;
+  background:transparent !important;
+  border:0 !important;
+  border-bottom:2px solid var(--tsrp-accent) !important;
+  color:var(--tsrp-accent) !important;
+  letter-spacing:.01em;
+}
+.st-key-new_analyze_company button[kind="primary"] {
+  background:transparent !important;
+  border:0 !important;
+  border-bottom:2px solid var(--tsrp-accent) !important;
+  color:var(--tsrp-accent) !important;
+  box-shadow:none !important;
+}
+.st-key-new_analyze_company button:hover { color:var(--tsrp-text) !important; }
+.tsrp-top-movers {
+  width:100%;
+  height:28px;
+  margin:0 0 16px;
+  overflow:hidden;
+  border-bottom:1px solid var(--tsrp-border);
+  color:var(--tsrp-text);
+}
+.tsrp-top-movers-viewport { width:100%; overflow:hidden; }
+.tsrp-top-movers-track {
+  --tsrp-mover-gap:20px;
+  display:flex;
+  width:max-content;
+  align-items:center;
+  gap:var(--tsrp-mover-gap);
+  animation:tsrp-top-movers-scroll 38s linear infinite;
+  will-change:transform;
+}
+.tsrp-top-mover-set {
+  display:flex;
+  flex:0 0 auto;
+  align-items:center;
+  gap:var(--tsrp-mover-gap);
+}
+.tsrp-top-movers-track:hover,
+.tsrp-top-movers-track:focus-within { animation-play-state:paused; }
+.tsrp-top-mover {
+  display:inline-flex;
+  flex:0 0 auto;
+  align-items:center;
+  gap:7px;
+  min-height:27px;
+  color:var(--tsrp-text) !important;
+  text-decoration:none !important;
+  font-size:11px;
+  line-height:1;
+  transition:color .12s ease, opacity .12s ease;
+}
+.tsrp-top-mover::after {
+  content:"";
+  width:1px;
+  height:12px;
+  margin-left:10px;
+  background:var(--tsrp-border);
+}
+.tsrp-top-mover-symbol { font-weight:800; letter-spacing:.04em; }
+.tsrp-top-mover-percent {
+  font:700 11px/1 var(--tsrp-mono);
+  font-variant-numeric:tabular-nums;
+}
+.tsrp-top-mover.positive .tsrp-top-mover-percent { color:var(--tsrp-green); }
+.tsrp-top-mover.negative .tsrp-top-mover-percent { color:var(--tsrp-red); }
+.tsrp-top-mover.neutral .tsrp-top-mover-percent { color:var(--tsrp-muted); }
+.tsrp-top-mover:hover .tsrp-top-mover-symbol { color:var(--tsrp-accent); }
+.tsrp-top-mover:active { opacity:.68; }
+.tsrp-top-mover:focus-visible {
+  outline:2px solid var(--tsrp-focus);
+  outline-offset:3px;
+}
+@keyframes tsrp-top-movers-scroll {
+  from { transform:translateX(0); }
+  to { transform:translateX(calc(-33.333333% - (var(--tsrp-mover-gap) / 3))); }
+}
+@media (prefers-reduced-motion:reduce) {
+  .tsrp-top-movers-track { animation:none !important; width:100%; justify-content:center; }
+  .tsrp-top-mover-set[aria-hidden="true"] { display:none; }
+}
+@media (max-width:640px) {
+  .tsrp-top-movers { height:26px; margin-bottom:12px; }
+  .tsrp-top-movers-track { --tsrp-mover-gap:14px; animation-duration:30s; }
+  .tsrp-top-mover { font-size:10px; }
+  .tsrp-top-mover-percent { font-size:10px; }
+}
 </style>
 """
     )
@@ -6455,9 +6740,12 @@ def snapshot_payload(analysis, company_name, ticker):
         "required_growth": safe_float(analysis.get("required_growth")),
         "revenue": safe_float(analysis.get("revenue")),
         "free_cash_flow": safe_float(analysis.get("free_cash_flow")),
+        "fcf_period": analysis.get("fcf_period"),
         "fcf_margin": safe_float(analysis.get("fcf_margin")),
         "enterprise_value": safe_float(analysis.get("enterprise_value")),
         "model_fcf_margin": safe_float(analysis.get("model_fcf_margin")),
+        "discount_rate": safe_float(analysis.get("discount_rate")),
+        "terminal_growth": safe_float(analysis.get("terminal_growth")),
         "solver_status": analysis.get("solver_status"),
         "sec_status": analysis.get("sec_status"),
         "user_assumptions": {
@@ -6716,8 +7004,9 @@ def render_section_anchor(section):
         f'aria-label="Current research section: {esc(section)}"></div>'
     )
     if st.session_state.pop("pending_section_focus", None) == section:
-        nonce = st.session_state.get("section_focus_nonce", 0)
-        SECTION_FOCUS(key=f"section_focus_{slug}_{nonce}")
+        # Keep one component identity across reruns so delayed focus messages
+        # cannot target an already-discarded component instance.
+        SECTION_FOCUS(key="section_focus")
 
 
 def dashboard_section_button(label, section, ticker, key):
@@ -7198,6 +7487,7 @@ render_html(
     '<div class="brand-copy-new"><strong>TSRP</strong><span>The Saleh Research Project</span></div></a>'
     '<div class="header-status-new">Company stock research<br>Market data and filing status shown with every analysis</div></div>'
 )
+render_top_movers_ticker()
 
 try:
     _, search_col, _ = st.columns([1, 2, 1], gap="small", vertical_alignment="bottom")
@@ -7330,10 +7620,18 @@ if trading_currency != display_currency and raw_fx_trading is None:
     st.warning(f"FX conversion {trading_currency} → {display_currency} is unavailable. Quote conversion remains N/A.")
 
 as_of = analysis.get("last_refreshed") or "N/A"
-previous_price = first_value(info, "previousClose", "regularMarketPreviousClose")
+previous_price = analysis.get("previous_close")
 price_change = analysis.get("price") / previous_price - 1 if analysis.get("price") is not None and previous_price not in (None, 0) else None
-if st.session_state.get("primary_section") not in PRIMARY_SECTIONS:
-    set_primary_section(query_primary_section() or PRIMARY_SECTIONS[0], focus=False)
+requested_section = query_primary_section()
+current_section = st.session_state.get("primary_section")
+if requested_section in PRIMARY_SECTIONS and requested_section != current_section:
+    # Direct internal links are part of the same navigation state as the
+    # segmented control. Honor the URL before the widget renders so an
+    # internal link cannot be overwritten by a stale session value.
+    st.session_state.primary_section = requested_section
+    st.session_state.sync_primary_section_nav = True
+elif current_section not in PRIMARY_SECTIONS:
+    set_primary_section(requested_section or PRIMARY_SECTIONS[0], focus=False)
 compact_score_markup = "" if st.session_state.get("primary_section") == "TSRP Score" else (
     f'<div class="compact-score"><span>TSRP Score</span><b>{esc(score(analysis.get("reality_score")))}</b><span>{esc(analysis.get("confidence", "N/A"))} confidence</span></div>'
 )

@@ -1,0 +1,39 @@
+{
+  "description": "Baseline TSRP engine case captured before the interface migration; no provider data or credentials.",
+  "rates": {
+    "currency": "USD",
+    "sector": "Technology",
+    "expected": {
+      "discount_rate": 0.094,
+      "terminal_growth": 0.024,
+      "risk_free": 0.043,
+      "erp": 0.045,
+      "sector_spread": 0.006,
+      "currency": "USD",
+      "used_fallback_currency": false
+    }
+  },
+  "score": {
+    "inputs": {
+      "business_quality": 87.75357142857143,
+      "financial_strength": 92.1590909090909,
+      "historical_growth": 0.12,
+      "required_growth": -0.011008385252441653,
+      "consensus_growth": 0.14
+    },
+    "expected_score": 92.427946846864,
+    "expected_weights": [0.35, 0.3, 0.2, 0.15]
+  },
+  "dcf": {
+    "inputs": {
+      "revenue": 400,
+      "growth": 0.12,
+      "fcf_margin": 0.18,
+      "discount_rate": 0.094,
+      "terminal_growth": 0.024,
+      "years": 10,
+      "start_margin": 0.18
+    },
+    "expected_enterprise_value": 1792.5284424873525
+  }
+}
