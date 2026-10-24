@@ -12,6 +12,7 @@ venv/
 .next/
 out/
 build/
+*.egg-info/
 node_modules/
 .vercel/
 .turbo/

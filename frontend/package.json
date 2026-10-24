@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@11.19.0",
   "engines": {
-    "node": ">=22.0.0"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "cross-env NEXT_TELEMETRY_DISABLED=1 next dev",
@@ -13,24 +13,28 @@
     "start": "cross-env NEXT_TELEMETRY_DISABLED=1 next start",
     "lint": "eslint .",
     "typecheck": "cross-env NEXT_TELEMETRY_DISABLED=1 next typegen --webpack && tsc --noEmit",
-    "test:python": "python3 -m unittest -q",
+    "test": "pnpm test:node && pnpm test:python",
+    "test:python": "python3 ../tests/run_all.py",
     "test:csv": "node --experimental-strip-types --test lib/csv.test.ts",
-    "test:node": "node --experimental-strip-types --test lib/*.test.ts"
+    "test:node": "node --experimental-strip-types --test lib/*.test.ts",
+    "test:production-smoke": "node tests/production-smoke.mjs"
   },
   "dependencies": {
-    "next": "^16.0.0",
+    "next": "^16.4.1",
+    "next-auth": "5.0.0-beta.32",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
-    "@next/eslint-plugin-next": "^16.3.8",
+    "@next/eslint-plugin-next": "^16.4.0",
     "@types/node": "^22.19.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "cross-env": "^10.1.0",
-    "eslint": "^10.0.0",
+    "eslint": "^10.12.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "playwright": "1.64.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.71.1"
   }

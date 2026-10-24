@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: "TSRP — Saleh Research Project",
   description: "Evidence-led public-company research with transparent assumptions and sourced financial data.",
   applicationName: "TSRP",
+  icons: { icon: "/icon.svg", apple: "/icon.svg" },
   robots: { index: false, follow: false },
 };
 

@@ -1,5 +1,5 @@
 {
-  "description": "Baseline TSRP engine case captured before the interface migration; no provider data or credentials.",
+  "description": "Fixed score-v8 calculation fixture with score-v4 and score-v7 results retained for explicit methodology-change comparisons; no provider data or credentials.",
   "rates": {
     "currency": "USD",
     "sector": "Technology",
@@ -14,6 +14,7 @@
     }
   },
   "score": {
+    "methodology_version": "score-v8",
     "inputs": {
       "business_quality": 87.75357142857143,
       "financial_strength": 92.1590909090909,
@@ -21,8 +22,10 @@
       "required_growth": -0.011008385252441653,
       "consensus_growth": 0.14
     },
-    "expected_score": 92.427946846864,
-    "expected_weights": [0.35, 0.3, 0.2, 0.15]
+    "score_v4_reference": 92.427946846864,
+    "score_v7_reference": 91.23970070682988,
+    "expected_score": 89.78688811188812,
+    "expected_weights": [0.5384615384615384, 0.46153846153846156]
   },
   "dcf": {
     "inputs": {

@@ -8,10 +8,15 @@
     "backend": {
       "root": "backend/",
       "framework": "python",
-      "entrypoint": "api.index:app"
+      "entrypoint": "api.index:app",
+      "functions": {
+        "api/index.py": { "maxDuration": 60 }
+      }
     }
   },
   "rewrites": [
+    { "source": "/api/auth/:path*", "destination": { "service": "frontend" } },
+    { "source": "/api/backend-token", "destination": { "service": "frontend" } },
     { "source": "/api/:path*", "destination": { "service": "backend" } },
     { "source": "/(.*)", "destination": { "service": "frontend" } }
   ]
