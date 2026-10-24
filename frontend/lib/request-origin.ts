@@ -50,3 +50,45 @@ export function trustedRequestOrigin(
   const protocol = forwardedProto === null ? requestUrl.protocol : forwardedProto;
   return parseForwardedOrigin(protocol, authority, isProduction);
 }
+
+export type ApplicationOriginEnvironment = {
+  APP_ORIGIN?: string;
+  VERCEL_ENV?: string;
+  VERCEL_URL?: string;
+  VERCEL_PROJECT_PRODUCTION_URL?: string;
+};
+
+function vercelOrigin(host?: string): string | undefined {
+  const authority = host?.trim();
+  if (!authority || authority.length > 260 || !AUTHORITY_PATTERN.test(authority)) return undefined;
+
+  try {
+    const url = new URL(`https://${authority}`);
+    if (url.pathname !== "/" || url.username || url.password || url.search || url.hash) return undefined;
+    return secureOrigin(url, true) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Use an explicit origin first, then Vercel's deployment-owned hostnames. */
+export function trustedApplicationOrigin(
+  request: Request,
+  environment: ApplicationOriginEnvironment,
+  isProduction: boolean,
+): string | null {
+  const configuredOrigin = environment.APP_ORIGIN?.trim();
+  if (configuredOrigin) return trustedRequestOrigin(request, configuredOrigin, isProduction);
+
+  if (environment.VERCEL_ENV === "preview") {
+    return trustedRequestOrigin(request, vercelOrigin(environment.VERCEL_URL), isProduction);
+  }
+
+  if (environment.VERCEL_ENV === "production") {
+    const productionHost = vercelOrigin(environment.VERCEL_PROJECT_PRODUCTION_URL)
+      ?? vercelOrigin(environment.VERCEL_URL);
+    return trustedRequestOrigin(request, productionHost, isProduction);
+  }
+
+  return trustedRequestOrigin(request, undefined, isProduction);
+}

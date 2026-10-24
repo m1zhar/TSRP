@@ -52,7 +52,8 @@ const isolatedNextEnv = {
   TMPDIR: process.env.TMPDIR,
   NODE_ENV: "production",
   NEXT_TELEMETRY_DISABLED: "1",
-  APP_ORIGIN: canonicalOrigin,
+  VERCEL_ENV: "production",
+  VERCEL_PROJECT_PRODUCTION_URL: new URL(canonicalOrigin).host,
   TSRP_API_TOKEN_SECRET: apiTestSecret,
 };
 try {

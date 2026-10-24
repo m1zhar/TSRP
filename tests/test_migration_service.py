@@ -2956,6 +2956,86 @@ class InputAndSourceSafetyTests(unittest.TestCase):
         self.assertFalse(has_sector_calibration("Financial Services"))
         self.assertFalse(has_sector_calibration("Unknown sector"))
 
+    def test_representative_companies_run_through_each_calibrated_sector_method(self):
+        representatives = (
+            ("AAPL", "Technology"),
+            ("META", "Communication Services"),
+            ("AMZN", "Consumer Cyclical"),
+            ("COST", "Consumer Defensive"),
+            ("CAT", "Industrials"),
+            ("JNJ", "Healthcare"),
+            ("XOM", "Energy"),
+            ("LIN", "Basic Materials"),
+            ("NEE", "Utilities"),
+            ("PLD", "Real Estate"),
+        )
+        fiscal_year = datetime.now(timezone.utc).year - 1
+        assumptions = {
+            "starting_growth": 0.08,
+            "fcf_margin": 0.15,
+            "discount_rate": 0.09,
+            "terminal_growth": 0.02,
+        }
+
+        for ticker, sector in representatives:
+            with self.subTest(ticker=ticker, sector=sector):
+                instrument = MockEquity(fiscal_year)
+                instrument.get_info = lambda ticker=ticker, sector=sector: {
+                    "symbol": ticker,
+                    "quoteType": "EQUITY",
+                    "longName": f"{ticker} deterministic sector fixture",
+                    "fullExchangeName": "NYSE",
+                    "financialCurrency": "USD",
+                    "currency": "USD",
+                    "sector": sector,
+                    "regularMarketTime": datetime.now(timezone.utc).timestamp(),
+                }
+                with patch("research_service.yf.Ticker", return_value=instrument), patch(
+                    "research_service._sec_facts",
+                    return_value=(None, {"kind": "not_configured", "label": "SEC unavailable in fixture"}),
+                ):
+                    baseline = analyze_company(ticker)["company"]
+                    scenario = analyze_company(ticker, assumptions)["company"]
+
+                self.assertEqual(baseline["sector"], sector)
+                self.assertTrue(baseline["sector_methodology_supported"])
+                self.assertTrue(baseline["score_available"])
+                self.assertIsInstance(baseline["score"], (int, float))
+                self.assertGreaterEqual(baseline["score"], 0)
+                self.assertLessEqual(baseline["score"], 100)
+                self.assertIsNotNone(baseline["enterprise_value"])
+                self.assertIsNotNone(baseline["revenue"])
+                self.assertIsNotNone(baseline["free_cash_flow"])
+                self.assertIsNotNone(scenario["scenario"]["enterprise_value"])
+                self.assertAlmostEqual(scenario["score"], baseline["score"], places=10)
+
+    def test_financial_services_company_facts_remain_visible_without_generic_score(self):
+        fiscal_year = datetime.now(timezone.utc).year - 1
+        instrument = MockEquity(fiscal_year)
+        instrument.get_info = lambda: {
+            "symbol": "JPM",
+            "quoteType": "EQUITY",
+            "longName": "JPMorgan Chase deterministic sector fixture",
+            "fullExchangeName": "NYSE",
+            "financialCurrency": "USD",
+            "currency": "USD",
+            "sector": "Financial Services",
+            "regularMarketTime": datetime.now(timezone.utc).timestamp(),
+        }
+        with patch("research_service.yf.Ticker", return_value=instrument), patch(
+            "research_service._sec_facts",
+            return_value=(None, {"kind": "not_configured", "label": "SEC unavailable in fixture"}),
+        ):
+            company = analyze_company("JPM")["company"]
+
+        self.assertEqual(company["sector"], "Financial Services")
+        self.assertIsNotNone(company["revenue"])
+        self.assertFalse(company["sector_methodology_supported"])
+        self.assertFalse(company["score_available"])
+        self.assertIsNone(company["score"])
+        self.assertIsNone(company["enterprise_value"])
+        self.assertTrue(any("No validated TSRP sector calibration" in flag["message"] for flag in company["quality_flags"]))
+
     def test_company_search_uses_shared_provider_budget_and_filters_equities(self):
         class SearchResult:
             response = {"quotes": [

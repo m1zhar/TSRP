@@ -1,5 +1,5 @@
 import { API_ACCESS_TOKEN_TTL_SECONDS, issueApiAccessToken, isStrongServerSecret } from "@/lib/api-access-token";
-import { trustedRequestOrigin } from "@/lib/request-origin";
+import { trustedApplicationOrigin } from "@/lib/request-origin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,9 +12,14 @@ function jsonError(status: number, message: string) {
 }
 
 export async function POST(request: Request) {
-  const origin = trustedRequestOrigin(
+  const origin = trustedApplicationOrigin(
     request,
-    process.env.APP_ORIGIN?.trim(),
+    {
+      APP_ORIGIN: process.env.APP_ORIGIN,
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      VERCEL_URL: process.env.VERCEL_URL,
+      VERCEL_PROJECT_PRODUCTION_URL: process.env.VERCEL_PROJECT_PRODUCTION_URL,
+    },
     process.env.NODE_ENV === "production",
   );
   if (!origin) return jsonError(503, "Application origin is not securely configured.");
