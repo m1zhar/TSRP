@@ -3048,6 +3048,39 @@ class InputAndSourceSafetyTests(unittest.TestCase):
             self.assertEqual(search_companies("Apple"), [{"ticker": "AAPL", "company": "Apple Inc.", "exchange": "", "sector": ""}])
         provider.assert_called_once_with("Apple", max_results=12, timeout=10, session=_YAHOO_SESSION)
 
+    def test_company_search_keeps_equities_among_yahoo_navigation_suggestions(self):
+        class SearchResult:
+            response = {"quotes": [
+                {"symbol": "MSFT", "quoteType": "EQUITY", "longname": "Microsoft Corporation"},
+                {"symbol": "SMSFT=F", "quoteType": "FUTURE"},
+                {"symbol": "MSFY", "quoteType": "ETF"},
+                {"symbol": None, "quoteType": None, "name": "Navigation suggestion"},
+                {"name": "Search more results"},
+                {"symbol": "MSFT.TO", "quoteType": "EQUITY", "shortname": "Microsoft CDR"},
+            ]}
+
+        with patch("research_service.yf.Search", return_value=SearchResult()):
+            matches = search_companies("Microsoft")
+        self.assertEqual([item["ticker"] for item in matches], ["MSFT", "MSFT.TO"])
+        self.assertEqual(matches[0]["company"], "Microsoft Corporation")
+
+    def test_company_search_preserves_valid_equities_when_another_equity_has_no_ticker(self):
+        class SearchResult:
+            response = {"quotes": [
+                {"quoteType": "EQUITY", "longname": "Unidentified company"},
+                {"symbol": "AAPL", "quoteType": "EQUITY", "longname": "Apple Inc."},
+            ]}
+
+        with patch("research_service.yf.Search", return_value=SearchResult()):
+            self.assertEqual([item["ticker"] for item in search_companies("Apple")], ["AAPL"])
+
+    def test_company_search_navigation_suggestions_alone_are_not_company_matches(self):
+        class SearchResult:
+            response = {"quotes": [{"name": "Search more results"}]}
+
+        with patch("research_service.yf.Search", return_value=SearchResult()):
+            self.assertEqual(search_companies("No matching company"), [])
+
     def test_company_search_rejects_email_phone_and_long_numbers_before_provider_access(self):
         for query in (
             "person@example.test",
