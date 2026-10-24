@@ -14,11 +14,11 @@ function companyFixture(overrides: Partial<Company> = {}): Company {
     discount_rate: 0.09, terminal_growth: 0.025, risk_free: 0.04, equity_risk_premium: 0.05, sector_spread: 0.01, rate_currency: "USD", historical_growth: 0.08, historical_growth_years: 3, historical_growth_3y: 0.07, consensus_growth: 0.06, analyst_estimate_period: "FY2026",
     target_mean_price: null, analyst_count: null, required_growth: 0.1, solver_status: "exact", solver_low: 0.1, solver_high: 0.1, growth_clamped: false,
     business_quality: 70, financial_strength: 65, market_expectations: 55, score: 67.6923076923077, score_label: "Mixed but explainable", score_trace: { score: 67.6923076923077, components: [{ key: "business_quality", label: "Business quality", value: 70, weight: 7 / 13, applied_weight: 7 / 13, evidence_coverage: 1, contribution: 70 * 7 / 13 }, { key: "financial_strength", label: "Financial strength", value: 65, weight: 6 / 13, applied_weight: 6 / 13, evidence_coverage: 1, contribution: 65 * 6 / 13 }], evidence_coverage: 1, minimum_evidence_coverage: 0.7, growth_comparison_available: false, growth_comparison_inputs: { historical_growth: null, required_growth: null, growth_clamped: false } }, score_available: true,
-    analysis_schema_version: "analysis-v4", snapshot_proof: "signed-test-proof", confidence: "Moderate", revenue_growth_source: "SEC", gross_margin: 0.45, operating_margin: 0.3, profit_margin: 0.25, return_on_equity: 1.2, cash: 20_000_000, debt: 100_000_000, assets: 500_000_000, equity: 100_000_000,
+    analysis_schema_version: "analysis-v5", snapshot_proof: "signed-test-proof", confidence: "Moderate", revenue_growth_source: "SEC", gross_margin: 0.45, operating_margin: 0.3, profit_margin: 0.25, return_on_equity: 1.2, cash: 20_000_000, debt: 100_000_000, assets: 500_000_000, equity: 100_000_000,
     debt_to_assets: 0.2, ev_sales: 7.5, ev_ebitda: 25, pe: 30,
     sources: { enterprise_value: { source: "Yahoo Finance", period: "2026-10-09", currency: "USD", kind: "market" }, historical_growth: { source: "SEC EDGAR", period: "FY2023–FY2025", currency: "USD", kind: "reported" } },
     sec_status: { kind: "available", label: "SEC data available" }, quality_flags: [{ message: "FCF is negative", severity: "warning" }],
-    retrieved_at: "2026-10-10T12:00:00Z", market_at: "2026-10-09T20:00:00Z", is_stale: false, freshness: "current", methodology_version: "score-v9",
+    retrieved_at: "2026-10-10T12:00:00Z", market_at: "2026-10-09T20:00:00Z", is_stale: false, freshness: "current", methodology_version: "score-v10",
     assumptions: { starting_growth: 0.1, fcf_margin: 0.12, discount_rate: 0.09, terminal_growth: 0.025 }, user_assumptions: null, scenario: null,
     ...overrides,
   };
@@ -42,7 +42,7 @@ test("JSON export preserves the displayed analysis, provenance, warnings, and us
   assert.deepEqual(parsed.company.score_trace, company.score_trace);
   assert.equal(parsed.company.free_cash_flow, -2_000_000);
   assert.equal(parsed.company.market_at, company.market_at);
-  assert.equal(parsed.company.methodology_version, "score-v9");
+  assert.equal(parsed.company.methodology_version, "score-v10");
   assert.equal(parsed.company.analyst_estimate_period, "FY2026");
   assert.deepEqual(parsed.company.scenario, scenario);
   assert.deepEqual(parsed.limitations, ["FCF is negative"]);
@@ -72,7 +72,7 @@ test("CSV export labels the same source, period, units, negative values, N/A, an
   const scenario = { enterprise_value: 500, equity_value: 450, inputs: { starting_growth: 0.11, fcf_margin: 0.13, discount_rate: 0.1, terminal_growth: 0.02 }, kind: "user_scenario" };
   const output = buildResearchExport(company, scenario, "Research disclaimer.", (key) => `source for ${key}`);
 
-  assert.match(output.csv, /"TSRP Score",67\.6923076923077,"0–100 research signal","TSRP engine","score-v9"/u);
+  assert.match(output.csv, /"TSRP Score",67\.6923076923077,"0–100 research signal","TSRP engine","score-v10"/u);
   assert.match(output.csv, /"Share price",192\.3,"USD","source for share_price","2026-10-10T20:00:00Z"/u);
   assert.match(output.csv, /"Free cash flow",-2000000,"USD","SEC","FY2025"/u);
   assert.match(output.csv, /"Reported debt",100000000,"USD","source for debt","FY2025"/u);
@@ -93,6 +93,30 @@ test("CSV export retains the enterprise-value calculation basis and limitation s
   const output = buildResearchExport(company, null, "Research disclaimer.", () => "source");
 
   assert.match(output.csv, /"Enterprise value",3010000000000,"USD","TSRP calculation","2025-12-31","Market capitalization \+ same-date reported debt − cash; excludes other claims not separately captured"/u);
+});
+
+test("scenario equity export discloses identified additional ownership claims", () => {
+  const company = companyFixture();
+  company.other_claims = 25;
+  const scenario = { enterprise_value: 500, equity_value: 425,
+    inputs: { starting_growth: .11, fcf_margin: .13, discount_rate: .1, terminal_growth: .02 }, kind: "user_scenario" };
+  const output = buildResearchExport(company, scenario, "Research disclaimer.", () => "source");
+  assert.match(output.csv, /"Scenario equity value",425,"USD","Scenario less reported debt and identified other claims plus cash"/u);
+  assert.equal(JSON.parse(output.json).company.other_claims, 25);
+  assert.equal(JSON.parse(output.json).company.scenario.equity_value, 425);
+});
+
+test("estimate exports retain the exact fiscal year and do not invent missing forecast currency", () => {
+  const company = companyFixture({ analyst_estimate_period: "Next-year analyst revenue estimate", analyst_estimate_end_date: "2027-06-30", analyst_estimate_currency: "USD" });
+  const output = buildResearchExport(company, null, "Research disclaimer.", () => "source");
+  const exported = JSON.parse(output.json).company;
+  assert.equal(exported.analyst_estimate_end_date, "2027-06-30");
+  assert.equal(exported.analyst_estimate_currency, "USD");
+  assert.match(output.csv, /"Next-year analyst revenue estimate",0\.06,"growth rate","source","2027-06-30","Forecast currency: USD"/u);
+  company.analyst_estimate_currency = null;
+  const unknown = buildResearchExport(company, null, "Research disclaimer.", () => "source");
+  assert.equal(JSON.parse(unknown.json).company.analyst_estimate_currency, null);
+  assert.match(unknown.csv, /Exact fiscal period or estimate currency unavailable; not revision-comparable/u);
 });
 
 test("CSV export retains the calculated Yahoo debt basis and both dated components", () => {
@@ -237,7 +261,7 @@ test("exports withhold valuation assumptions and provenance for an unsupported s
   };
 
   assert.equal(exportedCompany.score, null);
-  assert.match(output.csv, /"TSRP Score","N\/A","0–100 research signal","TSRP engine","score-v9","unavailable"/u);
+  assert.match(output.csv, /"TSRP Score","N\/A","0–100 research signal","TSRP engine","score-v10","unavailable"/u);
   assert.equal(exportedCompany.enterprise_value, null);
   assert.equal(exportedCompany.required_growth, null);
   assert.equal(exportedCompany.model_fcf_margin, null);
@@ -252,7 +276,8 @@ test("exports withhold valuation assumptions and provenance for an unsupported s
   assert.match(output.csv, /"Discount-rate assumption","N\/A"/u);
   assert.match(output.csv, /"Terminal-growth assumption","N\/A"/u);
   assert.match(output.csv, /"Scenario enterprise value","N\/A"/u);
-  assert.match(output.csv, /"Free cash flow margin assumption","N\/A","ratio","Unavailable"/u);
+  assert.match(output.csv, /"Pre-debt cash-flow margin assumption","N\/A","ratio","Unavailable"/u);
+  assert.equal(parsed.company.valuation_basis, null);
 });
 
 test("download keeps its URL until delayed cleanup and removes its temporary link", async () => {

@@ -45,6 +45,8 @@ research_service._SEC_SESSION.request = _reject_external_provider_request
 # real analysis engine with the same deterministic synthetic company used by
 # backend tests, and make SEC explicitly unavailable for this harness.
 _fixture_equity = MockEquity(datetime.now(timezone.utc).year - 1)
+_fixture_equity.revenue_estimate["currency"] = "USD"
+_fixture_equity.revenue_estimate["endDate"] = f"{datetime.now(timezone.utc).year + 1}-12-31"
 if os.environ.get("TSRP_E2E_FUTURE_PRICE_BAR") == "1":
     _fixture_history = _fixture_equity.history
 
@@ -69,7 +71,14 @@ if os.environ.get("TSRP_E2E_UNSUPPORTED_SECTOR") == "1":
         return info
 
     _fixture_equity.get_info = _financial_services_fixture
-research_service.yf.Ticker = lambda _symbol, session=None: _fixture_equity
+_uk_fixture_equity = MockEquity(datetime.now(timezone.utc).year - 1)
+_uk_fixture_equity.fast_info = {"currency": "GBp", "lastPrice": 120, "previousClose": 118}
+_uk_fixture_info = _uk_fixture_equity.get_info
+_uk_fixture_equity.get_info = lambda: {
+    **_uk_fixture_info(), "currency": "GBp", "financialCurrency": "GBP",
+    "currentPrice": 120, "previousClose": 118, "marketCap": 30, "sharesOutstanding": 25,
+}
+research_service.yf.Ticker = lambda _symbol, session=None: _uk_fixture_equity if _symbol == "EXM.L" else _fixture_equity
 research_service._sec_facts = lambda *_args: (
     None,
     {"kind": "not_configured", "label": "SEC unavailable in synthetic production smoke"},
@@ -193,6 +202,18 @@ elif os.environ.get("TSRP_E2E_ANALYSIS_RECOVERY") == "1":
     analyze_route.analyze_company = _analysis_recovery_fixture
 elif os.environ.get("TSRP_E2E_ANALYSIS_RACE") == "1":
     analyze_route.analyze_company = _analysis_race_fixture
+if os.environ.get("TSRP_E2E_ESTIMATE_REVISIONS") == "1":
+    _estimate_revision_count = 0
+    _analysis_before_revision = analyze_route.analyze_company
+
+    def _estimate_revision_fixture(ticker):
+        global _estimate_revision_count
+        if ticker.upper() == "QAEST":
+            _fixture_equity.revenue_estimate.loc["+1y", "growth"] = .12 if _estimate_revision_count == 0 else .18
+            _estimate_revision_count += 1
+        return _analysis_before_revision(ticker)
+
+    analyze_route.analyze_company = _estimate_revision_fixture
 if os.environ.get("TSRP_E2E_SINGLE_CHART_POINT") == "1":
     _analysis_with_single_chart_point = analyze_route.analyze_company
 

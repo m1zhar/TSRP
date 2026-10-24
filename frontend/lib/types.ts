@@ -8,7 +8,7 @@ export type ScoreComponent = {
   contribution: number | null;
 };
 
-export type ScoreFactor = { key: string; label: string; value: number | null; weight: number };
+export type ScoreFactor = { key: string; label: string; value: number | null; weight: number; normalization?: string };
 
 export type FxConversion = { from: string; to: string; rate: number | null; pairs: string[]; directions: string[]; leg_periods?: string[]; period: string | null };
 export type SourceFact = {
@@ -21,6 +21,11 @@ export type SourceFact = {
   tag: string | null;
 };
 export type Source = { source: string; period: string; currency: string; kind: string; conversions?: FxConversion[]; components?: SourceFact[] };
+
+export type ValuationBasis = {
+  cash_flow: { value: number | null; tax_rate: number | null; inputs: Record<string, number | null>; reason: string; period: string | null; currency: string; source: string };
+  capital_cost: { value: number | null; cost_of_equity: number | null; cost_of_debt: number | null; equity_weight: number | null; debt_weight: number | null; beta: number | null; tax_rate: number | null; inputs: Record<string, number | null>; reason: string; period: string | null; currency: string; source: string; reference: { date: string; currency: string; risk_free: number; equity_risk_premium: number; source: string; url: string } };
+};
 
 export type Company = {
   ticker: string;
@@ -38,6 +43,7 @@ export type Company = {
   market_cap: number | null;
   market_cap_reporting: number | null;
   enterprise_value: number | null;
+  other_claims?: number;
   revenue: number | null;
   revenue_period: string | null;
   revenue_source: string | null;
@@ -45,6 +51,11 @@ export type Company = {
   fcf_period: string | null;
   fcf_source: string | null;
   fcf_margin: number | null;
+  unlevered_cash_flow?: number | null;
+  unlevered_fcf_margin?: number | null;
+  valuation_basis?: ValuationBasis;
+  valuation_projection?: { enterprise_value: number; annual_cash_flows: { year: number; revenue_growth: number; revenue: number; cash_flow_margin: number; cash_flow: number; present_value: number }[]; terminal_value: number; terminal_present_value: number; terminal_value_share: number } | null;
+  valuation_sensitivity?: { discount_rate: number; terminal_growth: number; enterprise_value: number | null }[];
   model_fcf_margin: number | null;
   model_fcf_note: string | null;
   model_fcf_refused: boolean;
@@ -59,6 +70,8 @@ export type Company = {
   historical_growth_3y: number | null;
   consensus_growth: number | null;
   analyst_estimate_period: string | null;
+  analyst_estimate_end_date?: string | null;
+  analyst_estimate_currency?: string | null;
   target_mean_price: number | null;
   analyst_count: number | null;
   required_growth: number | null;
@@ -71,7 +84,7 @@ export type Company = {
   market_expectations: number | null;
   score: number | null;
   score_label: string;
-  score_trace: { score: number | null; components: ScoreComponent[]; subscores?: Record<string, { score: number | null; evidence_coverage: number; components: ScoreFactor[] }>; evidence_coverage: number; minimum_evidence_coverage: number; growth_comparison_available: boolean; growth_comparison_inputs: { historical_growth: number | null; required_growth: number | null; growth_clamped: boolean } } | null;
+  score_trace: { score: number | null; components: ScoreComponent[]; subscores?: Record<string, { score: number | null; evidence_coverage: number; components: ScoreFactor[] }>; weight_sensitivity?: { low: number; high: number; weight_variation: number; kind: string } | null; evidence_coverage: number; minimum_evidence_coverage: number; growth_comparison_available: boolean; growth_comparison_inputs: { historical_growth: number | null; required_growth: number | null; growth_clamped: boolean } } | null;
   snapshot_proof: string | null;
   score_available: boolean;
   analysis_schema_version: string;

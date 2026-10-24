@@ -33,9 +33,19 @@ function validResponse() {
     ...booleans.map((field) => [field, false]),
   ]);
   Object.assign(company, {
-    analysis_schema_version: "analysis-v4",
+    analysis_schema_version: "analysis-v5",
     snapshot_proof: "signed-snapshot-proof",
     score_trace: null,
+    unlevered_cash_flow: null,
+    unlevered_fcf_margin: null,
+    other_claims: 0,
+    valuation_projection: null,
+    valuation_sensitivity: [],
+    valuation_basis: {
+      cash_flow: { value: null, tax_rate: null, inputs: {}, period: null, currency: "USD", source: "Fixture", reason: "Unavailable" },
+      capital_cost: { value: null, tax_rate: null, inputs: {}, period: null, currency: "USD", source: "Fixture", reason: "Unavailable", cost_of_equity: null, cost_of_debt: null, equity_weight: null, debt_weight: null, beta: null,
+        reference: { date: "2026-01-01", currency: "USD", source: "Dated fixture", url: "https://example.invalid", risk_free: .0418, equity_risk_premium: .0423 } },
+    },
     sources: {
       share_price: { source: "Yahoo Finance", period: "2026-10-09", currency: "USD", kind: "market data" },
       fx: {
@@ -94,6 +104,19 @@ test("well-formed analysis data is accepted for the requested ticker", () => {
   const response = validResponse();
   assert.doesNotThrow(() => assertAnalysisResponse(response, "aapl"));
   assert.equal(response.company.ticker, "AAPL");
+});
+
+test("valuation traces reject non-finite, mismatched and mislabeled cash-flow inputs", () => {
+  for (const mutation of [
+    (c: Record<string, unknown>) => { c.other_claims = -1; },
+    (c: Record<string, unknown>) => { c.unlevered_cash_flow = Infinity; },
+    (c: Record<string, unknown>) => { c.valuation_basis = { cash_flow: {}, capital_cost: {} }; },
+    (c: Record<string, unknown>) => { c.unlevered_cash_flow = 10; },
+  ]) {
+    const value = validResponse();
+    mutation(value.company);
+    assert.throws(() => assertAnalysisResponse(value, "AAPL"), /Research data could not be validated/u);
+  }
 });
 
 test("historical growth duration cannot be negative or zero when growth is present", () => {
@@ -275,6 +298,24 @@ test("a different company identity uses the safe mismatch state", () => {
     () => assertAnalysisResponse(validResponse(), "MSFT"),
     /could not be matched to the selected ticker/,
   );
+});
+
+test("fiscal estimate metadata accepts real dates and currencies but rejects malformed values", () => {
+  const response = validResponse();
+  Object.assign(response.company, { analyst_estimate_end_date: "2027-06-30", analyst_estimate_currency: "USD" });
+  assert.doesNotThrow(() => assertAnalysisResponse(response, "AAPL"));
+  for (const metadata of [
+    { analyst_estimate_end_date: "2027-02-30" },
+    { analyst_estimate_end_date: "2027" },
+    { analyst_estimate_end_date: true },
+    { analyst_estimate_currency: "XXX" },
+    { analyst_estimate_currency: "unknown" },
+    { analyst_estimate_currency: 1 },
+  ]) {
+    const invalid = structuredClone(response);
+    Object.assign(invalid.company, metadata);
+    assert.throws(() => assertAnalysisResponse(invalid, "AAPL"), /Research data could not be validated/u);
+  }
 });
 
 test("malformed or unsupported analysis shapes fail safely before UI state updates", () => {

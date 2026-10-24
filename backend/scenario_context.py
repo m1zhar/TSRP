@@ -12,13 +12,14 @@ import os
 from typing import Any
 
 
-_VERSION = "v2"
+_VERSION = "v3"
 _MAX_TOKEN_LENGTH = 4096
 _FIELDS = frozenset({
     "ticker", "sector", "reporting_currency", "revenue", "revenue_period",
     "revenue_currency", "market_cap_reporting", "enterprise_value", "market_at",
     "cash", "cash_period", "cash_currency", "debt", "debt_period", "debt_currency",
     "starting_fcf_margin",
+    "other_claims",
     "methodology_version", "analysis_schema_version",
 })
 
@@ -46,14 +47,14 @@ def _source_meta(company: dict[str, Any], key: str) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _positive_finite_or_none(value: Any) -> float | None:
+def _finite_or_none(value: Any) -> float | None:
     if value is None or isinstance(value, bool):
         return None
     try:
         number = float(value)
     except (TypeError, ValueError, OverflowError):
         return None
-    return number if math.isfinite(number) and number > 0 else None
+    return number if math.isfinite(number) and abs(number) <= 10 else None
 
 
 def _basis_from_company(company: Any) -> dict[str, Any] | None:
@@ -71,6 +72,7 @@ def _basis_from_company(company: Any) -> dict[str, Any] | None:
         "revenue_currency": revenue_source.get("currency"),
         "market_cap_reporting": company.get("market_cap_reporting"),
         "enterprise_value": company.get("enterprise_value"),
+        "other_claims": company.get("other_claims"),
         "market_at": company.get("market_at"),
         "cash": company.get("cash"),
         "cash_period": cash_source.get("period"),
@@ -80,7 +82,7 @@ def _basis_from_company(company: Any) -> dict[str, Any] | None:
         "debt_currency": debt_source.get("currency"),
         # Reverse DCF fades from the latest positive reported margin to the
         # modeled margin. Sign that starting input so scenario defaults match.
-        "starting_fcf_margin": _positive_finite_or_none(company.get("fcf_margin")),
+        "starting_fcf_margin": _finite_or_none(company.get("unlevered_fcf_margin")),
         "methodology_version": company.get("methodology_version"),
         "analysis_schema_version": company.get("analysis_schema_version"),
     }

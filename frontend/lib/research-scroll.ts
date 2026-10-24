@@ -8,6 +8,9 @@ export function scrollToResearchHeading(
   prefersReducedMotion = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
 ) {
   if (!heading) return;
-  heading.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
+  // Keep navigation stationary during the next click, including rapid taps.
+  // Explicit instant also avoids inheriting the page's CSS smooth behavior.
+  void prefersReducedMotion;
+  heading.scrollIntoView({ behavior: "instant", block: "start" });
   heading.focus({ preventScroll: true });
 }

@@ -3,7 +3,7 @@ export function finite(value: number | null | undefined): value is number {
 }
 
 export function pct(value: number | null | undefined, digits = 1): string {
-  return finite(value) ? `${(value * 100).toFixed(digits)}%` : "N/A";
+  return finite(value) && Number.isFinite(value * 100) ? `${(value * 100).toFixed(digits)}%` : "N/A";
 }
 
 export function money(value: number | null | undefined, currency: string, compact = false): string {

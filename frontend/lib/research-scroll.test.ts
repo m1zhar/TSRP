@@ -27,12 +27,12 @@ test("section navigation uses instant scrolling when reduced motion is requested
   scrollToResearchHeading(heading, true);
 
   assert.deepEqual(calls, [
-    ["scroll", { behavior: "auto", block: "start" }],
+    ["scroll", { behavior: "instant", block: "start" }],
     ["focus", { preventScroll: true }],
   ]);
 });
 
-test("normal section navigation scrolls smoothly and focuses the heading", () => {
+test("normal navigation also focuses instantly so subsequent controls do not move under a pointer", () => {
   const calls: unknown[] = [];
   const heading = {
     scrollIntoView: (options: unknown) => calls.push(["scroll", options]),
@@ -42,7 +42,7 @@ test("normal section navigation scrolls smoothly and focuses the heading", () =>
   scrollToResearchHeading(heading, false);
 
   assert.deepEqual(calls, [
-    ["scroll", { behavior: "smooth", block: "start" }],
+    ["scroll", { behavior: "instant", block: "start" }],
     ["focus", { preventScroll: true }],
   ]);
 });

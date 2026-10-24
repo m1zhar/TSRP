@@ -7,9 +7,9 @@ from methodology import DEFAULT_SECTOR_MODEL, SECTOR_MODELS, get_sector_model, h
 class SectorMethodologyIntegrityTests(unittest.TestCase):
     def test_every_sector_and_default_model_has_complete_normalized_weights(self):
         expected = {
-            "business_weights": {"growth", "gross", "operating", "fcf", "roe", "balance"},
+            "business_weights": {"growth", "operating", "roe"},
             "expectation_weights": {"required_growth", "ev_sales", "pe", "ev_ebitda"},
-            "financial_weights": {"cash_debt", "operating", "fcf", "leverage"},
+            "financial_weights": {"cash_debt", "fcf", "leverage"},
         }
 
         for name, model in [("default", DEFAULT_SECTOR_MODEL), *SECTOR_MODELS.items()]:

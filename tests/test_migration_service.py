@@ -87,18 +87,18 @@ def compatible_snapshot(**changes):
         "score": 75, "evidence_coverage": 1.0,
         "components": [
             {"key": key, "value": 75, "weight": weight}
-            for key, weight in (("growth", .25), ("gross", .20), ("operating", .15), ("fcf", .20), ("roe", .10), ("balance", .10))
+            for key, weight in (("growth", 1/3), ("operating", 1/3), ("roe", 1/3))
         ],
     }
     financial = {
         "score": 70, "evidence_coverage": 1.0,
         "components": [
             {"key": key, "value": 70, "weight": weight}
-            for key, weight in (("cash_debt", .30), ("operating", .20), ("fcf", .30), ("leverage", .20))
+            for key, weight in (("cash_debt", 1/3), ("fcf", 1/3), ("leverage", 1/3))
         ],
     }
     trace = {
-        "score": (75 * 7 + 70 * 6) / 13,
+        "score": 72.5,
         "growth_comparison_inputs": {
             "historical_growth": None,
             "required_growth": None,
@@ -113,11 +113,12 @@ def compatible_snapshot(**changes):
         "evidence_coverage": 1.0,
     }
     result = {
-        "ticker": "AAPL", "methodology_version": "score-v9", "analysis_schema_version": "analysis-v4", "sector": "Technology",
+        "ticker": "AAPL", "methodology_version": "score-v10", "analysis_schema_version": "analysis-v5", "sector": "Technology",
         "reporting_currency": "USD", "retrieved_at": "2026-10-07T12:00:00+00:00", "saved_at": "2026-10-07T12:01:00+00:00",
         "score": trace["score"], "score_trace": trace, "business_quality": 75, "financial_strength": 70,
         "market_expectations": 61.0, "historical_growth": 0.1, "consensus_growth": 0.12,
         "analyst_estimate_period": "Next-year analyst revenue estimate", "required_growth": 0.1328125,
+        "analyst_estimate_end_date": "2027-12-31", "analyst_estimate_currency": "USD",
         "revenue": 100, "revenue_period": "2025-12-31", "revenue_source": "Yahoo Finance",
         "free_cash_flow": 20, "fcf_period": "2025-12-31", "fcf_source": "Yahoo Finance",
         "enterprise_value": 1000, "model_fcf_margin": 0.12, "discount_rate": 0.09,
@@ -143,11 +144,12 @@ def scenario_basis(**changes):
         "ticker": "AAPL", "sector": "Technology", "reporting_currency": "USD",
         "revenue": 1000.0, "revenue_period": period, "revenue_currency": "USD",
         "market_cap_reporting": 2500.0, "enterprise_value": 2600.0,
+        "other_claims": 0.0,
         "market_at": datetime.now(timezone.utc).isoformat(),
         "cash": 100.0, "cash_period": period, "cash_currency": "USD",
         "debt": 200.0, "debt_period": period, "debt_currency": "USD",
         "starting_fcf_margin": None,
-        "methodology_version": "score-v9", "analysis_schema_version": "analysis-v4",
+        "methodology_version": "score-v10", "analysis_schema_version": "analysis-v5",
     }
     result.update(changes)
     return result
@@ -157,17 +159,23 @@ class MockEquity:
     def __init__(self, fiscal_year: int):
         dates = [f"{year}-12-31" for year in range(fiscal_year, fiscal_year - 4, -1)]
         self.fast_info = {"lastPrice": 120.0, "previousClose": 118.0, "marketCap": 2500.0, "currency": "USD"}
-        self.financials = pd.DataFrame([
+        income_frame = pd.DataFrame([
             [1000, 900, 800, 700], [700, 630, 560, 490], [200, 180, 160, 140], [120, 110, 100, 90], [300, 280, 260, 240],
         ], index=["Total Revenue", "Gross Profit", "Operating Income", "Net Income", "EBITDA"], columns=dates)
+        income_frame.loc["Pretax Income"] = [150, 140, 130, 120]
+        income_frame.loc["Tax Provision"] = [30, 28, 26, 24]
+        income_frame.loc["Interest Expense"] = [10, 9, 8, 7]
+        self.financials = income_frame
         self.balance_sheet = pd.DataFrame([
             [100, 90, 80, 70], [200, 190, 180, 170], [1500, 1400, 1300, 1200], [700, 650, 600, 550],
         ], index=["Cash And Cash Equivalents", "Total Debt", "Total Assets", "Stockholders Equity"], columns=dates)
         self.cashflow = pd.DataFrame([[220, 200, 180, 160], [-40, -35, -30, -25]], index=["Operating Cash Flow", "Capital Expenditure"], columns=dates)
+        self.cashflow.loc["Depreciation And Amortization"] = [35, 30, 25, 20]
+        self.cashflow.loc["Change In Working Capital"] = [-5, -5, -5, -5]
         self.revenue_estimate = pd.DataFrame({"growth": [0.12]}, index=["+1y"])
 
     def get_info(self):
-        return {"quoteType": "EQUITY", "longName": "Example Corporation", "fullExchangeName": "NASDAQ", "financialCurrency": "USD", "currency": "USD", "sector": "Technology", "regularMarketTime": datetime.now(timezone.utc).timestamp()}
+        return {"quoteType": "EQUITY", "longName": "Example Corporation", "fullExchangeName": "NASDAQ", "financialCurrency": "USD", "currency": "USD", "sector": "Technology", "beta": 1.0, "regularMarketTime": datetime.now(timezone.utc).timestamp()}
 
     def history(self, **_kwargs):
         now = pd.Timestamp.now(tz="UTC").normalize()
@@ -348,15 +356,15 @@ class MigrationParityTests(unittest.TestCase):
         self.assertEqual(FIXTURE["score"]["methodology_version"], "score-v8")
         self.assertAlmostEqual(score_v4_reference, FIXTURE["score"]["score_v4_reference"], places=10)
         self.assertAlmostEqual(score_v7_reference, FIXTURE["score"]["score_v7_reference"], places=10)
-        self.assertAlmostEqual(trace["score"], score_v8_reference, places=10)
-        self.assertAlmostEqual(trace["score"], FIXTURE["score"]["expected_score"], places=10)
-        for item, expected_weight in zip(trace["components"], FIXTURE["score"]["expected_weights"]):
+        self.assertAlmostEqual(score_v8_reference, FIXTURE["score"]["expected_score"], places=10)
+        self.assertAlmostEqual(trace["score"], (values["business_quality"] + values["financial_strength"]) / 2, places=10)
+        for item, expected_weight in zip(trace["components"], (.5, .5)):
             self.assertAlmostEqual(item["weight"], expected_weight, places=14)
         self.assertAlmostEqual(sum(item["contribution"] for item in trace["components"]), trace["score"], places=10)
 
     def test_score_evidence_gate_passes_at_seventy_percent_and_fails_below(self):
         business = {"score": 80, "evidence_coverage": 1.0}
-        financial = {"score": 60, "evidence_coverage": 0.35}
+        financial = {"score": 60, "evidence_coverage": 0.40}
         at_boundary = score_breakdown(business, financial, None, None)
 
         self.assertAlmostEqual(at_boundary["evidence_coverage"], 0.70, places=14)
@@ -371,7 +379,7 @@ class MigrationParityTests(unittest.TestCase):
 
         below_boundary = score_breakdown(
             business,
-            {"score": 60, "evidence_coverage": 0.35 - 1e-6},
+            {"score": 60, "evidence_coverage": 0.40 - 1e-6},
             None,
             None,
         )
@@ -383,12 +391,12 @@ class MigrationParityTests(unittest.TestCase):
         model = get_sector_model("Technology")
         self.assertAlmostEqual(
             business_quality_score(.12, .68, .30, .19, .32, .15, model),
-            87.75357142857143,
+            (80 + 100 + 100) / 3,
             places=10,
         )
         self.assertAlmostEqual(
             financial_strength_score(90, 35, .30, .19, .15, model),
-            92.1590909090909,
+            (100 + .19 / .22 * 100 + (100 - .15 / .8 * 100)) / 3,
             places=10,
         )
 
@@ -441,18 +449,20 @@ class InputAndSourceSafetyTests(unittest.TestCase):
         self.assertNotEqual(scenarios[0]["scenario"]["enterprise_value"], scenarios[1]["scenario"]["enterprise_value"])
 
     def test_enterprise_value_just_below_reverse_dcf_range_is_excluded_from_score(self):
+        from valuation_basis import capital_cost
         fiscal_year = datetime.now(timezone.utc).year - 1
         instrument = MockEquity(fiscal_year)
         rates = model_rates("USD", "Technology")
+        cost = capital_cost("USD", 1, 2500, 200, 190, 10, .2)
         minimum_value = dcf_enterprise_value(
-            1000.0, SOLVER_LOW, 0.18, rates["discount_rate"], rates["terminal_growth"]
+            1000.0, SOLVER_LOW, 0.15, cost["value"], rates["terminal_growth"]
         )
         self.assertIsNotNone(minimum_value)
         # Market capitalization + debt - cash produces an EV just below the
         # low solver wall, within the old `isclose` tolerance.
         instrument.fast_info["marketCap"] = minimum_value * (1 - 5e-13) - 100.0
         with patch("research_service.yf.Ticker", return_value=instrument), patch(
-            "research_service.choose_model_fcf_margin", return_value=(0.18, False, "fixture margin")
+            "research_service.capital_cost", return_value=cost
         ), patch(
             "research_service._sec_facts", return_value=(None, {"kind": "not_configured", "label": "SEC unavailable"})
         ):
@@ -481,7 +491,7 @@ class InputAndSourceSafetyTests(unittest.TestCase):
             enterprise_value=company["enterprise_value"],
             cash=company["cash"],
             debt=company["debt"],
-            starting_fcf_margin=company["fcf_margin"],
+            starting_fcf_margin=company["unlevered_fcf_margin"],
         )
         interactive_scenario = analyze_scenario("AAPL", assumptions, basis)
 
@@ -730,7 +740,7 @@ class InputAndSourceSafetyTests(unittest.TestCase):
         self.assertIsNone(score_history["historical_growth"])
         self.assertIsNone(score_history["required_growth"])
         self.assertFalse(company["score_trace"]["growth_comparison_available"])
-        self.assertEqual(company["methodology_version"], "score-v9")
+        self.assertEqual(company["methodology_version"], "score-v10")
 
         self.assertEqual(company["free_cash_flow"], 150.0)
         self.assertEqual(company["fcf_source"], "SEC EDGAR")
@@ -738,8 +748,10 @@ class InputAndSourceSafetyTests(unittest.TestCase):
         aligned_margins = [(320 - 40) / 800, (400 - 60) / 1000, (180 - 30) / 1200]
         independent_modeled_margin = 0.5 * aligned_margins[-1] + 0.5 * (sum(aligned_margins) / len(aligned_margins))
         self.assertAlmostEqual(company["fcf_margin"], aligned_margins[-1], places=12)
-        self.assertAlmostEqual(company["model_fcf_margin"], independent_modeled_margin, places=12)
-        self.assertEqual(company["model_fcf_note"], "blend of latest and multi-year average")
+        self.assertGreater(independent_modeled_margin, 0)  # retained historical v9 reference
+        self.assertIsNone(company["model_fcf_margin"])
+        self.assertIsNone(company["unlevered_cash_flow"])
+        self.assertIn("Missing comparable annual inputs", company["model_fcf_note"])
         self.assertEqual(company["sources"]["free_cash_flow"]["kind"], "calculated: annual SEC operating cash flow less capital spending")
         self.assertEqual(company["cash"], 300.0)
         self.assertEqual(company["debt"], 300.0)
@@ -844,7 +856,7 @@ class InputAndSourceSafetyTests(unittest.TestCase):
         instrument.balance_sheet = pd.DataFrame(
             [[100, 90], [50, 45], [200, 190], [1500, 1400], [700, 650]],
             index=[
-                "Cash And Cash Equivalents", "Current Debt",
+                "Cash And Cash Equivalents", "Current Debt And Capital Lease Obligation",
                 "Long Term Debt And Capital Lease Obligation", "Total Assets",
                 "Stockholders Equity",
             ],
@@ -864,7 +876,7 @@ class InputAndSourceSafetyTests(unittest.TestCase):
         self.assertEqual(company["sources"]["debt"]["kind"], "calculated: Yahoo Finance current debt + long-term debt")
         self.assertEqual(
             [(item["tag"], item["value"]) for item in company["sources"]["debt"]["components"]],
-            [("Current Debt", 50.0), ("Long Term Debt And Capital Lease Obligation", 200.0)],
+            [("Current Debt And Capital Lease Obligation", 50.0), ("Long Term Debt And Capital Lease Obligation", 200.0)],
         )
 
     def test_yahoo_long_term_debt_without_current_debt_remains_unavailable_as_total(self):
@@ -2774,7 +2786,7 @@ class InputAndSourceSafetyTests(unittest.TestCase):
         fiscal_year = datetime.now(timezone.utc).year - 1
         instrument = MockEquity(fiscal_year)
         instrument.cashflow.loc["Operating Cash Flow"] = [-20, -15, -10, -5]
-        instrument.cashflow.loc["Capital Expenditure"] = [-10, -10, -10, -10]
+        instrument.cashflow.loc["Capital Expenditure"] = [-500, -500, -500, -500]
 
         with patch("research_service.yf.Ticker", return_value=instrument), patch(
             "research_service._sec_facts", return_value=(None, {"kind": "not_configured", "label": "SEC unavailable"})
@@ -2787,7 +2799,7 @@ class InputAndSourceSafetyTests(unittest.TestCase):
         self.assertIsNone(company["model_fcf_margin"])
         self.assertIsNone(company["required_growth"])
         self.assertIsNone(company["market_expectations"])
-        self.assertTrue(any("Free cash flow is negative" in flag["message"] for flag in company["quality_flags"]))
+        self.assertTrue(any("non-positive" in flag["message"] for flag in company["quality_flags"]))
 
     def test_financial_services_do_not_receive_generic_score_or_fcf_enterprise_valuation(self):
         fiscal_year = datetime.now(timezone.utc).year - 1
@@ -2802,7 +2814,7 @@ class InputAndSourceSafetyTests(unittest.TestCase):
         ):
             company = analyze_company("AAPL")["company"]
         self.assertFalse(company["sector_methodology_supported"])
-        self.assertEqual(company["methodology_version"], "score-v9")
+        self.assertEqual(company["methodology_version"], "score-v10")
         self.assertFalse(company["score_available"])
         self.assertIsNone(company["score"])
         self.assertEqual(company["score_label"], "Unavailable")
@@ -3328,6 +3340,7 @@ class InputAndSourceSafetyTests(unittest.TestCase):
         fiscal_year = datetime.now(timezone.utc).year - 1
         instrument = MockEquity(fiscal_year)
         instrument.fast_info["currency"] = "GBp"
+        instrument.fast_info.update(marketCap=3000, shares=25)
         instrument.get_info = lambda: {
             "quoteType": "EQUITY", "longName": "Example Corporation", "fullExchangeName": "LSE",
             "financialCurrency": "GBP", "currency": "GBp", "sector": "Technology",
@@ -3344,8 +3357,8 @@ class InputAndSourceSafetyTests(unittest.TestCase):
         self.assertEqual(company["price"], 120.0)
         self.assertEqual(company["trading_currency"], "GBp")
         self.assertEqual(company["sources"]["share_price"]["currency"], "GBp")
-        self.assertEqual(company["market_cap_reporting"], 25.0)
-        self.assertEqual(company["enterprise_value"], 125.0)
+        self.assertEqual(company["market_cap_reporting"], 30.0)
+        self.assertEqual(company["enterprise_value"], 130.0)
         self.assertEqual(company["sources"]["market_cap_reporting"]["source"], "Yahoo Finance + exact quote-unit scaling")
         fx_source = company["sources"]["fx"]
         self.assertEqual(fx_source["source"], "TSRP exact quote-unit scaling")
@@ -3360,6 +3373,7 @@ class InputAndSourceSafetyTests(unittest.TestCase):
         fiscal_year = datetime.now(timezone.utc).year - 1
         instrument = MockEquity(fiscal_year)
         instrument.fast_info["currency"] = "GBp"
+        instrument.fast_info.update(marketCap=3000, shares=25)
         instrument.get_info = lambda: {
             "quoteType": "EQUITY", "longName": "Example Corporation", "fullExchangeName": "LSE",
             "financialCurrency": "EUR", "currency": "GBp", "sector": "Technology",
@@ -3379,7 +3393,7 @@ class InputAndSourceSafetyTests(unittest.TestCase):
         ), patch("research_service._fx_rate_detail", side_effect=fx_for_pair) as fx_detail:
             company = analyze_company("EXM.L")["company"]
 
-        self.assertAlmostEqual(company["market_cap_reporting"], 22.5)
+        self.assertAlmostEqual(company["market_cap_reporting"], 27.0)
         self.assertTrue(any(call.args[:2] == ("GBP", "EUR") for call in fx_detail.call_args_list))
         conversions = company["sources"]["market_cap_reporting"]["conversions"]
         self.assertEqual(
@@ -3395,6 +3409,7 @@ class InputAndSourceSafetyTests(unittest.TestCase):
         fiscal_year = datetime.now(timezone.utc).year - 1
         instrument = MockEquity(fiscal_year)
         instrument.fast_info["currency"] = "GBp"
+        instrument.fast_info.update(marketCap=3000, shares=25)
         market_at = datetime.now(timezone.utc)
         instrument.get_info = lambda: {
             "quoteType": "EQUITY", "longName": "Example Corporation", "fullExchangeName": "LSE",

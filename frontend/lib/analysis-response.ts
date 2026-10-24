@@ -1,4 +1,5 @@
 import type { Analysis, Assumptions, Company } from "./types.ts";
+import { hasValidValuationLedger } from "./valuation-response.ts";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -165,6 +166,13 @@ function isScoreTrace(value: unknown): boolean {
     || !numbersMatch(appliedWeightTotal, 1)
     || !numbersMatch(contributionTotal, value.score)) return false;
 
+  const sensitivity = value.weight_sensitivity;
+  if (sensitivity !== undefined && sensitivity !== null && (!isRecord(sensitivity)
+    || !isInRange(sensitivity.low, 0, value.score)
+    || !isInRange(sensitivity.high, value.score, 100)
+    || !isInRange(sensitivity.weight_variation, 0, 1)
+    || typeof sensitivity.kind !== "string")) return false;
+
   if (value.subscores === undefined) return true;
   if (!isRecord(value.subscores)
     || Object.keys(value.subscores).length === 0
@@ -174,6 +182,22 @@ function isScoreTrace(value: unknown): boolean {
     && isInRange(subscore.evidence_coverage, 0, 1)
     && Array.isArray(subscore.components)
     && subscore.components.every(isScoreFactor));
+}
+
+function isValuationBasis(value: unknown): boolean {
+  if (!isRecord(value) || !isRecord(value.cash_flow) || !isRecord(value.capital_cost)) return false;
+  for (const bridge of [value.cash_flow, value.capital_cost]) {
+    if (!isNullableNumber(bridge.value) || !isNullableNumber(bridge.tax_rate)
+      || !isNullableString(bridge.period) || typeof bridge.currency !== "string"
+      || typeof bridge.source !== "string" || typeof bridge.reason !== "string"
+      || !isRecord(bridge.inputs) || !Object.values(bridge.inputs).every(isNullableNumber)) return false;
+  }
+  const cost = value.capital_cost;
+  const reference = cost.reference;
+  return matchesFields(cost, ["cost_of_equity", "cost_of_debt", "equity_weight", "debt_weight", "beta"], isNullableNumber)
+    && isRecord(reference) && isCalendarDate(reference.date)
+    && matchesFields(reference, ["currency", "source", "url"], (field) => typeof field === "string")
+    && isFiniteNumber(reference.risk_free) && isFiniteNumber(reference.equity_risk_premium);
 }
 
 function hasConsistentMonetaryCurrencies(company: UnknownRecord): boolean {
@@ -186,6 +210,7 @@ function hasConsistentMonetaryCurrencies(company: UnknownRecord): boolean {
     { value: "enterprise_value", source: "enterprise_value", currency: "reporting_currency" },
     { value: "revenue", source: "revenue", currency: "reporting_currency" },
     { value: "free_cash_flow", source: "free_cash_flow", currency: "reporting_currency" },
+    { value: "unlevered_cash_flow", source: "unlevered_cash_flow", currency: "reporting_currency" },
     { value: "cash", source: "cash", currency: "reporting_currency" },
     { value: "debt", source: "debt", currency: "reporting_currency" },
     { value: "equity", source: "equity", currency: "reporting_currency" },
@@ -250,9 +275,17 @@ function isCompany(value: unknown): value is Company {
     || (value.currency_methodology_supported !== undefined && typeof value.currency_methodology_supported !== "boolean")) return false;
 
   if (!hasConsistentMonetaryCurrencies(value)) return false;
+  if ((value.analyst_estimate_end_date !== undefined && value.analyst_estimate_end_date !== null && !isCalendarDate(value.analyst_estimate_end_date))
+    || (value.analyst_estimate_currency !== undefined && value.analyst_estimate_currency !== null
+      && (typeof value.analyst_estimate_currency !== "string" || !/^[A-Z]{3}$/u.test(value.analyst_estimate_currency) || value.analyst_estimate_currency === "XXX"))) return false;
 
   const score = value.score;
-  if (value.analysis_schema_version !== "analysis-v4"
+  if (value.analysis_schema_version !== "analysis-v5"
+    || !isNullableNumber(value.unlevered_cash_flow)
+    || !isNullableNumber(value.unlevered_fcf_margin)
+    || !isValuationBasis(value.valuation_basis)
+    || !hasValidValuationLedger(value)
+    || !isFiniteNumber(value.other_claims) || value.other_claims < 0
     || (score !== null && !isInRange(score, 0, 100))
     || !matchesFields(value, ["business_quality", "financial_strength", "market_expectations"], (field) => field === null || isInRange(field, 0, 100))
     || !isRecord(value.sources)
@@ -268,6 +301,11 @@ function isCompany(value: unknown): value is Company {
     || !isAssumptions(value.assumptions)
     || !(value.user_assumptions === null || isAssumptions(value.user_assumptions))
     || !(value.scenario === null || isScenario(value.scenario))) return false;
+
+  const basis = value.valuation_basis as UnknownRecord;
+  const operating = basis.cash_flow as UnknownRecord;
+  if (operating.value !== value.unlevered_cash_flow
+    || (operating.value !== null && (operating.currency !== value.reporting_currency || operating.period !== value.revenue_period))) return false;
 
   const trace = value.score_trace;
   if (value.score_available !== (score !== null && trace !== null)

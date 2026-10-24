@@ -6,8 +6,8 @@ import type { Company } from "./types.ts";
 test("snapshot comparison sends only required fields and stays within the API body limit", () => {
   const company = {
     ticker: "AAPL",
-    methodology_version: "score-v9",
-    analysis_schema_version: "analysis-v4",
+    methodology_version: "score-v10",
+    analysis_schema_version: "analysis-v5",
     snapshot_proof: "signed-snapshot-proof",
     sector: "Technology",
     reporting_currency: "USD",
@@ -44,6 +44,8 @@ test("snapshot comparison sends only required fields and stays within the API bo
     historical_growth: 0.12,
     consensus_growth: 0.1,
     analyst_estimate_period: "Next-year analyst revenue estimate",
+    analyst_estimate_end_date: "2027-06-30",
+    analyst_estimate_currency: "USD",
     required_growth: 0.08,
     revenue: 100,
     revenue_period: "2025-12-31",
@@ -73,6 +75,8 @@ test("snapshot comparison sends only required fields and stays within the API bo
   assert.equal(previous.saved_at, "2026-10-07T12:01:00Z");
   assert.equal(previous.snapshot_proof, "signed-snapshot-proof");
   assert.equal(previous.analyst_estimate_period, "Next-year analyst revenue estimate");
+  assert.equal(previous.analyst_estimate_end_date, "2027-06-30");
+  assert.equal(previous.analyst_estimate_currency, "USD");
   assert.equal(previous.sector, "Technology");
   assert.equal(previous.model_fcf_margin, 0.12);
   assert.equal(previous.discount_rate, 0.09);
@@ -139,8 +143,8 @@ test("new browser snapshots persist only the comparable research fields", () => 
   const company = {
     ticker: "AAPL",
     saved_at: "2026-10-07T12:01:00Z",
-    methodology_version: "score-v9",
-    analysis_schema_version: "analysis-v4",
+    methodology_version: "score-v10",
+    analysis_schema_version: "analysis-v5",
     snapshot_proof: "signed-snapshot-proof",
     score: 70,
     score_trace: {
