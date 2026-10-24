@@ -2683,10 +2683,9 @@ def search_companies(query: Any) -> list[dict]:
         if (
             not isinstance(quotes, list)
             or any(not isinstance(item, dict) for item in quotes)
-            or any(not isinstance(item.get("symbol"), str) or not item["symbol"].strip() for item in quotes)
         ):
             raise ValueError("Yahoo company-search response had an unsupported shape")
-        return search.quotes
+        return quotes
 
     try:
         provider_results, timed_out = _bounded_provider_calls(
@@ -2704,12 +2703,19 @@ def search_companies(query: Any) -> list[dict]:
         raise ResearchError("search_unavailable", "Company search is temporarily unavailable.", 503)
     matches = []
     seen = set()
+    unidentified_equities = False
     for item in result or []:
         if not isinstance(item, dict):
             continue
-        symbol = normalize_ticker(item.get("symbol"))
         kind = str(item.get("quoteType") or "").upper()
-        if not symbol or symbol in seen or kind != "EQUITY" or not TICKER_RE.fullmatch(symbol):
+        # Yahoo mixes navigation suggestions without symbols into this list.
+        if kind != "EQUITY":
+            continue
+        symbol = normalize_ticker(item.get("symbol"))
+        if not symbol or not TICKER_RE.fullmatch(symbol):
+            unidentified_equities = True
+            continue
+        if symbol in seen:
             continue
         seen.add(symbol)
         matches.append({
@@ -2718,6 +2724,8 @@ def search_companies(query: Any) -> list[dict]:
             "exchange": str(item.get("exchDisp") or item.get("exchange") or "")[:80],
             "sector": str(item.get("sectorDisp") or "")[:100],
         })
+    if not matches and unidentified_equities:
+        raise ResearchError("search_unavailable", "Company search is temporarily unavailable.", 503)
     return matches[:8]
 
 
