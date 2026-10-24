@@ -268,6 +268,7 @@ try {
     signal: AbortSignal.timeout(3000),
   });
   assert.equal(crossOriginToken.status, 403, "The public token endpoint must still reject cross-origin browser requests.");
+  assert.equal((await crossOriginToken.json()).error.code, "origin_not_allowed", "Access failures must retain a machine-readable recovery classification.");
   const sectionLabels = ["TSRP Score", "Expectations vs Reality", "Valuation", "Catalysts &amp; Risks", "What Changed?"];
 
   for (const section of sectionLabels) {

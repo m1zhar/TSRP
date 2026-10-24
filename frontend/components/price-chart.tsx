@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { money, dateLabel, finite } from "@/lib/format";
 import { pricePointsInRange } from "@/lib/price-chart-range";
+import { priceMovementDescription } from "@/lib/price-movement";
 import type { PricePoint } from "@/lib/types";
 
 const RANGES = [
@@ -66,7 +67,7 @@ export function PriceChart({ points, currency, ticker, source }: { points: Price
           <div className="chart-foot">{visible.length > 1
             ? <><span>{dateLabel(visible[0]?.date)}</span><span>{dateLabel(visible.at(-1)?.date)}</span></>
             : <span>{dateLabel(visible[0]?.date)}</span>}</div>
-          <p className="chart-summary">{visible.length} {visible.length === 1 ? "observation" : "observations"} · {move !== null ? `${move >= 0 ? "Increased" : "Decreased"} ${Math.abs(move * 100).toFixed(1)}% over this displayed period` : "Change unavailable"}</p>
+          <p className="chart-summary">{visible.length} {visible.length === 1 ? "observation" : "observations"} · {priceMovementDescription(first, last, visible.length)}</p>
         </>
       ) : <div className="empty-inline">Price history is unavailable from {source}.</div>}
     </section>

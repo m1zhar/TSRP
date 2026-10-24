@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseRetryAfterSeconds, requestJson } from "./api-client.ts";
+import { ApiResponseError, parseRetryAfterSeconds, requestJson } from "./api-client.ts";
 
 const tokenResponse = () => new Response(JSON.stringify({ data: { access_token: "test-access-token", expires_in: 60 } }), { status: 200 });
 
@@ -139,4 +139,14 @@ test("missing or malformed access token fails before the backend request", async
   };
   await assert.rejects(requestJson("/api/analyze?ticker=AAPL", {}, 100, noToken), /Research access could not be verified/u);
   assert.equal(backendCalled, false);
+});
+
+test("token configuration failures retain their typed code and never call the provider API", async () => {
+  let calls = 0;
+  const failed: typeof fetch = async () => {
+    calls += 1;
+    return new Response(JSON.stringify({ error: { code: "auth_not_configured", message: "Secure API access is not configured for this deployment." } }), { status: 503 });
+  };
+  await assert.rejects(requestJson("/api/analyze?ticker=AAPL", {}, 100, failed), (error: unknown) => error instanceof ApiResponseError && error.code === "auth_not_configured" && error.status === 503);
+  assert.equal(calls, 1);
 });

@@ -177,6 +177,50 @@ test("CSV market provenance follows the quote source instead of assuming Yahoo F
   assert.match(output.csv, new RegExp(`"Market observation as of","${marketAt}","UTC","Synthetic local QA fixture · ${marketAt} · USD","${marketAt}"`, "u"));
 });
 
+test("cash-flow exports follow the actual calculation source rather than inventing Yahoo provenance", () => {
+  const company = companyFixture({ unlevered_cash_flow: 123 });
+  company.sources.unlevered_cash_flow = { source: "Synthetic local QA operating-profit bridge", period: "2025-12-31", currency: "USD", kind: "calculated" };
+  const output = buildResearchExport(company, null, "Research disclaimer.", () => "source");
+  assert.match(output.csv, /"Estimated pre-debt operating cash flow",123,"USD","Synthetic local QA operating-profit bridge","2025-12-31"/u);
+  assert.doesNotMatch(output.csv, /TSRP operating-profit bridge \/ Yahoo annual statements/u);
+});
+
+test("JSON active user assumptions match the calculated scenario, not a stale company field", () => {
+  const company = companyFixture();
+  const scenario = { enterprise_value: 500, equity_value: 450, inputs: { starting_growth: .11, fcf_margin: .13, discount_rate: .1, terminal_growth: .02 }, kind: "user_scenario" };
+  const exported = JSON.parse(buildResearchExport(company, scenario, "Research disclaimer.", () => "source").json).company;
+  assert.deepEqual(exported.user_assumptions, scenario.inputs);
+  assert.equal(company.user_assumptions, null);
+});
+
+test("a source-aligned enterprise value is retained even without baseline rate calibration", () => {
+  const company = companyFixture({ reporting_currency: "JPY", rate_currency: "N/A", currency_methodology_supported: false, discount_rate: null, required_growth: null, solver_status: "unavailable" });
+  company.sources.enterprise_value = { source: "TSRP calculation", period: "2026-10-09", currency: "JPY", kind: "market equity + debt - cash" };
+  const output = buildResearchExport(company, null, "Research disclaimer.", () => "source");
+  assert.equal(JSON.parse(output.json).company.enterprise_value, company.enterprise_value);
+  assert.equal(JSON.parse(output.json).company.discount_rate, null);
+  assert.match(output.csv, /"Enterprise value",3010000000000,"JPY","TSRP calculation"/u);
+});
+
+test("exports retain the returned annual ledger, terminal concentration, sensitivity and research explanation", () => {
+  const company = companyFixture();
+  company.valuation_projection = {
+    enterprise_value: 300, terminal_value: 200, terminal_present_value: 100, terminal_value_share: 1.2,
+    annual_cash_flows: Array.from({ length: 10 }, (_, index) => ({ year: index + 1, revenue_growth: .1, revenue: 100 + index, cash_flow_margin: .2, cash_flow: index - 3, present_value: index - 4 })),
+  };
+  company.valuation_sensitivity = [{ discount_rate: .09, terminal_growth: .025, enterprise_value: 300 }, { discount_rate: .03, terminal_growth: .04, enterprise_value: null }];
+  const output = buildResearchExport(company, null, "Research disclaimer.", () => "source");
+  const parsed = JSON.parse(output.json);
+  assert.deepEqual(parsed.company.valuation_projection, company.valuation_projection);
+  assert.match(parsed.research_takeaway.validation_status, /no independent validation/);
+  assert.match(output.csv, /"Model year 1 pre-debt cash flow",-3,"USD"/u);
+  assert.match(output.csv, /"Model year 10 present value",5,"USD"/u);
+  assert.match(output.csv, /"Model terminal-value share",1\.2,"ratio"/u);
+  assert.match(output.csv, /"Enterprise-value sensitivity","N\/A","USD"/u);
+  assert.match(output.csv, /"Score validation","Experimental research signal/u);
+  assert.match(output.csv, /"Research takeaway"/u);
+});
+
 test("CSV marks retained market figures as stale when their quote is not current", () => {
   const company = companyFixture({ is_stale: true, freshness: "stale", enterprise_value: null, required_growth: null, solver_status: "unavailable" });
   const output = buildResearchExport(company, null, "Research disclaimer.", () => "source");

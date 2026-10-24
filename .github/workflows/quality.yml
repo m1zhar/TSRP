@@ -50,8 +50,8 @@ jobs:
         run: uv sync --locked --no-install-project
         working-directory: backend
 
-      - name: Audit production JavaScript dependencies
-        run: pnpm audit --prod
+      - name: Audit JavaScript dependencies, including build tools
+        run: pnpm audit --audit-level=high
         working-directory: frontend
 
       - name: Audit Python dependencies

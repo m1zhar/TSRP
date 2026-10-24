@@ -1,3 +1,5 @@
+import { analysisErrorCanRetry } from "./analysis-error.ts";
+
 export type CompanySearchMatch = { ticker: string };
 export type CompanyLookupState = "idle" | "pending" | "loading" | "done" | "failed";
 export type CompanySearchDecision =
@@ -42,7 +44,7 @@ export const PERSONAL_SEARCH_MESSAGE = "Remove email, phone, or long identificat
 export const COMPANY_SEARCH_DISABLED_MESSAGE = "Company search and stock analysis are not enabled for this deployment. Contact its operator.";
 
 export function canConfirmTickerAfterSearchFailure(errorCode?: string): boolean {
-  return errorCode !== "provider_disabled" && errorCode !== "rate_limited";
+  return analysisErrorCanRetry(errorCode);
 }
 
 /** Prefer a resolved company match over guessing that mixed/lowercase text is a ticker. */

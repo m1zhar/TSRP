@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { canConfirmTickerAfterSearchFailure, containsPersonalSearchText, decideCompanySearch } from "./company-search.ts";
 
+test("deployment setup failures do not offer a ticker fallback that uses the same broken access path", () => {
+  for (const code of ["auth_not_configured", "origin_not_configured", "origin_not_allowed"]) assert.equal(canConfirmTickerAfterSearchFailure(code), false);
+  assert.equal(canConfirmTickerAfterSearchFailure("search_unavailable"), true);
+});
+
 test("company search blocks common email and phone or long-number patterns", () => {
   for (const value of [
     "person@example.test",

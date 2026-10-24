@@ -481,7 +481,7 @@ p, h1, h2, h3 { margin-top: 0; }
 .freshness-badge { justify-content: center; text-align: center; }
 .data-notes { border: 0; border-top: 1px solid var(--line); background: transparent; padding: 11px 0; text-align: center; }
 .quality-note, .warning-note { text-align: center; }
-.section-title-row { min-height: 0; flex-direction: column; justify-content: center; gap: 11px; margin: 7px 0 18px; text-align: center; }
+.section-title-row { min-height: 0; flex-direction: column; align-items: center; justify-content: center; gap: 11px; margin: 7px 0 18px; text-align: center; }
 .section-title-row > div:first-child { display: grid; justify-items: center; gap: 3px; }
 .section-title-row .eyebrow { margin: 0; }
 .section-actions { justify-content: center; }
@@ -574,6 +574,21 @@ p, h1, h2, h3 { margin-top: 0; }
 .score-number { font-size: clamp(56px, 7vw, 70px); letter-spacing: -.07em; }
 .score-rating { margin-top: 2px; font-size: 13px; }
 .score-main p { max-width: 540px; margin-top: 7px; font-size: 12px; }
+.score-main .validation-note { color: var(--ink-muted); font-size: 11px; }
+.research-brief { display: grid; gap: 16px; padding: 24px 0; text-align: center; border-bottom: 1px solid var(--line); }
+.research-brief h2 { margin: 0; font-size: 16px; }
+.research-brief > p { width: min(76ch, 100%); margin: 0 auto; color: var(--ink-muted); font-size: 12px; }
+.research-brief strong { color: var(--ink); }
+.research-brief small { display: block; color: var(--ink-muted); overflow-wrap: anywhere; font-size: 11px; }
+.brief-evidence { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; width: min(700px, 100%); margin-inline: auto; }
+.brief-evidence > div { display: grid; align-content: start; gap: 8px; min-width: 0; }
+.brief-evidence h3, .brief-evidence p { margin: 0; font-size: 12px; }
+.brief-evidence p { font-variant-numeric: tabular-nums; }
+.metric-unavailable { margin: 8px 0; color: var(--ink-muted); font-size: 11px; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .research-brief { padding: 16px 0; }
+  .brief-evidence { grid-template-columns: 1fr; gap: 16px; }
+}
 .score-drivers { width: min(700px, 100%); padding: 13px 18px 17px; }
 .score-drivers .panel-heading h2 { font-size: 14px; }
 .score-drivers .panel-heading p, .confidence-label { font-size: 10px; }
