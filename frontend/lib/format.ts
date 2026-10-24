@@ -8,10 +8,16 @@ export function pct(value: number | null | undefined, digits = 1): string {
 
 export function money(value: number | null | undefined, currency: string, compact = false): string {
   if (!finite(value) || typeof currency !== "string") return "N/A";
+  const magnitude = Math.abs(value);
+  const tiny = magnitude > 0 && magnitude < .01;
+  const notation = tiny && magnitude < .000001 ? "scientific" : compact ? "compact" : "standard";
+  const precision: Intl.NumberFormatOptions = tiny
+    ? { maximumSignificantDigits: 3 }
+    : { maximumFractionDigits: 2 };
   if (["GBp", "GBX", "ZAc", "ILA"].includes(currency)) {
     const formatted = new Intl.NumberFormat("en-US", {
-      notation: compact ? "compact" : "standard",
-      maximumFractionDigits: 2,
+      notation,
+      ...precision,
     }).format(value);
     return `${formatted} ${currency}`;
   }
@@ -20,10 +26,10 @@ export function money(value: number | null | undefined, currency: string, compac
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency,
-      notation: compact ? "compact" : "standard",
+      notation,
       // Compact currency can inherit different currency minor-unit defaults across ICU versions.
-      minimumFractionDigits: compact ? 0 : 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: compact || tiny ? 0 : 2,
+      ...precision,
     }).format(value);
   } catch {
     return `${currency} ${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value)}`;

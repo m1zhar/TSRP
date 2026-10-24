@@ -1,6 +1,6 @@
 type ApiEnvelope<T> = { data?: T; error?: { code?: string; message?: string } };
 type ApiResponseObserver = (response: Response) => void;
-type AccessTokenEnvelope = { data?: { access_token?: unknown; expires_in?: unknown }; error?: { message?: string } };
+type AccessTokenEnvelope = { data?: { access_token?: unknown; expires_in?: unknown }; error?: { code?: string; message?: string } };
 
 export class ApiResponseError extends Error {
   readonly code?: string;
@@ -59,7 +59,11 @@ async function getAccessToken(fetcher: typeof fetch, signal: AbortSignal): Promi
   const expiresIn = body?.data?.expires_in;
   if (!response.ok || typeof token !== "string" || !token || token.length > 2048
     || typeof expiresIn !== "number" || !Number.isSafeInteger(expiresIn) || expiresIn < 10 || expiresIn > 90) {
-    throw new Error(typeof body?.error?.message === "string" ? body.error.message : "Research access could not be verified. Reload the page and try again.");
+    throw new ApiResponseError(
+      typeof body?.error?.message === "string" ? body.error.message : "Research access could not be verified. Reload the page and try again.",
+      typeof body?.error?.code === "string" ? body.error.code : undefined,
+      response.status,
+    );
   }
   return token;
 }

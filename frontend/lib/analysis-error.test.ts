@@ -16,3 +16,9 @@ test("a disabled provider does not offer a retry that cannot succeed", () => {
   assert.equal(analysisErrorCanRetry("provider_unavailable"), true);
   assert.equal(analysisErrorCanRetry(undefined), true);
 });
+
+test("configuration and invalid-input errors do not offer futile retries", () => {
+  for (const code of ["auth_not_configured", "origin_not_configured", "origin_not_allowed", "unsupported_asset", "invalid_ticker", "unsupported_sector", "unsupported_currency"]) assert.equal(analysisErrorCanRetry(code), false, code);
+  assert.equal(analysisErrorCanRetry("request_timeout"), true);
+  assert.equal(analysisErrorCanRetry("authentication_required"), true);
+});

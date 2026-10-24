@@ -1,6 +1,7 @@
 import { toCsv } from "./csv.ts";
 import { freeCashFlowSourceLabel } from "./fcf-evidence.ts";
 import { analystEstimateLabel } from "./research-signals.ts";
+import { buildResearchBrief, SCORE_VALIDATION_NOTE, sectorResearchGuide } from "./research-brief.ts";
 import type { Company } from "./types.ts";
 
 type SourceLineKey = "share_price" | "analyst_growth" | "market_cap_reporting" | "enterprise_value" | "valuation_assumptions" | "debt";
@@ -17,8 +18,11 @@ export function buildResearchExport(
   const valuationMethodologySupported = company.sector_methodology_supported && currencyMethodologySupported;
   const scoreAvailable = company.score_available && company.sector_methodology_supported;
   const score = scoreAvailable ? company.score : null;
-  const enterpriseValue = valuationMethodologySupported ? company.enterprise_value : null;
-  const enterpriseValueSource = valuationMethodologySupported
+  const evSource = company.sources.enterprise_value;
+  const enterpriseValueSupported = company.sector_methodology_supported && (currencyMethodologySupported
+    || (evSource && "source" in evSource && evSource.currency === company.reporting_currency));
+  const enterpriseValue = enterpriseValueSupported ? company.enterprise_value : null;
+  const enterpriseValueSource = enterpriseValueSupported
     ? company.sources.enterprise_value
     : { source: "Unavailable", period: "N/A", currency: "N/A", kind: "No validated TSRP sector and currency calibration for valuation" };
   const effectiveScenario = valuationMethodologySupported ? scenario : null;
@@ -40,6 +44,10 @@ export function buildResearchExport(
   const freeCashFlowKind = freeCashFlowSource && "source" in freeCashFlowSource ? freeCashFlowSource.kind : null;
   const sharePriceSource = company.sources.share_price;
   const sharePricePeriod = sharePriceSource && "period" in sharePriceSource ? sharePriceSource.period : company.market_at ?? "N/A";
+  const unleveredSource = company.sources.unlevered_cash_flow;
+  const unleveredSourceName = unleveredSource && "source" in unleveredSource ? unleveredSource.source : company.valuation_basis?.cash_flow.source ?? "Unavailable";
+  const unleveredPeriod = unleveredSource && "period" in unleveredSource ? unleveredSource.period : company.valuation_basis?.cash_flow.period ?? company.revenue_period ?? "N/A";
+  const brief = buildResearchBrief(company);
   const payload = {
     company: {
       ticker: company.ticker, name: company.company, exchange: company.exchange,
@@ -67,13 +75,16 @@ export function buildResearchExport(
       solver_high: valuationMethodologySupported ? company.solver_high : null,
       growth_clamped: valuationMethodologySupported && company.growth_clamped,
       model_fcf_margin: valuationMethodologySupported ? company.model_fcf_margin : null,
+      discount_rate: valuationMethodologySupported ? company.discount_rate : null,
+      terminal_growth: valuationMethodologySupported ? company.terminal_growth : null,
       assumptions: valuationMethodologySupported ? company.assumptions : { starting_growth: null, fcf_margin: null, discount_rate: null, terminal_growth: null },
-      user_assumptions: valuationMethodologySupported ? company.user_assumptions : null,
+      user_assumptions: valuationMethodologySupported ? effectiveScenario?.inputs ?? company.user_assumptions : null,
       scenario: effectiveScenario, sources, quality_flags: company.quality_flags,
       confidence: company.confidence, is_stale: company.is_stale, freshness: company.freshness,
       methodology_version: company.methodology_version, analysis_schema_version: company.analysis_schema_version,
     },
     disclaimer,
+    research_takeaway: { ...brief, sector_guidance: sectorResearchGuide(company), validation_status: SCORE_VALIDATION_NOTE },
     limitations: company.quality_flags.map((flag) => flag.message),
   };
   const solverBounds = !valuationMethodologySupported || company.solver_low === null || company.solver_high === null
@@ -92,7 +103,7 @@ export function buildResearchExport(
     ["Reported debt", company.debt ?? "N/A", company.reporting_currency, sourceLine("debt"), company.sources.debt && "period" in company.sources.debt ? company.sources.debt.period : "N/A", ""],
     ["Revenue", company.revenue ?? "N/A", company.reporting_currency, company.revenue_source ?? "Unavailable", company.revenue_period ?? "N/A", ""],
     ["Free cash flow", company.free_cash_flow ?? "N/A", company.reporting_currency, freeCashFlowSourceLabel(company.fcf_source, freeCashFlowKind), company.fcf_period ?? "N/A", ""],
-    ["Estimated pre-debt operating cash flow", company.unlevered_cash_flow ?? "N/A", company.reporting_currency, "TSRP operating-profit bridge / Yahoo annual statements", company.revenue_period ?? "N/A", company.valuation_basis?.cash_flow.reason ?? "Unavailable"],
+    ["Estimated pre-debt operating cash flow", company.unlevered_cash_flow ?? "N/A", company.reporting_currency, unleveredSourceName, unleveredPeriod, company.valuation_basis?.cash_flow.reason ?? "Unavailable"],
     ["Estimated WACC", valuationMethodologySupported ? company.valuation_basis?.capital_cost.value ?? "N/A" : "N/A", "ratio", valuationMethodologySupported ? company.valuation_basis?.capital_cost.reference.source ?? "Unavailable" : "Unavailable", valuationMethodologySupported ? company.valuation_basis?.capital_cost.reference.date ?? "N/A" : "N/A", valuationMethodologySupported ? company.valuation_basis?.capital_cost.reason ?? "Unavailable" : "Unsupported sector or currency"],
     ["Historical revenue growth", company.historical_growth ?? "N/A", "annualized", company.revenue_growth_source ?? "Unavailable", historicalGrowthPeriod, ""],
     [analystEstimateLabel(company.analyst_estimate_period), company.consensus_growth ?? "N/A", "growth rate", company.consensus_growth === null ? "Unavailable" : sourceLine("analyst_growth"), company.analyst_estimate_end_date ?? company.analyst_estimate_period ?? "N/A", company.analyst_estimate_end_date && company.analyst_estimate_currency ? `Forecast currency: ${company.analyst_estimate_currency}` : "Exact fiscal period or estimate currency unavailable; not revision-comparable"],
@@ -110,6 +121,26 @@ export function buildResearchExport(
     ["Market observation as of", company.market_at ?? "N/A", "UTC", company.market_at ? sourceLine("share_price") : "Unavailable", company.market_at ?? "N/A", ""],
     ["Limitations", company.quality_flags.map((flag) => flag.message).join("; ") || "See methodology and disclaimer", "", "TSRP quality flags", company.methodology_version, ""],
   ];
-  const csv = toCsv([...csvRows, [], ["Disclaimer", disclaimer]]);
+  const projectionRows = valuationMethodologySupported && company.valuation_projection
+    ? company.valuation_projection.annual_cash_flows.flatMap((row) => [
+      [`Model year ${row.year} revenue`, row.revenue, company.reporting_currency, "TSRP assumption-dependent projection", `Forecast year ${row.year}`, "Not reported results"],
+      [`Model year ${row.year} revenue growth`, row.revenue_growth, "ratio", "TSRP assumption-dependent projection", `Forecast year ${row.year}`, "Not reported results"],
+      [`Model year ${row.year} pre-debt cash flow`, row.cash_flow, company.reporting_currency, "TSRP assumption-dependent projection", `Forecast year ${row.year}`, "Not reported results"],
+      [`Model year ${row.year} present value`, row.present_value, company.reporting_currency, "TSRP assumption-dependent projection", `Forecast year ${row.year}`, "Discounted cash flow"],
+    ]) : [];
+  const sensitivityRows = valuationMethodologySupported ? (company.valuation_sensitivity ?? []).map((row) => [
+    "Enterprise-value sensitivity", row.enterprise_value ?? "N/A", company.reporting_currency,
+    "TSRP assumption-dependent sensitivity", "Ten-year model plus terminal cash flow",
+    `Discount rate ${row.discount_rate}; terminal growth ${row.terminal_growth}; rates are ratios`,
+  ]) : [];
+  const terminalRows = valuationMethodologySupported && company.valuation_projection ? [
+    ["Model terminal value", company.valuation_projection.terminal_value, company.reporting_currency, "TSRP assumption-dependent projection", "Beyond forecast year ten", "Not a target price"],
+    ["Model terminal present value", company.valuation_projection.terminal_present_value, company.reporting_currency, "TSRP assumption-dependent projection", "Beyond forecast year ten", "Discounted terminal cash flow"],
+    ["Model terminal-value share", company.valuation_projection.terminal_value_share, "ratio", "TSRP assumption-dependent projection", "Beyond forecast year ten", "Not a confidence interval"],
+  ] : [];
+  const csv = toCsv([...csvRows, ...projectionRows, ...terminalRows, ...sensitivityRows, [],
+    ["Research takeaway", brief.conclusion], ["Main uncertainty", brief.uncertainty],
+    ["Sector guidance", sectorResearchGuide(company)], ["Score validation", SCORE_VALIDATION_NOTE], ["Disclaimer", disclaimer],
+  ]);
   return { json: JSON.stringify(payload, null, 2), csv };
 }

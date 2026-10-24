@@ -2,6 +2,8 @@
 
 TSRP is an educational research index and an assumption-dependent valuation tool. It is not a probability, recommendation, price target, forecast or validated expected-return model. Python is the single calculation authority; UI and exports use its returned results.
 
+See the [score-validation record](score-validation.md) for reproducible implementation checks and the uncompleted independent-review and point-in-time historical-validation requirements. Neither tests nor a solved valuation equation establish predictive accuracy. Sector-specific UI guidance identifies research the generic model does not perform; it adds no new score factor or company fact.
+
 ## Changes from v9
 
 - Removed exact repeated factors. Business quality uses growth, operating margin and return on average equity. Financial strength uses cash/debt, reported cash-flow margin and debt/assets. Groups now have 50% each; each factor has one-third of its group. These are equal-weight policy choices, not fitted investment weights.

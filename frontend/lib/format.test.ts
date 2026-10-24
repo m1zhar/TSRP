@@ -25,6 +25,14 @@ test("compact currency removes trailing zero decimals consistently", () => {
   assert.equal(money(1_230, "USD", true), "$1.23K");
 });
 
+test("nonzero tiny money values do not become misleading zero prices", () => {
+  assert.equal(money(.00123, "USD"), "$0.00123");
+  assert.equal(money(-.00123, "USD"), "-$0.00123");
+  assert.equal(money(.00123, "GBp"), "0.00123 GBp");
+  assert.equal(money(1e-20, "USD"), "$1E-20");
+  assert.equal(money(0, "USD"), "$0.00");
+});
+
 test("date labels preserve exchange-local calendar dates from the API", () => {
   assert.equal(dateLabel("2026-10-10"), "Oct 10, 2026");
 });

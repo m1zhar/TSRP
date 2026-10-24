@@ -79,6 +79,31 @@ _uk_fixture_equity.get_info = lambda: {
     "currentPrice": 120, "previousClose": 118, "marketCap": 30, "sharesOutstanding": 25,
 }
 research_service.yf.Ticker = lambda _symbol, session=None: _uk_fixture_equity if _symbol == "EXM.L" else _fixture_equity
+if os.environ.get("TSRP_E2E_RESEARCH_BRIEF") == "1":
+    _reviewer_fixtures = {}
+    for _symbol, _sector in (("QACORE", "Technology"), ("QABANK", "Financial Services"), ("QAGAP", "Energy"), ("QAJPN", "Consumer Cyclical"), ("QAZERO", "Technology")):
+        _equity = MockEquity(datetime.now(timezone.utc).year - 1)
+        _equity.get_info = lambda sector=_sector: {
+            "quoteType": "EQUITY", "longName": "Synthetic QA · Example Research Company",
+            "fullExchangeName": "Synthetic exchange", "financialCurrency": "USD",
+            "currency": "USD", "sector": sector, "beta": 1.0,
+            "regularMarketTime": datetime.now(timezone.utc).timestamp(),
+        }
+        if _symbol == "QAGAP":
+            _equity.balance_sheet = pd.DataFrame()
+            _equity.cashflow = pd.DataFrame()
+            _equity.revenue_estimate = pd.DataFrame()
+        elif _symbol == "QAJPN":
+            _jpy_info = _equity.get_info
+            _equity.get_info = lambda: {**_jpy_info(), "financialCurrency": "JPY", "currency": "JPY"}
+            _equity.fast_info = {**_equity.fast_info, "currency": "JPY"}
+        elif _symbol == "QAZERO":
+            def _flat_history(**_kwargs):
+                today = pd.Timestamp.now(tz="UTC").normalize()
+                return pd.DataFrame({"Close": [120.0, 120.0], "Volume": [1000, 1200]}, index=[today - pd.Timedelta(1, unit="D"), today])
+            _equity.history = _flat_history
+        _reviewer_fixtures[_symbol] = _equity
+    research_service.yf.Ticker = lambda symbol, session=None: _reviewer_fixtures.get(symbol, _fixture_equity)
 research_service._sec_facts = lambda *_args: (
     None,
     {"kind": "not_configured", "label": "SEC unavailable in synthetic production smoke"},

@@ -12,5 +12,8 @@ export function analysisErrorForTicker(
 }
 
 export function analysisErrorCanRetry(code?: string): boolean {
-  return code !== "provider_disabled" && code !== "rate_limited";
+  return !new Set([
+    "provider_disabled", "rate_limited", "auth_not_configured", "origin_not_configured",
+    "origin_not_allowed", "invalid_ticker", "unsupported_asset", "unsupported_sector", "unsupported_currency",
+  ]).has(code ?? "");
 }

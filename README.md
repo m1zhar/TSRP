@@ -70,6 +70,12 @@ The app requires no sign-in and has no user-account database. Anyone who can acc
 
 Ticker inputs, query parameters, and scenario fields are validated server-side. Responses avoid provider payload dumps and exception details. Provider work is bounded to 12 workers and 24 outstanding tasks per warm Python process, with bounded route waits. This does not cap traffic across serverless instances or replace a distributed rate limiter. No distributed request-abuse control is configured in this repository.
 
+## Validation and reviewer checks
+
+The [score-validation record](docs/score-validation.md) distinguishes reproducible formula tests from independent financial review and historical investment validation. No return backtest or predictive-accuracy claim is made. The on-screen takeaway cites the server-returned factors; unavailable results explain the limitation rather than treating missing evidence as zero.
+
+An optional live hosted smoke check is available with Node 22: `node --experimental-strip-types frontend/tests/hosted-research-smoke.mjs`. It contacts the deployed public app for 13 listings across 11 sectors, including a facts-only bank, a London listing and a Japanese reporting-currency case. Run it deliberately, not on every commit: it consumes real provider/hosting requests. `TSRP_CHECK_ORIGIN` can select a different HTTPS site origin; no API key is required or printed. This check verifies response contracts and disclosed states, not the correctness of every provider observation or the identity of a deployed source commit. Deterministic tests remain network-independent.
+
 ## Financial information disclaimer
 
 TSRP is an independent research and educational tool, not a broker, investment adviser, or source of personalized investment advice. Its score is a heuristic signal—not a probability, forecast, buy/sell/hold recommendation, or promise of performance. Data may be delayed, incomplete, restated, or wrong. Verify material facts against filings and other primary sources, review the assumptions, and consult a qualified professional before making financial decisions.
