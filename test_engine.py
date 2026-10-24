@@ -53,7 +53,7 @@ class RateTests(unittest.TestCase):
         exposed_model["business_benchmarks"]["gross"] = 0.0
 
         fresh_model = get_sector_model("Technology")
-        self.assertEqual(fresh_model["business_weights"]["growth"], 0.25)
+        self.assertEqual(fresh_model["business_weights"]["growth"], 1/3)
         self.assertEqual(fresh_model["business_benchmarks"]["gross"], 0.70)
 
     def test_malformed_sector_metadata_is_safe_and_unconfigured(self):
@@ -196,7 +196,7 @@ class DcfTests(unittest.TestCase):
                 self.assertIsNone(result["growth"])
 
     def test_invalid_explicit_start_margin_is_not_silently_replaced(self):
-        for invalid in (True, False, 0, -0.01, float("nan"), float("inf"), "not-a-number"):
+        for invalid in (True, False, float("nan"), float("inf"), "not-a-number"):
             with self.subTest(start_margin=invalid):
                 self.assertIsNone(dcf_enterprise_value(100, 0.08, 0.15, 0.10, 0.02, start_margin=invalid))
         self.assertIsNotNone(dcf_enterprise_value(100, 0.08, 0.15, 0.10, 0.02))
@@ -440,9 +440,9 @@ class ScoreTests(unittest.TestCase):
         # Independently calculated from the documented Technology weights:
         # business = 75*.25 + 100*.20 + 100*.15 + 100*.20 + 100*.10 + 50*.10
         # financial = 67.5*.30 + 100*.20 + 100*.30 + 50*.20
-        expected_business = 88.75
-        expected_financial = 80.25
-        expected_total = (expected_business * 35 + expected_financial * 30) / 65
+        expected_business = (75 + 100 + 100) / 3
+        expected_financial = (67.5 + 100 + 50) / 3
+        expected_total = (expected_business + expected_financial) / 2
         trace = score_breakdown(business, financial, 0.10, 0.12)
 
         self.assertAlmostEqual(business["score"], expected_business)
@@ -457,23 +457,23 @@ class ScoreTests(unittest.TestCase):
         cash_debt = next(item for item in detail["components"] if item["key"] == "cash_debt")
 
         self.assertIsNone(cash_debt["value"])
-        self.assertAlmostEqual(detail["evidence_coverage"], 0.70)
-        self.assertAlmostEqual(detail["score"], (100 * 0.20 + 100 * 0.30 + 50 * 0.20) / 0.70)
+        self.assertAlmostEqual(detail["evidence_coverage"], 2/3)
+        self.assertAlmostEqual(detail["score"], (100 + 50) / 2)
         trace = supported_score_breakdown(
             {"score": 80, "evidence_coverage": 1.0}, detail,
             historical_growth=0.10, required_growth=0.10,
         )
         financial_component = next(item for item in trace["components"] if item["key"] == "financial_strength")
         self.assertAlmostEqual(financial_component["value"], detail["score"])
-        self.assertAlmostEqual(financial_component["evidence_coverage"], 0.70)
-        self.assertAlmostEqual(trace["score"], 80 * 7 / 13 + detail["score"] * 6 / 13)
+        self.assertAlmostEqual(financial_component["evidence_coverage"], 2/3)
+        self.assertAlmostEqual(trace["score"], (80 + detail["score"]) / 2)
 
     def test_zero_debt_with_positive_cash_remains_a_supported_best_case(self):
         detail = financial_strength_detail(10, 0, None, None, None, get_sector_model("Technology"))
         cash_debt = next(item for item in detail["components"] if item["key"] == "cash_debt")
 
         self.assertEqual(cash_debt["value"], 100)
-        self.assertAlmostEqual(detail["evidence_coverage"], 0.30)
+        self.assertAlmostEqual(detail["evidence_coverage"], 1/3)
 
     def test_negative_sales_multiple_is_missing_evidence(self):
         model = {
@@ -526,7 +526,7 @@ class ScoreTests(unittest.TestCase):
 
         baseline = score_breakdown(80, 60, 0.08, 0.10, 0.09)
         changed_consensus = score_breakdown(80, 60, 0.08, 0.10, 0.50)
-        expected_v8 = (80 * 0.35 + 60 * 0.30) / 0.65
+        expected_v8 = (80 + 60) / 2
 
         self.assertAlmostEqual(score_v4_parity, score_v4_recomputed)
         self.assertAlmostEqual(baseline["score"], expected_v8)
@@ -539,8 +539,8 @@ class ScoreTests(unittest.TestCase):
             "required_growth": None,
             "growth_clamped": False,
         })
-        self.assertAlmostEqual(baseline["components"][0]["weight"], 7 / 13)
-        self.assertAlmostEqual(baseline["components"][1]["weight"], 6 / 13)
+        self.assertAlmostEqual(baseline["components"][0]["weight"], .5)
+        self.assertAlmostEqual(baseline["components"][1]["weight"], .5)
 
     def test_score_v8_never_claims_a_growth_comparison_from_valuation_or_consensus(self):
         trace = supported_score_breakdown(
@@ -582,7 +582,7 @@ class ScoreTests(unittest.TestCase):
     def test_score_v8_evidence_gate_uses_the_two_scored_components(self):
         boundary = score_breakdown(
             {"score": 80, "evidence_coverage": 1.0},
-            {"score": 60, "evidence_coverage": 0.35},
+            {"score": 60, "evidence_coverage": 0.40},
             historical_growth=0.12, required_growth=0.50,
         )
         below = score_breakdown(
@@ -598,9 +598,9 @@ class ScoreTests(unittest.TestCase):
     def test_score_extreme_factor_overflow_is_not_a_zero_score_observation(self):
         from engine import business_quality_detail
         model = {"business_benchmarks": {"gross": .7, "operating": .3, "fcf": .2, "roe": .2}, "business_weights": {"growth": .25, "gross": .2, "operating": .15, "fcf": .2, "roe": .1, "balance": .1}}
-        detail = business_quality_detail(None, 1e308, None, None, None, None, model)
-        gross = next(item for item in detail["components"] if item["key"] == "gross")
-        self.assertIsNone(gross["value"])
+        detail = business_quality_detail(None, None, 1e308, None, None, None, model)
+        operating = next(item for item in detail["components"] if item["key"] == "operating")
+        self.assertIsNone(operating["value"])
 
     def test_score_helpers_never_replace_missing_inputs_with_a_fixed_score(self):
         from engine import business_quality_score, financial_strength_score, growth_reality_score
@@ -622,7 +622,7 @@ class ScoreTests(unittest.TestCase):
             consensus_growth=None,
         )
         self.assertIsNotNone(trace["score"])
-        self.assertAlmostEqual(trace["evidence_coverage"], 7 / 13 * 0.5 + 6 / 13)
+        self.assertAlmostEqual(trace["evidence_coverage"], .75)
 
     def test_score_breakdown_clamps_subscores_before_reconciling_contributions(self):
         trace = supported_score_breakdown(
@@ -657,7 +657,7 @@ class ScoreTests(unittest.TestCase):
         )
 
         self.assertEqual([item["evidence_coverage"] for item in trace["components"]], [1.0, 0.0])
-        self.assertAlmostEqual(trace["evidence_coverage"], 7 / 13)
+        self.assertAlmostEqual(trace["evidence_coverage"], .5)
         self.assertIsNone(trace["score"], "Out-of-range evidence metadata must not inflate the score threshold.")
 
 

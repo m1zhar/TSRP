@@ -21,12 +21,14 @@ class ScenarioContextTests(unittest.TestCase):
             "revenue_period": "2025-09-27",
             "market_cap_reporting": 3_000_000_000_000.0,
             "enterprise_value": 3_050_000_000_000.0,
+            "other_claims": 0.0,
             "market_at": "2026-10-09T20:00:00+00:00",
             "cash": 60_000_000_000.0,
             "debt": 110_000_000_000.0,
             "fcf_margin": 0.12,
-            "methodology_version": "score-v9",
-            "analysis_schema_version": "analysis-v4",
+            "unlevered_fcf_margin": 0.12,
+            "methodology_version": "score-v10",
+            "analysis_schema_version": "analysis-v5",
             "sources": {
                 "revenue": {"period": "2025-09-27", "currency": "USD"},
                 "cash": {"period": "2025-09-27", "currency": "USD"},
@@ -51,6 +53,7 @@ class ScenarioContextTests(unittest.TestCase):
             "revenue_currency", "market_cap_reporting", "enterprise_value", "market_at",
             "cash", "cash_period", "cash_currency", "debt", "debt_period", "debt_currency",
             "starting_fcf_margin",
+            "other_claims",
             "methodology_version", "analysis_schema_version",
         })
 

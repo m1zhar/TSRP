@@ -188,7 +188,7 @@ def year_margin(start_margin, mature_margin, year, years=FORECAST_YEARS):
     return start_margin + (mature_margin - start_margin) * t
 
 
-def dcf_enterprise_value(
+def dcf_projection(
     revenue,
     growth,
     fcf_margin,
@@ -220,7 +220,7 @@ def dcf_enterprise_value(
         return None
     if years <= 0 or years > 50 or fade_start < 0 or fade_start > years:
         return None
-    if revenue <= 0 or fcf_margin <= 0 or start_margin <= 0 or growth <= -1 or discount_rate <= terminal_growth:
+    if revenue <= 0 or fcf_margin <= 0 or growth <= -1 or discount_rate <= terminal_growth:
         return None
     if terminal_growth <= -1 or discount_rate <= -1:
         return None
@@ -229,25 +229,40 @@ def dcf_enterprise_value(
         present_value = 0.0
         projected_revenue = revenue
         final_fcf = 0.0
+        rows = []
         for year in range(1, years + 1):
             annual_growth = year_growth(growth, terminal_growth, year, years, fade_start)
             if annual_growth is None or annual_growth <= -1:
                 return None
             projected_revenue *= 1 + annual_growth
             margin = year_margin(start_margin, fcf_margin, year, years)
-            if not math.isfinite(projected_revenue) or margin is None or margin <= 0:
+            if not math.isfinite(projected_revenue) or margin is None:
                 return None
             final_fcf = projected_revenue * margin
             discount_factor = (1 + discount_rate) ** year
             if not math.isfinite(final_fcf) or not math.isfinite(discount_factor) or discount_factor <= 0:
                 return None
             present_value += final_fcf / discount_factor
+            rows.append({"year": year, "revenue_growth": annual_growth, "revenue": projected_revenue,
+                         "cash_flow_margin": margin, "cash_flow": final_fcf, "present_value": final_fcf / discount_factor})
 
         terminal_value = final_fcf * (1 + terminal_growth) / (discount_rate - terminal_growth)
-        present_value += terminal_value / ((1 + discount_rate) ** years)
-        return present_value if math.isfinite(present_value) and present_value > 0 else None
+        terminal_pv = terminal_value / ((1 + discount_rate) ** years)
+        present_value += terminal_pv
+        if not math.isfinite(present_value) or present_value <= 0:
+            return None
+        return {"enterprise_value": present_value, "annual_cash_flows": rows,
+                "terminal_value": terminal_value, "terminal_present_value": terminal_pv,
+                "terminal_value_share": terminal_pv / present_value}
     except (OverflowError, ZeroDivisionError):
         return None
+
+
+def dcf_enterprise_value(revenue, growth, fcf_margin, discount_rate, terminal_growth,
+                         years=FORECAST_YEARS, fade_start=FADE_START_YEAR, start_margin=None):
+    """Scalar view of the single auditable DCF projection implementation."""
+    result = dcf_projection(revenue, growth, fcf_margin, discount_rate, terminal_growth, years, fade_start, start_margin)
+    return result["enterprise_value"] if result is not None else None
 
 
 def solve_required_growth(
@@ -528,13 +543,18 @@ def business_quality_detail(revenue_growth, gross_margin, operating_margin, fcf_
     weights = sector_model["business_weights"]
     raw = {
         "growth": (revenue_growth, lambda value: 50 + value * 250, "Revenue growth"),
-        "gross": (gross_margin, lambda value: value / benchmarks["gross"] * 100, "Gross margin"),
         "operating": (operating_margin, lambda value: value / benchmarks["operating"] * 100, "Operating margin"),
-        "fcf": (fcf_margin, lambda value: value / benchmarks["fcf"] * 100, "Free-cash-flow margin"),
         "roe": (roe, lambda value: value / benchmarks["roe"] * 100, "Return on average equity"),
-        "balance": (debt_to_assets, lambda value: 100 - value / 0.80 * 100, "Debt to assets"),
     }
-    return _observed_weighted_score(raw, weights, minimum_coverage=0.5)
+    result = _observed_weighted_score(raw, weights, minimum_coverage=0.5)
+    normalizations = {
+        "growth": "50 + 250 × annualized revenue growth; bounded to 0–100",
+        "operating": f"Operating margin / {benchmarks['operating']:.1%} policy threshold × 100; bounded to 0–100",
+        "roe": f"Return on average equity / {benchmarks['roe']:.1%} policy threshold × 100; bounded to 0–100",
+    }
+    for item in result["components"]:
+        item["normalization"] = normalizations[item["key"]]
+    return result
 
 
 def expectation_score(required_growth, ev_sales, pe, ev_ebitda, sector_model):
@@ -578,11 +598,18 @@ def financial_strength_detail(cash, debt, operating_margin, fcf_margin, debt_to_
         cash_debt_score = clamp(raw_cash_debt_score) if math.isfinite(raw_cash_debt_score) else None
     raw = {
         "cash_debt": (cash_debt_score, lambda value: value, "Cash relative to debt"),
-        "operating": (operating_margin, lambda value: value / benchmarks["operating"] * 100, "Operating margin"),
         "fcf": (fcf_margin, lambda value: value / benchmarks["fcf"] * 100, "Free-cash-flow margin"),
         "leverage": (debt_to_assets, lambda value: 100 - value / 0.80 * 100, "Debt to assets"),
     }
-    return _observed_weighted_score(raw, weights, minimum_coverage=0.5)
+    result = _observed_weighted_score(raw, weights, minimum_coverage=0.5)
+    normalizations = {
+        "cash_debt": "50 + 35 × cash/debt; positive cash with zero debt = 100; 0/0 is unavailable; bounded to 0–100",
+        "fcf": f"Reported cash-flow margin / {benchmarks['fcf']:.1%} policy threshold × 100; bounded to 0–100",
+        "leverage": "100 − 125 × debt/assets; bounded to 0–100",
+    }
+    for item in result["components"]:
+        item["normalization"] = normalizations[item["key"]]
+    return result
 
 
 def _observed_weighted_score(raw_components, weights, minimum_coverage):
@@ -608,14 +635,13 @@ def _observed_weighted_score(raw_components, weights, minimum_coverage):
 
 
 def supported_score_breakdown(business, financial, historical_growth, required_growth, consensus_growth=None, growth_clamped=False):
-    """Build score-v8 from business quality and financial strength only.
+    """V10: two equally weighted groups, each factor belongs to one group only.
 
-    The valuation sensitivity remains available in research, but is not scored:
-    its cash-flow proxy and static discount assumptions are not a validated
-    FCFF/FCFE basis. Legacy arguments remain accepted for caller compatibility.
+    Weights/normalizations are declared policy choices, not fitted probabilities.
+    Valuation and analyst forecasts do not feed the index.
     """
     _ = historical_growth, required_growth, consensus_growth, growth_clamped
-    base_weights = (0.35, 0.30)
+    base_weights = (0.50, 0.50)
     comparable_weight_total = sum(base_weights)
     specs = [
         ("business_quality", "Business quality", business, base_weights[0] / comparable_weight_total),
@@ -645,6 +671,24 @@ def supported_score_breakdown(business, financial, historical_growth, required_g
         for component in components:
             component["applied_weight"] = 0.0
             component["contribution"] = None
+    sensitivity = None
+    if score is not None:
+        # Vary each observed factor's effective weight by +/-25%, one at a
+        # time, then renormalize. This is a policy sensitivity, NOT a CI.
+        factors = []
+        for component, detail in zip(components, (business, financial)):
+            if not isinstance(detail, dict):
+                continue
+            observed = [item for item in detail.get("components", []) if _f(item.get("value")) is not None and _f(item.get("weight"), 0) > 0]
+            total = math.fsum(item["weight"] for item in observed)
+            factors.extend((item["value"], component["applied_weight"] * item["weight"] / total) for item in observed if total > 0)
+        if factors:
+            alternatives = [score]
+            for value, weight in factors:
+                for change in (-.25, .25):
+                    alternatives.append((score + value * weight * change) / (1 + weight * change))
+            sensitivity = {"low": min(alternatives), "high": max(alternatives), "weight_variation": .25,
+                           "kind": "One observed factor weight changed at a time; not a confidence interval or prediction."}
     return {
         "score": score,
         "components": components,
@@ -660,6 +704,7 @@ def supported_score_breakdown(business, financial, historical_growth, required_g
         "evidence_coverage": evidence_coverage,
         "minimum_evidence_coverage": 0.70,
         "growth_comparison_available": False,
+        "weight_sensitivity": sensitivity,
     }
 
 
@@ -723,8 +768,8 @@ def score_label(value):
     if value >= 55:
         return "Mixed but explainable"
     if value >= 40:
-        return "Demanding expectations"
-    return "Very demanding expectations"
+        return "Limited operating support"
+    return "Weak operating evidence"
 
 
 def snapshot_diff(previous, current):

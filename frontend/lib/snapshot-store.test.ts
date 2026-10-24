@@ -38,7 +38,7 @@ class MemoryStorage implements SnapshotStorage {
 }
 
 function snapshot(ticker: string, savedAt = "2026-10-10T12:00:00Z"): StoredSnapshot {
-  return { ticker, saved_at: savedAt, retrieved_at: savedAt, methodology_version: "score-v9", analysis_schema_version: "analysis-v4" };
+  return { ticker, saved_at: savedAt, retrieved_at: savedAt, methodology_version: "score-v10", analysis_schema_version: "analysis-v5" };
 }
 
 test("snapshot store retains old schema records for an explicit incompatible comparison", () => {

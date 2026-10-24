@@ -31,13 +31,14 @@ from engine import (
     CURRENCY_PROFILES,
     business_quality_detail,
     clamp,
-    choose_model_fcf_margin,
     currency_profile_is_supported,
     dcf_enterprise_value,
+    dcf_projection,
     financial_strength_detail,
     fixed_quote_currency_conversion_rate,
     history_cagr_periods,
     model_rates,
+    normalize_market_currency,
     quote_currency_major_unit,
     score_label,
     snapshot_diff,
@@ -54,10 +55,12 @@ from financial_data import (
     period_observations_for_aliases,
     safe_number,
     statement_period,
-    trailing_aligned_fcf_margins,
 )
 from methodology import get_sector_model, has_sector_calibration, normalize_sector_label
-from provider_utils import get_ticker_info, provider_ticker_matches
+from provider_utils import get_revenue_estimates, get_ticker_fast_info, get_ticker_info, provider_ticker_matches
+from expectations import revenue_estimate
+from market_quote import resolve_market_cap
+from valuation_basis import capital_cost, operating_cash_flow
 
 
 MAX_TICKER_LENGTH = 15
@@ -83,13 +86,16 @@ YAHOO_ACCESS_ENABLED_ENV = "TSRP_YAHOO_FINANCE_ENABLED"
 MAX_SEC_TICKER_MAP_BYTES = 2 * 1024 * 1024
 MAX_SEC_COMPANY_FACTS_BYTES = 8 * 1024 * 1024
 FORECAST_YEARS = 10
-METHODOLOGY_VERSION = "score-v9"
-ANALYSIS_SCHEMA_VERSION = "analysis-v4"
+METHODOLOGY_VERSION = "score-v10"
+ANALYSIS_SCHEMA_VERSION = "analysis-v5"
 SEC_TAGS = {
     "revenue": ("RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet", "Revenues"),
-    "net_income": ("NetIncomeLoss", "ProfitLoss"),
+    # Parent and consolidated earnings/equity have different ownership scopes.
+    # ProfitLoss includes non-controlling interests; it is not a parent alias.
+    "net_income": ("NetIncomeLoss",),
+    "common_income": ("NetIncomeLossAvailableToCommonStockholdersBasic",),
     "assets": ("Assets",),
-    "equity": ("StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"),
+    "equity": ("StockholdersEquity",),
     # Do not treat the combined cash/restricted-cash aggregate as cash
     # available to offset enterprise value.
     "cash": ("CashAndCashEquivalentsAtCarryingValue",),
@@ -367,6 +373,8 @@ def _snapshot_proof_claims(value: dict) -> dict:
         "historical_growth": value.get("historical_growth"),
         "consensus_growth": value.get("consensus_growth"),
         "analyst_estimate_period": value.get("analyst_estimate_period"),
+        "analyst_estimate_end_date": value.get("analyst_estimate_end_date"),
+        "analyst_estimate_currency": value.get("analyst_estimate_currency"),
         "required_growth": value.get("required_growth"),
         "revenue": value.get("revenue"),
         "revenue_period": value.get("revenue_period"),
@@ -431,8 +439,12 @@ def _verified_snapshot_claims(value: Any) -> dict | None:
         "enterprise_value", "model_fcf_margin", "discount_rate", "terminal_growth",
         "solver_status", "sources",
     }
-    if not isinstance(claims, dict) or set(claims) != expected_keys:
+    optional_keys = {"analyst_estimate_end_date", "analyst_estimate_currency"}
+    if not isinstance(claims, dict) or set(claims) - optional_keys != expected_keys:
         return None
+    # Old signed proofs remain readable, but unsigned browser metadata cannot
+    # add a fiscal date or currency to make their estimates comparable.
+    claims = {**claims, **{key: claims.get(key) for key in optional_keys}}
     if any(
         value.get(field) != claims.get(field)
         for field in (
@@ -608,33 +620,27 @@ def _yahoo_total_debt_detail(frame: pd.DataFrame | None) -> tuple[float | None, 
     Long-term debt alone is not a defensible proxy for total debt. If Yahoo
     provides only one side of the balance, leave total debt unavailable.
     """
-    candidates: list[tuple[str, int, float, str, list[tuple[str, float]]]] = []
+    candidates: list[tuple[str, float, float, str, list[tuple[str, float]]]] = []
     for period, value in period_observations_for_aliases(frame, ["Total Debt"]):
         if value >= 0:
             candidates.append((str(period)[:10], 1, value, "reported", []))
 
-    current_aliases = ["Current Debt", "Current Debt And Capital Lease Obligation", "Current Portion Of Long Term Debt"]
-    long_term_aliases = ["Long Term Debt And Capital Lease Obligation", "Long Term Debt"]
-    current_by_period = dict(period_observations_for_aliases(frame, current_aliases))
-    long_term_by_period = dict(period_observations_for_aliases(frame, long_term_aliases))
-
-    def matched_label(aliases: list[str], period: str, value: float) -> str:
-        for alias in aliases:
-            if (period, value) in period_observations(frame, [alias]):
-                return alias
-        return aliases[0]
-
-    for period in current_by_period.keys() & long_term_by_period.keys():
-        current = current_by_period[period]
-        long_term = long_term_by_period[period]
-        total = finite(current + long_term)
-        if current < 0 or long_term < 0 or total is None:
-            continue
-        components = [
-            (matched_label(current_aliases, period, current), current),
-            (matched_label(long_term_aliases, period, long_term), long_term),
-        ]
-        candidates.append((str(period)[:10], 0, total, "calculated: Yahoo Finance current debt + long-term debt", components))
+    # These are alternative definitions, NOT synonymous aliases. Treating
+    # loan-only and lease-inclusive debt as aliases discards valid dates when
+    # both rows differ (and can silently fall back to a stale year).
+    for priority, current_label, long_label in (
+        (0, "Current Debt", "Long Term Debt"),
+        (.5, "Current Debt And Capital Lease Obligation", "Long Term Debt And Capital Lease Obligation"),
+    ):
+        current_by_period = dict(period_observations_for_aliases(frame, [current_label]))
+        long_term_by_period = dict(period_observations_for_aliases(frame, [long_label]))
+        for period in current_by_period.keys() & long_term_by_period.keys():
+            current, long_term = current_by_period[period], long_term_by_period[period]
+            total = finite(current + long_term)
+            if current < 0 or long_term < 0 or total is None:
+                continue
+            components = [(current_label, current), (long_label, long_term)]
+            candidates.append((str(period)[:10], priority, total, "calculated: Yahoo Finance current debt + long-term debt", components))
 
     if not candidates:
         return None, None, "unavailable: Yahoo Finance total debt or aligned components missing", []
@@ -1475,14 +1481,8 @@ def _as_frame(value: Any) -> pd.DataFrame:
 
 
 def _estimate_growth(frame: pd.DataFrame) -> tuple[float | None, str | None]:
-    if frame is None or frame.empty or "growth" not in frame.columns:
-        return None, None
-    for period in ("+1y", "0y"):
-        if period in frame.index:
-            value = finite(frame.loc[period, "growth"])
-            if value is not None:
-                return value, "Next-year analyst revenue estimate" if period == "+1y" else "Current-year analyst revenue estimate"
-    return None, None
+    detail = revenue_estimate(frame)
+    return detail["growth"], detail["label"]
 
 
 def _quote_timestamp(info: dict, fast_info: dict, history: pd.DataFrame, now: datetime | None = None) -> str | None:
@@ -1561,9 +1561,11 @@ def _average_equity_roe(net_income: float | None, income_period: str | None, equ
             dated.append((date, amount))
     current = next((value for date, value in dated if date == end), None)
     prior_candidates = [(date, value) for date, value in dated if 330 <= (end - date).days <= 430]
-    if current is None or not prior_candidates:
+    if current is None or current <= 0 or not prior_candidates:
         return None
     prior = min(prior_candidates, key=lambda item: abs((end - item[0]).days - 365))[1]
+    if prior <= 0:
+        return None
     average = (current + prior) / 2
     if not math.isfinite(average) or average <= 0:
         return None
@@ -1584,6 +1586,76 @@ def _flag(message: str, severity: str = "medium") -> dict:
     return {"message": message, "severity": severity}
 
 
+def _operating_valuation_basis(financials, cashflow, balance, period, revenue, debt, debt_period, market_equity, beta, currency, statement_currency, now):
+    """Select exact annual dates before entering the pure valuation calculations."""
+    def at(frame, aliases):
+        return next((value for stamp, value in period_observations_for_aliases(frame, aliases) if str(stamp)[:10] == period), None)
+
+    aligned = bool(period) and currency == statement_currency
+    provider_revenue = at(financials, ["Total Revenue", "Operating Revenue"]) if aligned else None
+    aligned = aligned and provider_revenue is not None and revenue is not None and math.isclose(provider_revenue, revenue, rel_tol=1e-4, abs_tol=1e-6)
+    age = _period_age_days(period, now)
+    aligned = aligned and age is not None and 0 <= age <= MAX_STATEMENT_AGE_DAYS
+    bridge = operating_cash_flow(
+        at(financials, ["Operating Income"]) if aligned else None,
+        at(financials, ["Pretax Income"]) if aligned else None,
+        at(financials, ["Tax Provision"]) if aligned else None,
+        at(cashflow, ["Depreciation And Amortization", "Depreciation Amortization Depletion"]) if aligned else None,
+        at(cashflow, ["Capital Expenditure"]) if aligned else None,
+        at(cashflow, ["Change In Working Capital"]) if aligned else None,
+    )
+    opening_debt = None
+    closing_debt_matches = False
+    if aligned and debt_period == period:
+        columns = [column for column in balance.columns if str(column)[:10] == period]
+        closing = _yahoo_total_debt_detail(balance[columns])[0] if columns else None
+        closing_debt_matches = closing is not None and debt is not None and math.isclose(closing, debt, rel_tol=1e-4, abs_tol=1e-6)
+        previous = []
+        for stamp in balance.columns:
+            stamp = str(stamp)[:10]
+            try:
+                days = (date.fromisoformat(period) - date.fromisoformat(stamp)).days
+            except (TypeError, ValueError):
+                continue
+            if 330 <= days <= 400:
+                previous.append(stamp)
+        if previous:
+            selected = max(previous)
+            columns = [column for column in balance.columns if str(column)[:10] == selected]
+            opening_debt = _yahoo_total_debt_detail(balance[columns])[0]
+    interest = at(financials, ["Interest Expense", "Interest Expense Non Operating"]) if aligned else None
+    cost = capital_cost(currency, beta, market_equity, debt if debt_period == period and closing_debt_matches else None,
+                        opening_debt, interest, bridge["tax_rate"], today=now.date())
+    common = {"period": period, "currency": currency, "source": "Yahoo Finance annual statements"}
+    return {"cash_flow": {**bridge, **common}, "capital_cost": {**cost, **common}}
+
+
+def _sec_total_debt_record(facts, currencies):
+    """Do not mistake current maturities for all short-term borrowing.
+
+    Keep loan-only and finance-lease-inclusive definitions in separate families.
+    Missing short-term borrowing is not an assumed zero.
+    """
+    candidates = []
+    for tags in (
+        ("DebtCurrent", "LongTermDebtNoncurrent"),
+        ("LongTermDebtCurrent", "LongTermDebtNoncurrent", "ShortTermBorrowings"),
+        ("LongTermDebtAndFinanceLeaseObligationsCurrent", "LongTermDebtAndFinanceLeaseObligationsNoncurrent", "ShortTermBorrowings"),
+    ):
+        records = [_sec_value(facts, (tag,), currencies, kind="instant") for tag in tags]
+        if not all(records):
+            continue
+        bases = {(record.get("period"), record.get("unit")) for record in records}
+        amounts = [finite(record.get("value")) for record in records]
+        if len(bases) != 1 or any(value is None or value < 0 for value in amounts):
+            continue
+        total = finite(sum(amounts))
+        if total is None:
+            continue
+        candidates.append({**records[-1], "value": total, "tag": "current + noncurrent debt", "components": records})
+    return max(candidates, key=lambda record: record["period"]) if candidates else None
+
+
 def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
     ticker_symbol = validate_ticker(symbol)
     _require_yahoo_access()
@@ -1591,12 +1663,12 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
     provider_failures: list[str] = []
     provider_data, provider_timeouts = _bounded_provider_calls({
         "info": lambda: _fetch_info(instrument),
-        "fast_info": lambda: dict(instrument.fast_info),
+        "fast_info": lambda: get_ticker_fast_info(instrument),
         "history": lambda: instrument.history(period="5y", auto_adjust=False, timeout=10),
         "financials": lambda: instrument.financials,
         "balance": lambda: instrument.balance_sheet,
         "cashflow": lambda: instrument.cashflow,
-        "estimates": lambda: instrument.revenue_estimate,
+        "estimates": lambda: get_revenue_estimates(instrument),
         "sec": lambda: _sec_facts(ticker_symbol, "N/A", "N/A"),
     }, timeout_seconds=20, failures=provider_failures)
     raw_info = provider_data.get("info")
@@ -1638,6 +1710,12 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
     if reporting_currency not in {"GBp", "GBX", "ZAc", "ILA"}:
         reporting_currency = reporting_currency.upper()
     trading_currency = str(info.get("currency") or fast_info.get("currency") or "N/A").strip()
+    quote_currency_conflict = bool(info.get("currency") and fast_info.get("currency")
+        and normalize_market_currency(info["currency"]) != normalize_market_currency(fast_info["currency"]))
+    if quote_currency_conflict:
+        # Price/previous close must use the selected profile's declared unit.
+        # Do not attach its currency to an incompatible fast-quote amount.
+        fast_info = {}
     sector = normalize_sector_label(info.get("sector"))
     sector_methodology_supported = has_sector_calibration(sector)
     if assumptions is not None and not sector_methodology_supported:
@@ -1673,23 +1751,21 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
                 price = None
             if previous_close is not None and previous_close <= 0:
                 previous_close = None
-    market_cap = _first_number(fast_info, "marketCap", "market_cap")
-    if market_cap is None:
-        market_cap = _first_number(info, "marketCap")
-    if market_cap is not None and market_cap <= 0:
-        market_cap = None
+    market_cap_detail = resolve_market_cap(info, fast_info, trading_currency)
+    market_cap = market_cap_detail["value"]
 
     yahoo_revenue_observations = period_observations_for_aliases(financials, ["Total Revenue", "Operating Revenue"])
     yahoo_revenue, yahoo_revenue_period = (yahoo_revenue_observations[0][1], str(yahoo_revenue_observations[0][0])[:10]) if yahoo_revenue_observations else (None, None)
     yahoo_gross, yahoo_gross_period = _row_period(financials, ("Gross Profit",))
     yahoo_operating_income, yahoo_operating_period = _row_period(financials, ("Operating Income",))
-    yahoo_net_income, yahoo_net_income_period = _row_period(financials, ("Net Income", "Net Income Common Stockholders"))
-    yahoo_ebitda, yahoo_ebitda_period = _row_period(financials, ("EBITDA", "Normalized EBITDA"))
+    yahoo_net_income, yahoo_net_income_period = _row_period(financials, ("Net Income",))
+    yahoo_common_income, yahoo_common_income_period = _row_period(financials, ("Net Income Common Stockholders",))
+    yahoo_ebitda, yahoo_ebitda_period = _row_period(financials, ("EBITDA",))
     yahoo_fcf, yahoo_fcf_period, yahoo_fcf_method = latest_period_aligned_fcf_detail(cashflow, financials, ["Total Revenue", "Operating Revenue"])
     yahoo_cash, yahoo_cash_period = _row_period(balance, ("Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"))
     yahoo_debt, yahoo_debt_period, yahoo_debt_kind, yahoo_debt_components = _yahoo_total_debt_detail(balance)
     yahoo_assets, yahoo_assets_period = _row_period(balance, ("Total Assets",))
-    yahoo_equity, yahoo_equity_period = _row_period(balance, ("Stockholders Equity", "Total Equity Gross Minority Interest"))
+    yahoo_equity, yahoo_equity_period = _row_period(balance, ("Stockholders Equity",))
     if not yahoo_statement_currency_identified:
         # Yahoo's statement frames do not retain currency metadata per row.
         # A listing/quote currency is not evidence of statement currency.
@@ -1700,6 +1776,7 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
         yahoo_debt_components = []
         yahoo_revenue_period = yahoo_gross_period = yahoo_operating_period = None
         yahoo_net_income_period = yahoo_ebitda_period = yahoo_fcf_period = None
+        yahoo_common_income = yahoo_common_income_period = None
         yahoo_cash_period = yahoo_debt_period = yahoo_assets_period = yahoo_equity_period = None
     sec_result = provider_data.get("sec")
     sec_facts, sec_state = sec_result if isinstance(sec_result, tuple) and len(sec_result) == 2 else (None, {"kind": "unavailable", "label": "SEC company facts are unavailable"})
@@ -1720,28 +1797,11 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
     if assumptions is not None and not currency_supported:
         raise ResearchError("unsupported_currency", "TSRP does not have a validated valuation calibration for this reporting currency.", 422)
     sec_net_income = _sec_value(sec_facts, SEC_TAGS["net_income"], sec_currencies, kind="duration")
+    sec_common_income = _sec_value(sec_facts, SEC_TAGS["common_income"], sec_currencies, kind="duration")
     sec_assets = _sec_value(sec_facts, SEC_TAGS["assets"], sec_currencies, kind="instant")
     sec_equity = _sec_value(sec_facts, SEC_TAGS["equity"], sec_currencies, kind="instant")
     sec_cash = _sec_value(sec_facts, SEC_TAGS["cash"], sec_currencies, kind="instant")
-    sec_debt_current = _sec_value(sec_facts, SEC_TAGS["debt_current"], sec_currencies, kind="instant")
-    sec_debt_long = _sec_value(sec_facts, SEC_TAGS["debt_long"], sec_currencies, kind="instant")
-    sec_debt = None
-    sec_debt_record = None
-    if sec_debt_current and sec_debt_long:
-        same_basis = (sec_debt_current.get("period"), sec_debt_current.get("unit")) == (
-            sec_debt_long.get("period"), sec_debt_long.get("unit")
-        )
-        if same_basis:
-            current = finite(sec_debt_current.get("value"))
-            long_term = finite(sec_debt_long.get("value"))
-            if current is not None and long_term is not None:
-                sec_debt = current + long_term
-                sec_debt_record = {
-                    **sec_debt_long,
-                    "value": sec_debt,
-                    "tag": "current + noncurrent debt",
-                    "components": [sec_debt_current, sec_debt_long],
-                }
+    sec_debt_record = _sec_total_debt_record(sec_facts, sec_currencies)
     sec_revenue = finite(sec_revenue_record.get("value")) if sec_revenue_record else None
     sec_unit = str(sec_revenue_record.get("unit") or sec_revenue_unit) if sec_revenue_record else sec_revenue_unit
     fx_flags = []
@@ -1898,6 +1958,8 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
     revenue_source = "SEC EDGAR" if revenue_record else ("Yahoo Finance" if yahoo_revenue is not None else None)
     revenue_period = str(revenue_record.get("period")) if revenue_record else yahoo_revenue_period
     net_income, net_income_record = choose_sec_or_yahoo(sec_net_income, yahoo_net_income, yahoo_net_income_period, "net income")
+    common_income, common_income_record = choose_sec_or_yahoo(sec_common_income, yahoo_common_income, yahoo_common_income_period, "earnings available to common shareholders")
+    common_income_period = str(common_income_record.get("period")) if common_income_record else yahoo_common_income_period
     assets, assets_record = choose_sec_or_yahoo(sec_assets, yahoo_assets, yahoo_assets_period, "assets")
     equity, equity_record = choose_sec_or_yahoo(sec_equity, yahoo_equity, yahoo_equity_period, "equity")
     cash, cash_record = choose_sec_or_yahoo(sec_cash, yahoo_cash, yahoo_cash_period, "cash")
@@ -1972,6 +2034,15 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
         # A provider quote explicitly marked with an invalid future time cannot
         # be made fresh merely because a daily history bar is dated today.
         stale = True
+    other_claims = 0.0
+    other_claims_observed = []
+    if yahoo_statement_currency_identified and str(raw_reporting_currency).upper() == reporting_currency:
+        for aliases, label in ((["Minority Interest"], "non-controlling interests"), (["Preferred Stock Equity"], "preferred equity")):
+            observations = period_observations_for_aliases(balance, aliases)
+            amount = next((value for period, value in observations if str(period)[:10] == debt_period and value is not None and value >= 0), None)
+            if amount is not None:
+                other_claims += amount
+                other_claims_observed.append(label)
     enterprise_value = None
     enterprise_value_period = None
     if (
@@ -1983,7 +2054,7 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
         and cash is not None and cash >= 0
         and debt is not None and debt >= 0
     ):
-        enterprise_value = finite(market_cap_reporting + debt - cash)
+        enterprise_value = finite(market_cap_reporting + debt + other_claims - cash)
         if enterprise_value is not None:
             enterprise_value_period = f"Market data {market_at}; balance sheet {debt_period}"
 
@@ -2020,18 +2091,25 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
     operating_margin = _period_ratio(yahoo_operating_income, yahoo_operating_period, yahoo_revenue, yahoo_revenue_period) if yahoo_income_current else None
     profit_margin = _period_ratio(net_income, net_income_period, revenue, revenue_period) if net_income_current and revenue_current else None
     fcf_margin = _period_ratio(free_cash_flow, fcf_period, revenue, revenue_period) if fcf_current and revenue_current else None
-    if revenue_source == "SEC EDGAR":
-        trailing_fcf_margins = _sec_fcf_margin_history(
-            sec_facts, revenue_record, years=4
-        ) if revenue_current and fcf_current else []
-    else:
-        trailing_fcf_margins = [] if not fcf_current else trailing_aligned_fcf_margins(
-            cashflow, financials, ["Total Revenue", "Operating Revenue"], years=4
-        )
-    model_fcf_margin, model_fcf_refused, model_fcf_note = choose_model_fcf_margin(
-        fcf_margin, trailing_fcf_margins, model["financial_benchmarks"]["fcf"]
+    valuation_basis = _operating_valuation_basis(
+        financials, cashflow, balance, revenue_period, revenue, debt, debt_period,
+        market_cap_reporting if not stale else None, _first_number(info, "beta"),
+        reporting_currency, str(raw_reporting_currency or "").upper(), analysis_now,
     )
+    unlevered_cash_flow = valuation_basis["cash_flow"]["value"]
+    unlevered_fcf_margin = _period_ratio(unlevered_cash_flow, revenue_period, revenue, revenue_period)
+    model_fcf_margin = unlevered_fcf_margin if unlevered_fcf_margin is not None and 0 < unlevered_fcf_margin <= .5 else None
+    model_fcf_refused = model_fcf_margin is None
+    model_fcf_note = valuation_basis["cash_flow"]["reason"]
+    estimated_wacc = valuation_basis["capital_cost"]["value"]
     if not sector_methodology_supported:
+        estimated_wacc = None
+        unlevered_cash_flow = unlevered_fcf_margin = None
+        valuation_basis["cash_flow"]["value"] = None
+        valuation_basis["cash_flow"]["reason"] = "Unavailable: no sector-appropriate enterprise cash-flow method."
+        for field in ("value", "cost_of_equity", "cost_of_debt", "equity_weight", "debt_weight"):
+            valuation_basis["capital_cost"][field] = None
+        valuation_basis["capital_cost"]["reason"] = "Unavailable: no sector calibration for an appropriate enterprise cash-flow valuation method."
         model_fcf_margin = None
         model_fcf_refused = True
         model_fcf_note = "Unavailable: TSRP does not have a validated sector calibration for this company."
@@ -2041,7 +2119,7 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
             for period, value in equity_record.get("series", [])
         ]
     elif not net_income_record and not equity_record:
-        equity_observations = period_observations(balance, ["Stockholders Equity", "Total Equity Gross Minority Interest"])
+        equity_observations = period_observations(balance, ["Stockholders Equity"])
     else:
         equity_observations = []
     roe = _average_equity_roe(net_income, net_income_period, equity_observations) if net_income_current else None
@@ -2050,10 +2128,12 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
     ev_ebitda = None
     if enterprise_value is not None and enterprise_value > 0 and yahoo_income_current and yahoo_ebitda is not None and yahoo_ebitda > 0 and yahoo_ebitda_period == revenue_period:
         ev_ebitda = finite(enterprise_value / yahoo_ebitda)
-    pe = finite(market_cap_reporting / net_income) if not stale and market_cap_reporting is not None and market_cap_reporting > 0 and net_income_current and net_income is not None and net_income > 0 else None
+    common_income_age = _period_age_days(common_income_period, analysis_now)
+    common_income_current = common_income_age is not None and 0 <= common_income_age <= MAX_STATEMENT_AGE_DAYS
+    pe = finite(market_cap_reporting / common_income) if not stale and market_cap_reporting is not None and market_cap_reporting > 0 and common_income_current and common_income is not None and common_income > 0 else None
 
     assumptions = validate_assumptions(assumptions) if assumptions is not None else None
-    discount_rate = assumptions["discount_rate"] if assumptions else rates["discount_rate"]
+    discount_rate = assumptions["discount_rate"] if assumptions else estimated_wacc
     terminal_growth = assumptions["terminal_growth"] if assumptions else rates["terminal_growth"]
     selected_margin = assumptions["fcf_margin"] if assumptions else model_fcf_margin
     start_growth = assumptions["starting_growth"] if assumptions else None
@@ -2062,7 +2142,7 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
     solver_status = "unavailable"
     solver_low = solver_high = None
     growth_clamped = False
-    if not stale and revenue_current and fcf_current and balance_current:
+    if not stale and revenue_current and balance_current:
         solve = solve_supported_required_growth(
             reporting_currency,
             sector_methodology_supported,
@@ -2071,17 +2151,36 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
             selected_margin,
             discount_rate,
             terminal_growth,
-            start_margin=fcf_margin if fcf_margin is not None and fcf_margin > 0 and assumptions is None else selected_margin,
+            start_margin=unlevered_fcf_margin if unlevered_fcf_margin is not None else selected_margin,
         )
         required_growth = solve["growth"]
         solver_status = solve["status"]
         solver_low, solver_high = solve["low"], solve["high"]
         growth_clamped = solver_status in {"below_range", "above_range"}
 
-    consensus_growth, consensus_label = _estimate_growth(estimate_frame)
+    valuation_projection = None
+    valuation_sensitivity = []
+    if solver_status == "exact":
+        valuation_projection = dcf_projection(revenue, required_growth, selected_margin, discount_rate, terminal_growth, start_margin=unlevered_fcf_margin)
+        # Hold the solved starting growth and margin fixed. Show how changing
+        # the two long-duration assumptions changes firm value, not the score.
+        for rate_delta in (-.01, 0, .01):
+            for growth_delta in (-.005, 0, .005):
+                test_rate, test_growth = discount_rate + rate_delta, terminal_growth + growth_delta
+                value = dcf_enterprise_value(revenue, required_growth, selected_margin, test_rate, test_growth, start_margin=unlevered_fcf_margin) if test_growth >= 0 and .03 <= test_rate <= .20 else None
+                valuation_sensitivity.append({"discount_rate": test_rate, "terminal_growth": test_growth, "enterprise_value": value})
+
+    estimate_detail = revenue_estimate(estimate_frame, as_of=analysis_now.date())
+    consensus_growth, consensus_label = estimate_detail["growth"], estimate_detail["label"]
     target_price = _first_number(info, "targetMeanPrice")
     analyst_count = _first_number(info, "numberOfAnalystOpinions")
     flags: list[dict] = []
+    if consensus_growth is not None and (estimate_detail["end_date"] is None or estimate_detail["currency"] is None):
+        flags.append(_flag("The analyst estimate has no verified fiscal end date or estimate currency. Its relative horizon remains visible, but changes are not treated as comparable analyst revisions."))
+    if market_cap_detail["unit_warning"]:
+        flags.append(_flag(market_cap_detail["kind"], "high"))
+    if quote_currency_conflict:
+        flags.append(_flag("Quote sources disagree on the trading unit. Fast-quote amounts are excluded; only the separately labeled company-profile quote is used.", "high"))
     provider_labels = {
         "history": "market-price history", "financials": "income statements",
         "balance": "balance sheet", "cashflow": "cash-flow statements",
@@ -2096,15 +2195,23 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
     if revenue is None:
         flags.append(_flag("Annual revenue is unavailable.", "high"))
     if model_fcf_refused and assumptions is None:
-        flags.append(_flag("The latest free-cash-flow margin is non-positive or unavailable; reverse DCF is not solved.", "high"))
+        flags.append(_flag("Estimated pre-debt operating cash flow is non-positive or cannot be reconstructed from comparable annual inputs; baseline reverse DCF is unavailable.", "high"))
     elif required_growth is None:
         flags.append(_flag("The available price, revenue, and cash-flow evidence does not support a growth solve.", "high"))
+    if estimated_wacc is None:
+        flags.append(_flag(valuation_basis["capital_cost"]["reason"], "medium"))
+    else:
+        flags.append(_flag("Valuation uses a dated capital-market reference, provider beta, effective tax and a historical borrowing-cost proxy, not live WACC. Inspect and stress the assumptions.", "medium"))
     if free_cash_flow is None:
         flags.append(_flag("Period-aligned free cash flow is unavailable."))
     elif fcf_margin is not None and fcf_margin <= 0:
-        flags.append(_flag("Free cash flow is negative; TSRP does not solve growth required by price from it."))
+        flags.append(_flag("Reported operating cash flow less capital spending is non-positive. The separately reconstructed pre-debt cash flow may differ; inspect both definitions."))
     if historical_growth is None:
         flags.append(_flag("There is not enough positive annual revenue history for a comparable growth rate."))
+    if common_income is None or not common_income_current:
+        flags.append(_flag("Annual price/earnings is unavailable without current earnings attributable to common shareholders; parent or consolidated earnings are not silently substituted."))
+    if net_income is None or equity is None:
+        flags.append(_flag("Return on equity needs parent-company earnings and parent equity; totals that include minority owners are not substitutes."))
     if revenue_age_days is None or revenue_age_days < 0 or revenue_age_days > MAX_STATEMENT_AGE_DAYS:
         flags.append(_flag("The latest annual revenue period is missing, future-dated, or more than 18 months old; it is excluded from current valuation and scoring.", "high"))
     if fcf_age_days is None or fcf_age_days < 0 or fcf_age_days > MAX_STATEMENT_AGE_DAYS:
@@ -2164,16 +2271,16 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
         # but must not flow back into the baseline TSRP Score.
         score_required_growth = None
         score_growth_clamped = False
-        if not model_fcf_refused and not stale and revenue_current and fcf_current and balance_current:
+        if not model_fcf_refused and not stale and revenue_current and balance_current:
             baseline_solve = solve_supported_required_growth(
                 reporting_currency,
                 sector_methodology_supported,
                 enterprise_value,
                 revenue,
                 model_fcf_margin,
-                rates["discount_rate"],
+                estimated_wacc,
                 rates["terminal_growth"],
-                start_margin=fcf_margin if fcf_margin is not None and fcf_margin > 0 else model_fcf_margin,
+                start_margin=unlevered_fcf_margin,
             )
             score_required_growth = baseline_solve["growth"]
             score_growth_clamped = baseline_solve["status"] in {"below_range", "above_range"}
@@ -2211,9 +2318,7 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
     confidence = _confidence(data_fields, flags)
     if not score_is_defensible:
         confidence = "Low"
-    if model_fcf_refused or growth_clamped:
-        confidence = "Low"
-    elif sec_state["kind"] != "available" and confidence == "High":
+    if sec_state["kind"] != "available" and confidence == "High":
         confidence = "Medium"
 
     def provenance(source: str | None, period: str | None, currency: str, status: str = "reported") -> dict:
@@ -2318,14 +2423,16 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
         "TSRP calculation" if ev_ebitda is not None else None,
         f"Market value {market_at}; annual EBITDA {yahoo_ebitda_period}" if ev_ebitda is not None else None,
         reporting_currency,
-        "enterprise value / same-period annual EBITDA",
+        "enterprise value / same-period annual EBITDA; normalized or adjusted EBITDA is not substituted",
     )
     pe_source = provenance(
         "TSRP calculation" if pe is not None else None,
-        f"Market value {market_at}; annual net income {net_income_period}" if pe is not None else None,
+        f"Market value {market_at}; annual common-shareholder earnings {common_income_period}" if pe is not None else None,
         reporting_currency,
-        "current market capitalization / annual net income; not a trailing-twelve-month P/E",
+        "current common-equity market capitalization / annual earnings available to common shareholders; not a trailing-twelve-month P/E",
     )
+    pe_source["earnings_basis"] = fact_provenance(common_income_record, "Yahoo Finance" if common_income is not None else None, common_income_period)
+    pe_source["earnings_basis"]["value"] = common_income
 
     fx_history_used = any(
         any(step.get("pairs") for step in conversion_steps(source, target, detail))
@@ -2379,27 +2486,23 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
 
     sources = {
         "share_price": provenance("Yahoo Finance", _quote_timestamp(info, fast_info, history, analysis_now), trading_currency, "market data"),
-        "market_cap": provenance("Yahoo Finance", market_at, market_cap_currency, "market data; currency follows the listing quote currency"),
+        "market_cap": {**provenance("Yahoo Finance" if market_cap is not None else None, market_at, market_cap_currency, market_cap_detail["kind"]), "original_value": market_cap_detail["raw_value"], "original_currency": market_cap_detail["raw_currency"]},
         "market_cap_reporting": market_cap_reporting_source,
-        "enterprise_value": provenance("TSRP calculation" if enterprise_value is not None else None, enterprise_value_period, reporting_currency, "market capitalization + same-date reported debt − cash; excludes other claims not separately captured" if sector_methodology_supported else "unavailable: no validated TSRP sector valuation method"),
+        "enterprise_value": provenance("TSRP calculation" if enterprise_value is not None else None, enterprise_value_period, reporting_currency, "market capitalization + same-date debt + identified book-value non-controlling/preferred interests − cash; additional claims may be unreported. Identified: " + (", ".join(other_claims_observed) or "no separate additional claim rows") if sector_methodology_supported else "unavailable: no validated TSRP sector valuation method"),
         "ev_sales": ev_sales_source,
         "ev_ebitda": ev_ebitda_source,
         "pe": pe_source,
         "valuation_assumptions": provenance(
-            "TSRP static calibration" if valuation_calibration_supported else None,
-            "No live market-yield timestamp" if valuation_calibration_supported else None,
-            rates["currency"] if valuation_calibration_supported else "N/A",
-            rates["calibration_basis"] if valuation_calibration_supported else (
-                "unavailable: no validated sector calibration; valuation rate assumptions are withheld"
-                if not sector_methodology_supported
-                else "unavailable: no validated calibration for the reporting currency; USD rates are not substituted"
-            ),
+            "TSRP estimated WACC / NYU Stern January 2026 reference" if estimated_wacc is not None and valuation_calibration_supported else None,
+            valuation_basis["capital_cost"]["reference"]["date"], reporting_currency if valuation_calibration_supported else "N/A",
+            valuation_basis["capital_cost"]["reason"],
         ),
+        "unlevered_cash_flow": provenance("TSRP calculation / Yahoo Finance annual statements" if unlevered_cash_flow is not None else None, revenue_period, reporting_currency, model_fcf_note),
         "revenue": fact_provenance(revenue_record, revenue_source, revenue_period),
         "net_income": fact_provenance(net_income_record, "Yahoo Finance" if net_income is not None else None, net_income_period),
         "free_cash_flow": fcf_provenance,
         "historical_growth": provenance(history_source, f"{history_start} to {history_end}" if history_start and history_end else None, reporting_currency, "calculated from dated annual reported revenue"),
-        "analyst_growth": provenance("Yahoo Finance analyst estimates" if consensus_growth is not None else None, consensus_label, reporting_currency, "consensus estimate"),
+        "analyst_growth": provenance("Yahoo Finance analyst estimates" if consensus_growth is not None else None, estimate_detail["end_date"] or consensus_label, estimate_detail["currency"] or "N/A", "consensus estimate; fiscal end date and estimate currency are not inferred from the company's latest accounts"),
         "cash": fact_provenance(cash_record, "Yahoo Finance" if cash is not None else None, cash_period),
         "debt": debt_provenance,
         "equity": fact_provenance(equity_record, "Yahoo Finance" if equity is not None else None, equity_period),
@@ -2407,7 +2510,7 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
         "operating_margin": provenance("Yahoo Finance annual income statement" if operating_margin is not None else None, yahoo_operating_period, reporting_currency, "calculated from same-period operating income / revenue"),
         "profit_margin": provenance("Period-aligned net income / revenue" if profit_margin is not None else None, revenue_period, reporting_currency, "calculated"),
         "free_cash_flow_margin": provenance("Period-aligned free cash flow / revenue" if fcf_margin is not None else None, fcf_period, reporting_currency, "calculated"),
-        "return_on_equity": provenance("SEC EDGAR" if net_income_record and equity_record else "Yahoo Finance" if roe is not None else None, net_income_period, reporting_currency, "net income / average beginning and ending equity"),
+        "return_on_equity": provenance("SEC EDGAR" if roe is not None and net_income_record and equity_record else "Yahoo Finance" if roe is not None else None, net_income_period, reporting_currency, "parent-company net income / average positive beginning and ending parent equity; excludes non-controlling interests, includes preferred equity; not return on common equity"),
         "debt_to_assets": provenance("Period-aligned balance-sheet values" if debt_to_assets is not None else None, debt_period, reporting_currency, "calculated"),
         "fx": {
             "source": " + ".join(fx_source_parts) if fx_source_parts else "FX conversion unavailable" if fx_conversion_unavailable else "No conversion required",
@@ -2437,6 +2540,7 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
         "market_cap": market_cap,
         "market_cap_reporting": market_cap_reporting,
         "enterprise_value": enterprise_value,
+        "other_claims": other_claims,
         "revenue": revenue,
         "revenue_period": revenue_period,
         "revenue_source": revenue_source,
@@ -2444,14 +2548,19 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
         "fcf_period": fcf_period,
         "fcf_source": fcf_source,
         "fcf_margin": fcf_margin,
+        "unlevered_cash_flow": unlevered_cash_flow,
+        "unlevered_fcf_margin": unlevered_fcf_margin,
+        "valuation_basis": valuation_basis,
+        "valuation_projection": valuation_projection,
+        "valuation_sensitivity": valuation_sensitivity,
         "model_fcf_margin": selected_margin,
         "model_fcf_note": model_fcf_note,
         "model_fcf_refused": model_fcf_refused and assumptions is None,
         "discount_rate": discount_rate if valuation_calibration_supported else None,
         "terminal_growth": terminal_growth if valuation_calibration_supported else None,
-        "risk_free": rates["risk_free"] if valuation_calibration_supported else None,
-        "equity_risk_premium": rates["erp"] if valuation_calibration_supported else None,
-        "sector_spread": rates["sector_spread"] if valuation_calibration_supported else None,
+        "risk_free": valuation_basis["capital_cost"]["reference"]["risk_free"] if estimated_wacc is not None and valuation_calibration_supported else None,
+        "equity_risk_premium": valuation_basis["capital_cost"]["reference"]["equity_risk_premium"] if estimated_wacc is not None and valuation_calibration_supported else None,
+        "sector_spread": None,
         "rate_currency": rates["currency"] if valuation_calibration_supported else "N/A",
         "currency_methodology_supported": currency_supported,
         "historical_growth": historical_growth,
@@ -2459,6 +2568,8 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
         "historical_growth_3y": historical_growth_3y,
         "consensus_growth": consensus_growth,
         "analyst_estimate_period": consensus_label,
+        "analyst_estimate_end_date": estimate_detail["end_date"],
+        "analyst_estimate_currency": estimate_detail["currency"],
         "target_mean_price": target_price,
         "analyst_count": analyst_count,
         "required_growth": required_growth,
@@ -2520,11 +2631,11 @@ def analyze_company(symbol: Any, assumptions: dict | None = None) -> dict:
             revenue, assumptions["starting_growth"], assumptions["fcf_margin"],
             assumptions["discount_rate"], assumptions["terminal_growth"],
             years=FORECAST_YEARS,
-            start_margin=fcf_margin if fcf_margin is not None and fcf_margin > 0 else assumptions["fcf_margin"],
+            start_margin=unlevered_fcf_margin if unlevered_fcf_margin is not None else assumptions["fcf_margin"],
         ) if scenario_available else None
         display["scenario"] = {
             "enterprise_value": scenario_ev,
-            "equity_value": finite(scenario_ev - debt + cash) if scenario_ev is not None and balance_current and cash_debt_comparable and debt is not None and debt >= 0 and cash is not None and cash >= 0 else None,
+            "equity_value": finite(scenario_ev - debt - other_claims + cash) if scenario_ev is not None and balance_current and cash_debt_comparable and debt is not None and debt >= 0 and cash is not None and cash >= 0 else None,
             "inputs": assumptions,
             "kind": "user scenario, not a forecast or target price",
         }
@@ -2561,6 +2672,7 @@ def _validate_scenario_basis(symbol: str, payload: Any) -> dict:
         "revenue_currency", "market_cap_reporting", "enterprise_value", "market_at",
         "cash", "cash_period", "cash_currency", "debt", "debt_period", "debt_currency",
         "starting_fcf_margin",
+        "other_claims",
         "methodology_version", "analysis_schema_version",
     }
     unavailable = ResearchError(
@@ -2587,19 +2699,19 @@ def _validate_scenario_basis(symbol: str, payload: Any) -> dict:
             raise ResearchError("scenario_currency_mismatch", "Scenario facts must use the company’s reporting currency.", 422)
 
     numbers = {}
-    for field in ("revenue", "market_cap_reporting", "enterprise_value", "cash", "debt"):
+    for field in ("revenue", "market_cap_reporting", "enterprise_value", "cash", "debt", "other_claims"):
         raw = payload.get(field)
         number = None if isinstance(raw, bool) else finite(raw)
         if number is None or abs(number) > MAX_SCENARIO_FINANCIAL_AMOUNT:
             raise unavailable
         numbers[field] = number
-    if numbers["revenue"] <= 0 or numbers["market_cap_reporting"] <= 0 or numbers["cash"] < 0 or numbers["debt"] < 0:
+    if numbers["revenue"] <= 0 or numbers["market_cap_reporting"] <= 0 or numbers["cash"] < 0 or numbers["debt"] < 0 or numbers["other_claims"] < 0:
         raise unavailable
 
     starting_fcf_margin = payload.get("starting_fcf_margin")
     if starting_fcf_margin is not None:
         starting_fcf_margin = None if isinstance(starting_fcf_margin, bool) else finite(starting_fcf_margin)
-        if starting_fcf_margin is None or starting_fcf_margin <= 0:
+        if starting_fcf_margin is None or abs(starting_fcf_margin) > 10:
             raise unavailable
 
     periods = {}
@@ -2627,7 +2739,7 @@ def _validate_scenario_basis(symbol: str, payload: Any) -> dict:
     if age_seconds > 60 * 60 * 48 or age_seconds < -5 * 60:
         raise ResearchError("scenario_data_stale", "Market data is stale. Refresh the company analysis before calculating a scenario.", 422)
 
-    derived_ev = numbers["market_cap_reporting"] + numbers["debt"] - numbers["cash"]
+    derived_ev = numbers["market_cap_reporting"] + numbers["debt"] + numbers["other_claims"] - numbers["cash"]
     if derived_ev <= 0 or abs(numbers["enterprise_value"] - derived_ev) > max(1.0, abs(derived_ev) * 1e-8):
         raise ResearchError("scenario_basis_inconsistent", "Company valuation inputs do not reconcile. Refresh the analysis before continuing.", 422)
 
@@ -2658,13 +2770,13 @@ def analyze_scenario(symbol: Any, assumptions: Any, basis: Any) -> dict:
         current["revenue"], values["starting_growth"], values["fcf_margin"],
         values["discount_rate"], values["terminal_growth"],
         years=FORECAST_YEARS,
-        start_margin=current["starting_fcf_margin"] or values["fcf_margin"],
+        start_margin=current["starting_fcf_margin"] if current["starting_fcf_margin"] is not None else values["fcf_margin"],
     )
     if scenario_ev is None:
         raise ResearchError("scenario_unavailable", "These assumptions do not produce a supported scenario value.", 422)
     return {
         "enterprise_value": scenario_ev,
-        "equity_value": finite(scenario_ev - current["debt"] + current["cash"]),
+        "equity_value": finite(scenario_ev - current["debt"] - current["other_claims"] + current["cash"]),
         "inputs": values,
         "kind": "user scenario using the source facts currently shown; not a forecast or target price",
     }
@@ -3066,6 +3178,10 @@ def compare_snapshots(previous: Any, current: Any) -> dict:
         return {"comparable": False, "reason": "snapshot_metadata_missing", "changes": [], "excluded_fields": []}
     if not _valid_snapshot(previous, require_saved_at=True) or not _valid_snapshot(current, require_saved_at=False):
         return {"comparable": False, "reason": "snapshot_schema_invalid", "changes": [], "excluded_fields": []}
+    previous_time = datetime.fromisoformat(previous["retrieved_at"].replace("Z", "+00:00"))
+    current_time = datetime.fromisoformat(current["retrieved_at"].replace("Z", "+00:00"))
+    if previous_time > current_time:
+        return {"comparable": False, "reason": "snapshot_order_invalid", "changes": [], "excluded_fields": []}
     previous_core = {
         key: previous.get(key)
         for key in (
@@ -3106,6 +3222,12 @@ def compare_snapshots(previous: Any, current: Any) -> dict:
             previous_core["consensus_growth"] = current_core["consensus_growth"] = None
             excluded_fields.append({"field": "consensus_growth", "reason": "estimate_period_unavailable"})
         elif previous_estimate_period != current_estimate_period:
+            previous_core["consensus_growth"] = current_core["consensus_growth"] = None
+            excluded_fields.append({"field": "consensus_growth", "reason": "estimate_period_changed"})
+        elif not all(statement_period(item.get("analyst_estimate_end_date")) and item.get("analyst_estimate_currency") for item in (previous, current)):
+            previous_core["consensus_growth"] = current_core["consensus_growth"] = None
+            excluded_fields.append({"field": "consensus_growth", "reason": "estimate_period_unavailable"})
+        elif previous.get("analyst_estimate_end_date") != current.get("analyst_estimate_end_date") or previous.get("analyst_estimate_currency") != current.get("analyst_estimate_currency"):
             previous_core["consensus_growth"] = current_core["consensus_growth"] = None
             excluded_fields.append({"field": "consensus_growth", "reason": "estimate_period_changed"})
 
@@ -3155,8 +3277,8 @@ def _timestamp_is_valid(value: Any) -> bool:
     if not isinstance(value, str) or not value.strip():
         return False
     try:
-        datetime.fromisoformat(value.replace("Z", "+00:00"))
-        return True
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed.tzinfo is not None and parsed.utcoffset() is not None
     except (TypeError, ValueError, OverflowError):
         return False
 
@@ -3176,6 +3298,12 @@ def _valid_snapshot(value: dict, *, require_saved_at: bool) -> bool:
     if estimate_period is not None and (
         not isinstance(estimate_period, str) or not estimate_period.strip() or len(estimate_period) > 100
     ):
+        return False
+    end_date = value.get("analyst_estimate_end_date")
+    estimate_currency = value.get("analyst_estimate_currency")
+    if end_date is not None and (not isinstance(end_date, str) or statement_period(end_date) != end_date):
+        return False
+    if estimate_currency is not None and (not isinstance(estimate_currency, str) or not re.fullmatch(r"[A-Z]{3}", estimate_currency) or estimate_currency == "XXX"):
         return False
     if not _timestamp_is_valid(value.get("retrieved_at")) or (require_saved_at and not _timestamp_is_valid(value.get("saved_at"))):
         return False

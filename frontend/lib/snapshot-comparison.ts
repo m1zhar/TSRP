@@ -93,6 +93,8 @@ export function toSnapshotComparisonPayload(company: SnapshotComparisonInput, sa
     historical_growth: company.historical_growth,
     consensus_growth: company.consensus_growth,
     analyst_estimate_period: company.analyst_estimate_period,
+    analyst_estimate_end_date: company.analyst_estimate_end_date ?? null,
+    analyst_estimate_currency: company.analyst_estimate_currency ?? null,
     required_growth: company.required_growth,
     revenue: company.revenue,
     revenue_period: company.revenue_period,

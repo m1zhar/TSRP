@@ -9,6 +9,7 @@ import { basename, delimiter, dirname, isAbsolute, join, relative, resolve, sep 
 import { tmpdir } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import { assertAnalysisResponse } from "../lib/analysis-response.ts";
 
 const host = "127.0.0.1";
 async function allocatePort() {
@@ -350,6 +351,9 @@ try {
   const successfulAnalysis = await successfulAnalysisResponse.json();
   assert.equal(successfulAnalysisResponse.status, 200, "A listed-equity analysis must succeed through the production Next.js-to-ASGI boundary with a local fixture.");
   assert.equal(successfulAnalysis.data?.company?.ticker, "AAPL");
+  assertAnalysisResponse(successfulAnalysis.data, "AAPL");
+  assert.equal(successfulAnalysis.data.company.analyst_estimate_end_date, `${new Date().getUTCFullYear() + 1}-12-31`);
+  assert.equal(successfulAnalysis.data.company.analyst_estimate_currency, "USD");
   assert.equal(successfulAnalysis.data?.company?.company, "Synthetic QA · Example Corporation", "The analysis fixture must remain clearly synthetic.");
   assert.equal(successfulAnalysis.data?.company?.score_available, true);
   assert.equal(successfulAnalysis.data?.scenario_context_status, "available");
@@ -369,6 +373,24 @@ try {
   assert.equal(successfulAnalysisResponse.headers.get("cache-control"), "private, no-store");
   assert.match(successfulAnalysisResponse.headers.get("x-request-id") ?? "", /^[a-f0-9]{32}$/u);
   const coldAnalysisMs = performance.now() - coldAnalysisStartedAt;
+
+  const subunitResponse = await fetch(`${publicOrigin}/api/analyze?ticker=EXM.L`, {
+    headers: { Authorization: `Bearer ${testAccessToken()}` },
+    signal: AbortSignal.timeout(25_000),
+  });
+  const subunitAnalysis = await subunitResponse.json();
+  assert.equal(subunitResponse.status, 200);
+  assertAnalysisResponse(subunitAnalysis.data, "EXM.L");
+  const subunitCompany = subunitAnalysis.data.company;
+  assert.equal(subunitCompany.trading_currency, "GBp");
+  assert.equal(subunitCompany.reporting_currency, "GBP");
+  assert.equal(subunitCompany.market_cap, 3000, "A profile fallback already in pounds must normalize to pence before the existing quote-unit conversion.");
+  assert.equal(subunitCompany.market_cap_reporting, 30, "Market equity must not shrink 100-fold when the fast market-cap field is missing.");
+  assert.equal(subunitCompany.enterprise_value, 130);
+  assert.equal(subunitCompany.sources.market_cap.original_currency, "GBP");
+  assert.equal(subunitCompany.sources.market_cap.original_value, 30);
+  assert.equal(subunitCompany.score_available, true);
+  assert.equal(subunitCompany.discount_rate, null, "Do not invent a sourced GBP WACC to make the fixture appear complete.");
 
   const warmAnalysisStartedAt = performance.now();
   const warmAnalysisResponse = await fetch(`${publicOrigin}/api/analyze?ticker=AAPL`, {

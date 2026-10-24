@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dateLabel, methodologyVersionLabel, money } from "./format.ts";
+import { dateLabel, methodologyVersionLabel, money, pct } from "./format.ts";
+
+test("percentage formatting never renders overflow as an infinite percentage", () => {
+  assert.equal(pct(1e308), "N/A");
+  assert.equal(pct(Number.NaN), "N/A");
+  assert.equal(pct(.12), "12.0%");
+});
 
 test("money preserves known quote subunits instead of hiding or relabeling prices", () => {
   for (const unit of ["GBp", "GBX", "ZAc", "ILA"]) {

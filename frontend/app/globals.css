@@ -32,7 +32,7 @@
 }
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; scroll-padding-top: 20px; }
+html { scroll-behavior: auto; scroll-padding-top: 20px; }
 body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
 button, input { font: inherit; }
 button { color: inherit; }
@@ -282,6 +282,10 @@ p, h1, h2, h3 { margin-top: 0; }
 .change-table-wrap { margin-top: 17px; }
 .snapshot-date { color: var(--ink-muted); font-size: 12px; line-height: 1.5; text-align: center; }
 .change-table { width: 100%; border-top: 1px solid var(--line); }
+.table-scroll { max-width: 100%; overflow-x: auto; margin-block: var(--space-4); }
+.table-scroll table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.table-scroll th, .table-scroll td { padding: var(--space-3) var(--space-2); text-align: center; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.table-scroll thead { color: var(--ink-muted); }
 .change-table-head, .change-table-row { display: grid; grid-template-columns: minmax(145px,1.4fr) repeat(3,minmax(75px,1fr)); gap: 14px; align-items: center; }
 .change-table-head { min-height: 34px; color: var(--ink-soft); font-size: 9px; font-weight: 700; }
 .change-table-row { min-height: 42px; border-top: 1px solid var(--line); font-size: 10px; }
