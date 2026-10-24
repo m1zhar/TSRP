@@ -10,8 +10,17 @@ export type ScoreComponent = {
 
 export type ScoreFactor = { key: string; label: string; value: number | null; weight: number };
 
-export type FxConversion = { from: string; to: string; rate: number | null; pairs: string[]; directions: string[]; period: string | null };
-export type Source = { source: string; period: string; currency: string; kind: string; conversions?: FxConversion[] };
+export type FxConversion = { from: string; to: string; rate: number | null; pairs: string[]; directions: string[]; leg_periods?: string[]; period: string | null };
+export type SourceFact = {
+  value: number | null;
+  period: string | null;
+  source_unit: string | null;
+  filing_date: string | null;
+  filing_form: string | null;
+  taxonomy: string | null;
+  tag: string | null;
+};
+export type Source = { source: string; period: string; currency: string; kind: string; conversions?: FxConversion[]; components?: SourceFact[] };
 
 export type Company = {
   ticker: string;
@@ -19,6 +28,8 @@ export type Company = {
   exchange: string;
   quote_type: string;
   sector: string;
+  sector_methodology_supported: boolean;
+  currency_methodology_supported?: boolean;
   industry: string;
   reporting_currency: string;
   trading_currency: string;
@@ -37,11 +48,11 @@ export type Company = {
   model_fcf_margin: number | null;
   model_fcf_note: string | null;
   model_fcf_refused: boolean;
-  discount_rate: number;
-  terminal_growth: number;
-  risk_free: number;
-  equity_risk_premium: number;
-  sector_spread: number;
+  discount_rate: number | null;
+  terminal_growth: number | null;
+  risk_free: number | null;
+  equity_risk_premium: number | null;
+  sector_spread: number | null;
   rate_currency: string;
   historical_growth: number | null;
   historical_growth_years: number;
@@ -60,7 +71,8 @@ export type Company = {
   market_expectations: number | null;
   score: number | null;
   score_label: string;
-  score_trace: { score: number | null; components: ScoreComponent[]; subscores?: Record<string, { score: number | null; evidence_coverage: number; components: ScoreFactor[] }>; evidence_coverage: number; minimum_evidence_coverage: number; growth_comparison_available: boolean } | null;
+  score_trace: { score: number | null; components: ScoreComponent[]; subscores?: Record<string, { score: number | null; evidence_coverage: number; components: ScoreFactor[] }>; evidence_coverage: number; minimum_evidence_coverage: number; growth_comparison_available: boolean; growth_comparison_inputs: { historical_growth: number | null; required_growth: number | null; growth_clamped: boolean } } | null;
+  snapshot_proof: string | null;
   score_available: boolean;
   analysis_schema_version: string;
   confidence: string;
@@ -98,11 +110,16 @@ export type Assumptions = {
 };
 
 export type PricePoint = { date: string; close: number; volume: number | null };
-export type Analysis = { company: Company; price_history: PricePoint[] };
+export type Analysis = {
+  company: Company;
+  price_history: PricePoint[];
+  scenario_context_token: string | null;
+  scenario_context_status?: "available" | "not_configured" | "unsupported" | "unavailable";
+};
 export type CompanyMatch = { ticker: string; company: string; exchange: string; sector: string };
 export type MarketMover = { ticker: string; change_percent: number; absolute_change: number; currency: string; market_at: string };
-export type MarketMovers = { source: string; period: string; top_stocks_rank: string; top_stocks_label: string; retrieved_at: string; items: MarketMover[]; top_stocks: MarketMover[] };
-export type TopStocksResponse = { source: string; rank: string; label: string; retrieved_at: string; items: MarketMover[] };
+export type MarketMovers = { source: string; period: string; top_stocks_rank: string; top_stocks_label: string; retrieved_at: string; top_stocks_retrieved_at?: string; items: MarketMover[]; top_stocks: MarketMover[]; coverage_note?: string; top_stocks_coverage_note?: string; popular_stocks?: MarketMover[]; popular_stocks_rank?: string; popular_stocks_label?: string; popular_stocks_retrieved_at?: string; popular_stocks_coverage_note?: string };
+export type TopStocksResponse = { source: string; rank: string; label: string; retrieved_at: string; items: MarketMover[]; coverage_note?: string };
 export type SectionName = "TSRP Score" | "Expectations vs Reality" | "Valuation" | "Catalysts & Risks" | "What Changed?";
 
 export const SECTIONS: SectionName[] = [
