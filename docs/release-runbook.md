@@ -1,6 +1,6 @@
 # TSRP preview, monitoring, and rollback runbook
 
-This is a procedure for release verification; it does not mean TSRP currently has production monitoring, alerts, staged rollout, or rollback configured. Commit `d271645` is on GitHub `main`, and GitHub reports that Vercel completed a deployment for it. The deployed app and API have not been manually smoke-tested, and no Vercel project settings were changed here. Treat deployment completion as a build/deploy signal, not release sign-off.
+This runbook explains how to verify a release. It does not mean TSRP has production monitoring, alerts, staged rollout, or rollback configured. Check the deployed commit and manually test both the app and API before each release. A completed Vercel deployment confirms the build and deployment step, not release sign-off.
 
 ## Before a release
 

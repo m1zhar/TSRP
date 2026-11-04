@@ -18,9 +18,8 @@ QUOTE_CURRENCY_SUBUNITS_TO_MAJOR = {
 }
 QUOTE_CURRENCY_SUBUNITS = frozenset(QUOTE_CURRENCY_SUBUNITS_TO_MAJOR)
 
-# Long-run nominal bases by reporting currency. These are calibrated levels,
-# not live yields — the important property is internal consistency:
-# cash, discount rate, and terminal growth share the same money world.
+# Fixed long-run assumptions by reporting currency, not current market yields.
+# Cash flows, the discount rate, and terminal growth use the same currency.
 CURRENCY_PROFILES = {
     "USD": {"risk_free": 0.043, "terminal_growth": 0.024, "erp": 0.045, "label": "US dollar"},
     "EUR": {"risk_free": 0.026, "terminal_growth": 0.018, "erp": 0.048, "label": "Euro"},
@@ -500,16 +499,16 @@ def average_finite_margins(margins):
 
 def choose_model_fcf_margin(latest_margin, trailing_margins, mature_margin=None):
     """
-    Reverse DCF only runs on real positive cash conversion.
-    Trailing average is preferred when it exists; latest year is blended in.
-    Never invent a healthy margin for a cash-burning company.
+    Reverse DCF requires a positive reported free-cash-flow margin.
+    Prefer the trailing average when available and blend it with the latest year.
+    Do not assume a profitable margin for a company with negative cash flow.
     """
     latest = _f(latest_margin)
     avg = average_finite_margins(trailing_margins)
     _ = mature_margin  # kept for callers that still pass sector mature as a label only
 
     if latest is not None and latest <= 0:
-        return None, True, "latest free-cash-flow margin is non-positive — reverse DCF not solved"
+        return None, True, "Reverse DCF unavailable: the latest free-cash-flow margin is non-positive."
     if latest is not None and latest > 0 and avg is not None:
         if avg > 0:
             blended = 0.5 * latest + 0.5 * avg
@@ -519,7 +518,7 @@ def choose_model_fcf_margin(latest_margin, trailing_margins, mature_margin=None)
         return latest, False, "latest year"
     if avg is not None and avg > 0:
         return avg, False, "multi-year average (latest year not usable)"
-    return None, True, "no positive usable free-cash margin — reverse DCF not solved"
+    return None, True, "Reverse DCF unavailable: no positive free-cash-flow margin is available."
 
 
 def growth_reality_score(benchmark_growth, required_growth):
@@ -674,7 +673,7 @@ def supported_score_breakdown(business, financial, historical_growth, required_g
     sensitivity = None
     if score is not None:
         # Vary each observed factor's effective weight by +/-25%, one at a
-        # time, then renormalize. This is a policy sensitivity, NOT a CI.
+        # time, then renormalize. This is a policy sensitivity, not a confidence interval.
         factors = []
         for component, detail in zip(components, (business, financial)):
             if not isinstance(detail, dict):

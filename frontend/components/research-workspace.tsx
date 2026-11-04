@@ -826,7 +826,7 @@ export function ResearchWorkspace() {
           <div className="home-guide-intro">
             <p className="eyebrow">Inside a company analysis</p>
             <h2 id="home-guide-title">Follow the signal back to its evidence.</h2>
-            <p>TSRP keeps reported results, market expectations, and model assumptions distinct, so you can see what supports the research view—and what remains uncertain.</p>
+            <p>TSRP keeps reported results, market expectations, and model assumptions separate. You can see what supports the research view and what remains uncertain.</p>
           </div>
           <ol className="home-research-steps">
             {HOME_RESEARCH_SECTIONS.map(({ section, description }, index) => <li key={section}>
@@ -958,7 +958,7 @@ function ExpectationsView({ company: c }: { company: Company }) {
       <div className="evidence-grid three-columns">
         <EvidenceRow label="Historical revenue growth" value={pct(c.historical_growth)} note={c.historical_growth_years ? `Annualized over approximately ${c.historical_growth_years.toFixed(1)} years, using actual reporting dates. This is backward-looking, not a forecast.` : "Comparable positive annual revenue observations are unavailable."} source={sourceLine(c, "historical_growth")} />
         <EvidenceRow label={analystEstimateLabel(c.analyst_estimate_period)} value={pct(c.consensus_growth)} note={analystAvailabilityReason(c)} source={sourceLine(c, "analyst_growth")} />
-        <EvidenceRow label="TSRP model-required revenue growth" value={pct(c.required_growth)} note={`${solverDescription(c)} This is the annual revenue growth used to reconcile TSRP’s 10-year illustration to enterprise value—not a one-year analyst estimate or an observed market expectation.`} source={`TSRP calculation · ${c.reporting_currency} assumptions · ${methodologyVersionLabel(c.methodology_version)}`} />
+        <EvidenceRow label="TSRP model-required revenue growth" value={pct(c.required_growth)} note={`${solverDescription(c)} This is the annual revenue growth TSRP needs to reconcile its 10-year illustration with enterprise value. It is not a one-year analyst estimate or an observed market expectation.`} source={`TSRP calculation · ${c.reporting_currency} assumptions · ${methodologyVersionLabel(c.methodology_version)}`} />
       </div>
       <div className="comparison-note"><strong>Different evidence, different meanings.</strong><span>Past revenue growth, analyst estimates, and TSRP’s modeled growth requirement cover different periods. The model output also depends on illustrative cash-flow and discount assumptions, so it is not observed market consensus. These figures alone do not establish whether the company is beating or missing expectations.</span></div>
     </section>
@@ -1144,7 +1144,7 @@ function ChangesView({ company, count, state, diff, message, corrupt, onSave, on
         </div> : <div className="empty-state"><strong>No measured changes detected</strong><p>The comparable fields match the latest saved analysis.</p></div>}
       </div>}
     </section>
-    <p className="snapshot-privacy">Stored in this browser only—not encrypted, synced, or backed up. Up to eight per ticker; saving another removes the oldest. Remove this ticker’s snapshots here or clear site data.</p>
+    <p className="snapshot-privacy">Saved only in this browser. TSRP does not encrypt, sync, or back up these snapshots. Up to eight are kept per ticker; saving another removes the oldest. Remove this ticker’s snapshots here or clear site data.</p>
   </div>;
 }
 

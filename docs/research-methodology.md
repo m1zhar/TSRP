@@ -1,8 +1,10 @@
-# TSRP methodology — score v10 / analysis v5
+# TSRP methodology: score v10 / analysis v5
 
-TSRP is an educational research index and an assumption-dependent valuation tool. It is not a probability, recommendation, price target, forecast or validated expected-return model. Python is the single calculation authority; UI and exports use its returned results.
+TSRP is an educational research tool. Its score summarizes operating evidence; its valuation estimates company value under stated assumptions. Neither is a probability, recommendation, price target, forecast, or validated expected-return model. The Python engine calculates the results. The website and exports display those same results.
 
-See the [score-validation record](score-validation.md) for reproducible implementation checks and the uncompleted independent-review and point-in-time historical-validation requirements. Neither tests nor a solved valuation equation establish predictive accuracy. Sector-specific UI guidance identifies research the generic model does not perform; it adds no new score factor or company fact.
+The [score-validation record](score-validation.md) lists checks that can be repeated and reviews that have not been completed. Passing tests or solving the valuation equation does not show that TSRP can predict returns. Sector guidance explains where the general model has limits; it does not add score factors or facts about a company.
+
+Terms used below: **CAGR** is the steady annual growth rate that would produce the observed change over a period. **ROE** compares profit with average shareholders’ equity. **CFO** is cash from operations, **capex** is spending on long-lived assets, and reported **FCF** is cash from operations less capital spending when periods and currencies match. **EBIT** is earnings before interest and taxes; **D&A** is depreciation and amortization. **EV** is enterprise value, an estimate of total business value that generally adds debt and other claims to equity value and subtracts cash. **DCF** estimates value from projected cash flows. **WACC** is the discount rate used in this model. **ERP** is an assumption for the extra return associated with equity risk.
 
 ## Changes from v9
 
@@ -16,7 +18,7 @@ See the [score-validation record](score-validation.md) for reproducible implemen
 
 ## Score: exact formulas
 
-Clamp observed factors to 0–100. Missing, boolean, non-finite and undefined inputs are unavailable, not neutral or zero. Reweight only observed factors. Each group needs at least 50% factor coverage; the final score needs 70% weighted evidence and 70% available group weight, so both groups are required.
+Keep each observed factor between 0 and 100. Missing values, boolean values, invalid numbers such as NaN or infinity, and undefined inputs are unavailable, not neutral or zero. Reweight only factors with usable values. Each group needs at least 50% factor coverage. The final score needs at least 70% weighted evidence and 70% available group weight, so both groups must have enough data.
 
 | Group | Factor | Normalization before clamping |
 | --- | --- | --- |
@@ -42,9 +44,9 @@ Operating-margin / ROE / cash-flow-margin saturation thresholds:
 | Utilities | 22% | 14% | 9% |
 | Real Estate | 35% | 14% | 15% |
 
-These are not statistically calibrated peer percentiles. Factor correlation, equity buybacks, cyclicality, regulated returns and property depreciation remain limitations. Financial Services and unknown sectors receive facts, not a generic score/enterprise valuation. Real-estate scoring is a generic operating index, not an FFO/AFFO or property valuation.
+These thresholds were not statistically calibrated against peer-company percentiles. Correlated factors, share buybacks, business cycles, regulated returns, and property depreciation remain limitations. The app shows available facts for financial-services companies and companies with unknown sectors, but does not give them a generic score or enterprise valuation. For real estate, the score is a general operating measure. It does not use funds from operations (FFO), adjusted FFO (AFFO), or property values.
 
-Weight sensitivity varies one observed factor's effective weight by ±25%, renormalizes, and reports the resulting range. It is not a confidence interval, simultaneous stress, backtest or predictive validation. Valuation and analyst assumptions cannot change the score. Data Confidence is a separate availability/warning heuristic, not statistical accuracy. Different-coverage scores are not directly comparable.
+Weight sensitivity changes one observed factor's effective weight by ±25% at a time, then adjusts the weights and reports the resulting range. This is not a confidence interval, a combined stress test, a backtest, or predictive validation. Valuation and analyst assumptions cannot change the score. Data Confidence is a separate measure of data availability and warnings; it is not a measure of statistical accuracy. Scores based on different amounts of data are not directly comparable.
 
 ## Accounting and data
 
@@ -73,7 +75,7 @@ This is calculated, not a reported subtotal. Stock compensation stays expensed i
     Kd_proxy = annual_interest_expense / average(opening_debt, closing_debt)
     WACC_estimate = Ke × E/(E+D) + Kd_proxy × (1−effective_tax) × D/(E+D)
 
-E is fresh FX-comparable market equity, D is book debt, a market-debt proxy. Opening debt must be from the prior annual date. Explicit zero debt needs no fabricated borrowing cost. Positive debt with missing/zero interest has no automatic debt-cost estimate. No sector spread is added. Supported beta is 0–5 and WACC 3–20%; out-of-range values are withheld, not clamped.
+E is market equity converted using fresh, comparable foreign-exchange data. D is book debt, used as a proxy for market debt. Opening debt must come from the previous annual date. Explicit zero debt needs no fabricated borrowing cost. Positive debt with missing/zero interest has no automatic debt-cost estimate. No sector spread is added. Supported beta is 0–5 and WACC 3–20%; out-of-range values are withheld, not clamped.
 
 The dated USD reference is 2026-01-01: the 2025 year-end row of [Damodaran's January 2026 implied ERP table](https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/histimpl.html), Treasury reference 4.18% and ERP 4.23%. These are not live and expire after 366 days. Other reporting currencies have no sourced automatic WACC; USD is not substituted. Users may enter an explicit scenario discount assumption. Yahoo beta's estimation window is not independently established. Historical interest cost is not a current spread; effective tax is not a verified marginal rate.
 
