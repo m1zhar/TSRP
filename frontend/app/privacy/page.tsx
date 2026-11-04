@@ -4,7 +4,7 @@ import { API_ACCESS_TOKEN_TTL_SECONDS } from "@/lib/api-access-token";
 import { MARKET_LIST_LABELS, MARKET_LIST_REFRESH_INTERVAL_MINUTES } from "@/lib/market-refresh";
 
 export const metadata = {
-  title: "Privacy & data: TSRP",
+  title: "Privacy & data — TSRP",
   description: "A factual overview of the information TSRP processes, stores in your browser, and sends to data providers.",
 };
 
