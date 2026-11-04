@@ -1,28 +1,30 @@
-# Score validation: what the evidence supports
+# TSRP Score validation: what the evidence supports
 
-TSRP Score v10 is an experimental operating-evidence index, not an investment recommendation, probability, forecast or validated return model. A score of 80 does not mean an 80% chance of success. Data Confidence is separate.
+TSRP Score v10 summarizes operating evidence. It is experimental, not an investment recommendation, probability, forecast, or validated return model. A score of 80 does not mean an 80% chance of success. Data Confidence describes data availability and warnings; it is separate from the score.
 
-## Reproducible implementation checks
+## Checks you can repeat
 
 Run the complete backend suite with `PYTHONPATH=backend backend/.venv/bin/python -W error -m unittest -q`. The focused `tests/test_score_research_validation.py` uses synthetic inputs and a fixed random seed; it never requests market data.
 
-It checks all ten configured sectors against an independently written arithmetic oracle (40 cases per sector), every combination of six present/missing factors (64 per sector), seven beneficial input perturbations per sector, nominal currency scaling, zero/negative versus missing cash flow, unique factor membership and the weight-sensitivity envelope. Existing tests cover non-finite values, accounting periods, ownership, provider mappings, supported currencies and source failures. Frontend tests confirm that the takeaway uses the server-returned evidence, preserves missing states and never calculates a replacement score.
+It checks all ten configured sectors against a separate set of calculations (40 cases per sector), every combination of six present or missing factors (64 per sector), seven beneficial input changes per sector, nominal currency scaling, zero or negative cash flow versus missing cash flow, unique factor membership, and the weight-sensitivity range. Existing tests cover invalid numbers, accounting periods, ownership, provider mappings, supported currencies, and source failures. Frontend tests confirm that the takeaway uses evidence returned by the server, preserves missing-data states, and does not calculate a second score.
 
-These checks demonstrate reproducible implementation behavior only. They do not independently verify Yahoo or SEC observations, prove that the policy weights are economically optimal, or establish predictive usefulness. Passing a test and validating an investment thesis are different tasks.
+These checks show that the implementation produces repeatable results. They do not independently verify Yahoo or SEC data, prove that the chosen weights are economically sound, or show that the score predicts returns. Passing tests is not the same as validating an investment thesis.
 
-## What is not established
+## What has not been proven
 
 - No independent professional financial-methodology review has been completed.
-- No point-in-time, survivorship-aware historical return study has been completed.
-- Saturation thresholds and weights are declared research policies, not empirically estimated peer percentiles.
-- Sensitivity ranges are conditional model outputs, not statistical confidence intervals.
-- A configured sector does not imply every business within it fits a generic model. REIT property values, bank regulatory capital and commodity cycles need specialist treatment.
+- No historical return study has been completed using only the information available at the time, including companies that were later delisted.
+- Score caps and weights are research choices, not measurements from peer companies.
+- Sensitivity ranges depend on the model assumptions. They are not statistical confidence intervals.
+- A sector label does not mean that every company in the sector fits one generic model. Real-estate property values, bank capital rules, and commodity cycles need their own methods.
 
 ## Protocol required before any predictive claim
 
-Freeze and version the methodology before measuring performance. Use original filing-publication timestamps, restatement vintages and the historical security universe, including delisted firms. Generate each score using only information available at that time, with a declared reporting lag. Keep score-coverage cohorts separate. Predeclare the research horizon, corporate-action-adjusted total-return convention, sector/country/size controls, benchmark, turnover and transaction-cost treatment. Reserve a genuinely held-out period; do not tune thresholds to that period. Report sample sizes, exclusions, missing-data rates, uncertainty and negative results. Compare against simple baseline factors and test sensitivity to weights and timing. Arrange independent replication before describing the result as validated.
+Freeze and version the method before measuring performance. Build the historical dataset from filings as they were published, include later restatements and companies that were delisted, and use only information available on each analysis date after a stated reporting delay. Keep companies with different data coverage in separate groups.
 
-Current provider snapshots are not that dataset. TSRP must not reconstruct a historical backtest from today’s revised statements and present it as information investors actually had.
+Choose the research period, total-return method (including dividends, splits, and other corporate actions), sector, country and size comparisons, benchmark, portfolio turnover (how often holdings change), and transaction-cost assumptions before testing. Set aside a period for final testing and do not use it to tune the method. Report sample sizes, exclusions, missing-data rates, uncertainty, and negative results. Compare TSRP with simple baseline factors and test different weights and timing. Have an independent reviewer reproduce the results before calling the method validated.
+
+Current provider snapshots cannot replace this historical dataset. TSRP must not use today’s revised statements to recreate a backtest and present them as information investors had at the time.
 
 ## Sector guidance references
 
