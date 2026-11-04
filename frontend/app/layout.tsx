@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "TSRP — Saleh Research Project",
+  title: "TSRP: Saleh Research Project",
   description: "Evidence-led public-company research with transparent assumptions and sourced financial data.",
   applicationName: "TSRP",
   icons: { icon: "/icon.svg", apple: "/icon.svg" },
