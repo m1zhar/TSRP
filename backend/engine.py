@@ -508,7 +508,7 @@ def choose_model_fcf_margin(latest_margin, trailing_margins, mature_margin=None)
     _ = mature_margin  # kept for callers that still pass sector mature as a label only
 
     if latest is not None and latest <= 0:
-        return None, True, "Reverse DCF unavailable: the latest free-cash-flow margin is not positive."
+        return None, True, "Reverse DCF unavailable: the latest free-cash-flow margin is non-positive."
     if latest is not None and latest > 0 and avg is not None:
         if avg > 0:
             blended = 0.5 * latest + 0.5 * avg
