@@ -1,18 +1,24 @@
-# TSRP — Saleh Research Project
+# TSRP: Saleh Research Project
 
 **Current hosted URL:** [thesrp.vercel.app](https://thesrp.vercel.app/)
 
-> **Deployment note:** local changes in this checkout do not alter the hosted URL until they are pushed and deployed. Verify the deployed revision and test the live site before sharing it in an application.
+> **Deployment note:** Changes on your computer do not update the hosted site until they are pushed and deployed. Before sharing the site in an application, check which revision is deployed and test the live site.
 
-TSRP is an independent, evidence-led equity research application for listed company stocks. The UI is Next.js App Router with strict TypeScript; the Python engine remains the single source of truth for scores, assumptions, and valuation calculations. Vercel routes the frontend and Python API as two services in one deployment.
+TSRP is an educational tool for researching listed companies. The web app uses Next.js and TypeScript. A Python engine calculates the score and valuation, and is the only place those calculations are made. Vercel runs the web app and Python API as two services in one deployment.
 
-The five primary research sections, in order, are **TSRP Score**, **Expectations vs Reality**, **Valuation**, **Catalysts & Risks**, and **What Changed?**. The score view is the home view. Ticker and section are encoded in the URL so links, refresh, and browser history retain the selected research view.
+The app has five research sections: **TSRP Score**, **Expectations vs Reality**, **Valuation**, **Catalysts & Risks**, and **What Changed?** The score page is the home page. The ticker and section appear in the URL, so links, refreshes, and browser history keep the selected company and section.
 
 ## Deploy to Vercel
 
-The Vercel project must have the Services framework enabled for this two-runtime repository. In Project Settings → Build and Deployment, set the framework to **Services**; a `services` block in `vercel.json` alone does not enable Services mode. `vercel.json` defines a Next.js frontend in `frontend/` and a Python API service in `backend/`. TSRP is an open educational research project: anyone with the site link can use it without creating an account or signing in. The former sign-in page returns to research and `/api/auth/*` is disabled. The browser obtains a short-lived signed API token from the same site; this protects the internal frontend-to-API request flow, not access to the public app. Set `APP_ORIGIN` to the exact HTTPS origin for each deployed environment. Set `TSRP_API_TOKEN_SECRET` to a strong random value in both frontend and Python runtimes, and set a different `TSRP_SCENARIO_SIGNING_SECRET` in the Python runtime. Never reuse these secrets across environments. Rotating the API token secret invalidates older signed snapshots. Python 3.12 and direct dependencies are declared in `backend/pyproject.toml`; `backend/uv.lock` is the canonical, hash-bearing transitive lock used by Vercel, CI, and Dependabot. Set `SEC_USER_AGENT` only if you want SEC requests; use a real monitored contact identity. Yahoo Finance requires no API key, but the integration is disabled by default; do not enable `TSRP_YAHOO_FINANCE_ENABLED` until its data-use rights are cleared.
+The Vercel project must use the **Services** framework. In Project Settings → Build and Deployment, set the framework to **Services**. Adding a `services` block to `vercel.json` does not enable Services mode by itself. The file defines a Next.js frontend in `frontend/` and a Python API service in `backend/`.
 
-The Python API is implemented under `backend/api/`. A small ASGI entrypoint dispatches to the six existing `BaseHTTPRequestHandler` routes, keeping their validation and response logic unchanged. The backend entrypoint has a **60-second maximum duration** configured in `vercel.json`; a linked Preview must confirm Vercel applies that service-scoped setting. Vercel announced general availability of its Python runtime on October 15, 2026; Vercel Services remain Beta, the project must have its Framework set to **Services**, and actual access/routing/runtime behavior still needs a Preview check. See [Vercel Services](https://vercel.com/kb/guide/vercel-services) and the [Python runtime GA announcement](https://vercel.com/changelog/python-on-vercel-is-now-generally-available).
+TSRP is an open educational project. Anyone with the site link can use it without an account. The old sign-in page returns to research, and `/api/auth/*` is disabled. The browser requests a short-lived signed API token from the same site. The token protects requests between the frontend and API; it does not restrict access to the public app.
+
+Set `APP_ORIGIN` to the exact HTTPS origin for each deployed environment. Set a strong `TSRP_API_TOKEN_SECRET` in both frontend and Python runtimes. Set a different `TSRP_SCENARIO_SIGNING_SECRET` in the Python runtime. Do not reuse secrets across environments. Rotating the API token secret invalidates older signed snapshots.
+
+Python 3.12 and direct dependencies are declared in `backend/pyproject.toml`. `backend/uv.lock` is the canonical hash-bearing dependency lock used by Vercel, CI, and Dependabot. Set `SEC_USER_AGENT` only if you want SEC requests; use a real monitored contact identity. Yahoo Finance requires no API key, but its integration is disabled by default. Do not enable `TSRP_YAHOO_FINANCE_ENABLED` until its data-use rights are cleared.
+
+The Python API is under `backend/api/`. A small ASGI entry point routes requests to six existing `BaseHTTPRequestHandler` routes. Their input checks and responses are unchanged. `vercel.json` sets a **60-second maximum duration** for the backend entry point. A linked Preview must confirm that Vercel applies this setting to the Python service. Vercel announced general availability of its Python runtime on October 15, 2026. Vercel Services remain in Beta, and the project framework must be set to **Services**. Check access, routing, and runtime behavior in a Preview. See [Vercel Services](https://vercel.com/kb/guide/vercel-services) and the [Python runtime GA announcement](https://vercel.com/changelog/python-on-vercel-is-now-generally-available).
 
 ## Run checks locally
 
@@ -24,7 +30,7 @@ python3 -m pip install uv==0.12.19
 (cd backend && uv sync --locked --no-install-project)
 ```
 
-To run locally, no identity-provider or account setup is required. Use the same `TSRP_API_TOKEN_SECRET` in the frontend and Python processes. Start the loopback-only Python API adapter from the repository root:
+You do not need an identity provider or account to run the app locally. Use the same `TSRP_API_TOKEN_SECRET` in the frontend and Python processes. Start the loopback-only Python API adapter from the repository root:
 
 ```bash
 TSRP_API_TOKEN_SECRET='<the same local secret>' backend/.venv/bin/python frontend/tests/asgi-http-server.py 8000
@@ -36,7 +42,7 @@ Then start Next.js from `frontend/`:
 pnpm dev
 ```
 
-The development server proxies `/api/*` to `http://127.0.0.1:8000` through its own origin, so browser requests do not need cross-origin permissions. `TSRP_DEV_API_ORIGIN` can select another `127.0.0.1` port for local testing; it is ignored outside development. The Python adapter is a local test harness, not a production server or a substitute for verifying Vercel routing. Company analysis can contact the configured external data providers.
+The development server proxies `/api/*` to `http://127.0.0.1:8000` through its own origin, so browser requests do not need cross-origin permissions. `TSRP_DEV_API_ORIGIN` can select another `127.0.0.1` port for local testing; it is ignored outside development. The local Python adapter accepts requests only from this computer. It is a test harness, not a production server or a substitute for checking Vercel routing. Company analysis can contact the configured external data providers.
 
 Run frontend checks from `frontend/` with `pnpm lint`, `pnpm typecheck`, `pnpm test:node`, and `pnpm build`. `pnpm test` runs frontend Node tests plus the complete Python test tree, including root-level financial-engine tests and `tests/`; `pnpm test:python` uses the same full-tree discovery. The Python suite can also be run from the repository root with `PYTHONPATH=backend backend/.venv/bin/python -m unittest -q`. To change Python dependencies, edit `backend/pyproject.toml`, run `uv lock` from `backend/`, then run `uv sync --locked --no-install-project`; commit the manifest and lock together. The production-mode integration smoke is `TSRP_PYTHON=../backend/.venv/bin/python pnpm test:production-smoke` from `frontend/`; it starts the built Next.js app and the real ASGI entrypoint behind a temporary same-origin proxy on loopback, verifies that the page and API-token route work without a cookie, and completes a successful analysis using the deterministic synthetic `MockEquity` fixture. The test adapter mocks Yahoo and disables SEC, so no public market providers are contacted. This verifies the server boundary, not hosted Vercel routing.
 
@@ -78,7 +84,7 @@ An optional live hosted smoke check is available with Node 22: `node --experimen
 
 ## Financial information disclaimer
 
-TSRP is an independent research and educational tool, not a broker, investment adviser, or source of personalized investment advice. Its score is a heuristic signal—not a probability, forecast, buy/sell/hold recommendation, or promise of performance. Data may be delayed, incomplete, restated, or wrong. Verify material facts against filings and other primary sources, review the assumptions, and consult a qualified professional before making financial decisions.
+TSRP is an independent educational research tool. It is not a broker, investment adviser, or source of personalized investment advice. The score is a simplified research signal based on operating evidence. It is not a probability, forecast, recommendation to buy, sell, or hold, or a promise of performance. Data may be delayed, incomplete, restated, or wrong. Check important facts against company filings and other primary sources. Review the assumptions and consult a qualified professional before making financial decisions.
 
 ## Release checks still required
 
